@@ -1,0 +1,317 @@
+{
+  "bundle": "ur_live_calibration",
+  "prepared_date": "2026-10-12",
+  "source_root": "/home/jm/Robotpose",
+  "purpose": "RealSense RGB + RTDE joint live camera-from-base pose estimation for UR5e and UR10e.",
+  "checkpoint_selection": {
+    "ur5e": {
+      "path": "trained_models/v3m2a3/best.pt",
+      "epoch": 85,
+      "json_keys": [
+        "ur5e_link0",
+        "ur5e_link1",
+        "ur5e_link2",
+        "ur5e_link3",
+        "ur5e_link4",
+        "ur5e_link5",
+        "ur5e_link6"
+      ],
+      "image_hw": [
+        480,
+        640
+      ],
+      "no_normalize": false,
+      "reason": "UR5e identity verified using checkpoint metadata; selected from existing repository weights."
+    },
+    "ur10e": {
+      "path": "trained_models/ur10e_2/best.pt",
+      "epoch": 73,
+      "json_keys": [
+        "ur10e_link0",
+        "ur10e_link1",
+        "ur10e_link2",
+        "ur10e_link3",
+        "ur10e_link4",
+        "ur10e_link5",
+        "ur10e_link6"
+      ],
+      "image_hw": [
+        480,
+        640
+      ],
+      "no_normalize": false,
+      "reason": "Existing default in infer_live_ur10e.py; UR10e identity verified using checkpoint metadata."
+    }
+  },
+  "verification": {
+    "python": "3.10.12",
+    "packages": {
+      "torch": "2.11.0+cu128",
+      "torchvision": "0.26.0+cu128",
+      "numpy": "2.2.6",
+      "opencv-python": "4.13.0.92",
+      "scipy": "1.15.3",
+      "pyrr": "0.10.3",
+      "pyrealsense2": "2.58.2.10647",
+      "ur_rtde": "1.6.3"
+    },
+    "passed": [
+      "Preserved reference Python files and all checkpoint/backbone assets retain their original SHA-256 hashes.",
+      "Python and Bash syntax.",
+      "Both launchers display --help from /tmp in optimized and ROBOTPOSE_REFERENCE=1 modes.",
+      "Original bundle runtime imports and offline backbone initialization checked.",
+      "Regression suite: 19 unittest methods, 16 passed, 3 CUDA-only tests skipped because CUDA is inaccessible.",
+      "Exact CPU voting equivalence for float16/32/64 candidates, full outputs, debug data and RNG state across ties, sparse/neighbor/empty/nonfinite, batch and layout cases.",
+      "Exact CPU network-block eval outputs, training outputs/gradients and state-dict compatibility.",
+      "Full EMPnP regression: 144 synthetic UR5e/UR10e FK cases; 140 exact successful matches and 4 matching initialization failures.",
+      "Both trained checkpoints load strictly and produce exactly identical full seg/vec outputs on Data/real/UR/rgb/000000.png at 640x480 in CPU FP32.",
+      "Live function debug output on/off preserves keypoint coordinates/covariances and CLI defaults."
+    ],
+    "not_run": [
+      "Physical camera/RTDE connection",
+      "CUDA/FP16 equivalence and GPU performance",
+      "Live end-to-end FPS and real-world calibration accuracy",
+      "ROS 2 publishing"
+    ]
+  },
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 83,
+      "sha256": "7dfea794478a99c8baebdec82223d730fde44291358c415189c37181fdbd0072",
+      "source": "Created for GitHub upload."
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 45,
+      "sha256": "4cb18d750ab3d36453c88d0f1b380636848f501dadf444d3e442f2b7254ffe5f",
+      "source": "Created for GitHub upload."
+    },
+    {
+      "path": "README.md",
+      "bytes": 10961,
+      "sha256": "5cb896d90ff726cf6107f432b6bc14bcbbaa5b4ed81238f0faea5d6a8738b08f",
+      "source": "Created for this bundle."
+    },
+    {
+      "path": "infer_live.py",
+      "bytes": 18275,
+      "sha256": "29c67f21251e6a0ad438ee617a94fa5b644bfbe3cce9e998572ecf2ed4b6fd89",
+      "source": "robotpose/infer_live.py",
+      "source_sha256": "d858ca28acd5010ccfe59d657cc88e2b0251604e613ed8f1b5f2aaacc26012e3",
+      "byte_identical_to_source": false,
+      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible."
+    },
+    {
+      "path": "infer_live_10.py",
+      "bytes": 93,
+      "sha256": "438500f9ae3b90a76eff0597944b02a539277b64ed3c806727a05b2e62205518",
+      "source": "robotpose/infer_live_10.py",
+      "source_sha256": "438500f9ae3b90a76eff0597944b02a539277b64ed3c806727a05b2e62205518",
+      "byte_identical_to_source": true
+    },
+    {
+      "path": "infer_live_ur10e.py",
+      "bytes": 22684,
+      "sha256": "2f9b0a0164a787b78b708e962fe420fb5ca0d56707647d80b946f796b6d7db53",
+      "source": "robotpose/infer_live_ur10e.py",
+      "source_sha256": "8526abdd9fe081ec0bf814df430ee9a53b5c1dfd7c4559c4c73ed1e6967308f7",
+      "byte_identical_to_source": false,
+      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible."
+    },
+    {
+      "path": "my_pnp.py",
+      "bytes": 9248,
+      "sha256": "0a8147c9a1b8b9162bf8311374cfe01b12e74c37689f789c40e90c477bcab9d1",
+      "source": "robotpose/my_pnp.py",
+      "source_sha256": "76bf7b86a1a03c5645a5e76fb867f322ddc0fbb3ef576b6d40d4ef148b3ba31e",
+      "byte_identical_to_source": false,
+      "change": "Reuse identical prior products and fixed weights; bounded cache for identical consecutive residual evaluations. Keep numerical Jacobian and solver settings."
+    },
+    {
+      "path": "network3.py",
+      "bytes": 13349,
+      "sha256": "dffa07f7094bf97ff0d95d68ff2bb74cc5841a9e2fe7e9d3b96653a148014430",
+      "source": "robotpose/network3.py",
+      "source_sha256": "386777a7cd7b8f3422510b935e8e5607515adf8a50d0695986d74f8093a5a8f5",
+      "byte_identical_to_source": false,
+      "change": "Reuse identical LayerNorm results in eval mode, retaining distinct Q/K/V object identity, attention path and addition order."
+    },
+    {
+      "path": "reference/infer_live.py",
+      "source": "robotpose/infer_live.py",
+      "bytes": 18053,
+      "sha256": "d858ca28acd5010ccfe59d657cc88e2b0251604e613ed8f1b5f2aaacc26012e3",
+      "source_sha256": "d858ca28acd5010ccfe59d657cc88e2b0251604e613ed8f1b5f2aaacc26012e3",
+      "byte_identical_to_source": true,
+      "change": "Preserved snapshot before optimization."
+    },
+    {
+      "path": "reference/infer_live_10.py",
+      "source": "robotpose/infer_live_10.py",
+      "bytes": 93,
+      "sha256": "438500f9ae3b90a76eff0597944b02a539277b64ed3c806727a05b2e62205518",
+      "source_sha256": "438500f9ae3b90a76eff0597944b02a539277b64ed3c806727a05b2e62205518",
+      "byte_identical_to_source": true,
+      "change": "Preserved snapshot before optimization."
+    },
+    {
+      "path": "reference/infer_live_ur10e.py",
+      "source": "robotpose/infer_live_ur10e.py",
+      "bytes": 22462,
+      "sha256": "8526abdd9fe081ec0bf814df430ee9a53b5c1dfd7c4559c4c73ed1e6967308f7",
+      "source_sha256": "8526abdd9fe081ec0bf814df430ee9a53b5c1dfd7c4559c4c73ed1e6967308f7",
+      "byte_identical_to_source": true,
+      "change": "Preserved snapshot before optimization."
+    },
+    {
+      "path": "reference/my_pnp.py",
+      "source": "robotpose/my_pnp.py",
+      "bytes": 8319,
+      "sha256": "76bf7b86a1a03c5645a5e76fb867f322ddc0fbb3ef576b6d40d4ef148b3ba31e",
+      "source_sha256": "76bf7b86a1a03c5645a5e76fb867f322ddc0fbb3ef576b6d40d4ef148b3ba31e",
+      "byte_identical_to_source": true,
+      "change": "Preserved snapshot before optimization."
+    },
+    {
+      "path": "reference/network3.py",
+      "source": "robotpose/network3.py",
+      "bytes": 11581,
+      "sha256": "386777a7cd7b8f3422510b935e8e5607515adf8a50d0695986d74f8093a5a8f5",
+      "source_sha256": "386777a7cd7b8f3422510b935e8e5607515adf8a50d0695986d74f8093a5a8f5",
+      "byte_identical_to_source": true,
+      "change": "Preserved snapshot before optimization."
+    },
+    {
+      "path": "reference/vote2.py",
+      "source": "robotpose/vote2.py",
+      "bytes": 13359,
+      "sha256": "8279e2480b631f331c0b3de975245e97123326338578866de5a8f8a19db5987e",
+      "source_sha256": "8279e2480b631f331c0b3de975245e97123326338578866de5a8f8a19db5987e",
+      "byte_identical_to_source": true,
+      "change": "Preserved snapshot before optimization."
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 643,
+      "sha256": "1f5a8c27bc34194efeb69a2ffba7cbe536271ccae64b255654c2fd85fa509a8f",
+      "source": "requirements_live_ur10e.txt",
+      "source_sha256": "23942c669e40eaa657970edde95cc9c754eee7fbfc5ba7cee1c9ce46cf168a01",
+      "byte_identical_to_source": false,
+      "change": "Bundle-specific comments; dependency entries unchanged."
+    },
+    {
+      "path": "run_ur10e.sh",
+      "bytes": 448,
+      "sha256": "8870d68d2d0261cfeea412d088c4d005b614be96445575d81e49d45b5489dcc9",
+      "source": "Created for this bundle.",
+      "change": "ROBOTPOSE_REFERENCE=1 selects preserved pre-optimization code with the same bundled checkpoint."
+    },
+    {
+      "path": "run_ur5e.sh",
+      "bytes": 441,
+      "sha256": "2a97d3128c39dba8e12c250ee47593de1dbec546a9b1285655d0d1c858a6af75",
+      "source": "Created for this bundle.",
+      "change": "ROBOTPOSE_REFERENCE=1 selects preserved pre-optimization code with the same bundled checkpoint."
+    },
+    {
+      "path": "tests/test_live_equivalence.py",
+      "source": "Created for this bundle.",
+      "bytes": 4893,
+      "sha256": "2a673ad931284aff0c99ca6eae3b824e6d8dc3bf4a5d81b704354d0d56455e4d"
+    },
+    {
+      "path": "tests/test_network_equivalence.py",
+      "source": "Created for this bundle.",
+      "bytes": 8074,
+      "sha256": "d2b4b531234e8ce3f93ab1c6766464c8cc0b376bf569dd7c4dcd6b6cd04c3eb8"
+    },
+    {
+      "path": "tests/test_pnp_equivalence.py",
+      "source": "Created for this bundle.",
+      "bytes": 6028,
+      "sha256": "741fb9b1f3891b6688b1b27ce4b54e30f6e775a3d30d59c7bd0095a83e0194aa"
+    },
+    {
+      "path": "tests/test_vote_equivalence.py",
+      "source": "Created for this bundle.",
+      "bytes": 9499,
+      "sha256": "4e3b2ef9bcb47f8e7cd1578aa5134dcf9179c470475ab8b208db5078f566a3ff"
+    },
+    {
+      "path": "tests/verify_checkpoints.py",
+      "source": "Created for this bundle.",
+      "bytes": 3327,
+      "sha256": "5d67f8dba5de03d5f5aaac4d0f92022624048f2457ae051bf58a812e34547ef8"
+    },
+    {
+      "path": "torch_cache/hub/checkpoints/resnet18-f37072fd.pth",
+      "bytes": 46830571,
+      "sha256": "f37072fd47e89c5e827621c5baffa7500819f7896bbacec160b1a16c560e07ec",
+      "source": "/home/jm/.cache/torch/hub/checkpoints/resnet18-f37072fd.pth",
+      "source_sha256": "f37072fd47e89c5e827621c5baffa7500819f7896bbacec160b1a16c560e07ec",
+      "byte_identical_to_source": true
+    },
+    {
+      "path": "trained_models/ur10e_2/best.pt",
+      "bytes": 1846319105,
+      "sha256": "84c08345ea8d62d197cae2e5c2203997afd769cec3d86b19af8834e43ac2e5cd",
+      "source": "trained_models/ur10e_2/best.pt",
+      "source_sha256": "84c08345ea8d62d197cae2e5c2203997afd769cec3d86b19af8834e43ac2e5cd",
+      "byte_identical_to_source": true
+    },
+    {
+      "path": "trained_models/v3m2a3/best.pt",
+      "bytes": 1846318778,
+      "sha256": "beb3ce559998a1908ebf498e253a4a02fb65b51c00006c804e8274e554772d36",
+      "source": "trained_models/v3m2a3/best.pt",
+      "source_sha256": "beb3ce559998a1908ebf498e253a4a02fb65b51c00006c804e8274e554772d36",
+      "byte_identical_to_source": true
+    },
+    {
+      "path": "vote2.py",
+      "bytes": 14379,
+      "sha256": "3f24d5c183dd749379b0d0d432b61f7d3aadffe600d31a7dce6b4eda89b8efc0",
+      "source": "robotpose/vote2.py",
+      "source_sha256": "8279e2480b631f331c0b3de975245e97123326338578866de5a8f8a19db5987e",
+      "byte_identical_to_source": false,
+      "change": "Vectorize per-bin first-maximum candidate selection; reuse segmentation probabilities, masks and neighbor pixel counts. Preserve RNG order and voting settings."
+    }
+  ],
+  "optimized_date": "2026-10-12",
+  "optimization": {
+    "policy": "Preserve existing mathematical operations, arithmetic ordering, random draw sequence, model parameters and inference settings; remove redundant work only.",
+    "reference_mode": "ROBOTPOSE_REFERENCE=1 ./run_ur5e.sh or ./run_ur10e.sh with normal arguments.",
+    "tests_command": "python -B -m unittest discover -s tests -v",
+    "full_model_command": "python -B tests/verify_checkpoints.py --image /path/frame.png --device cpu",
+    "deferred": [
+      "need_weights=False/new attention kernels",
+      "Analytic Jacobian (full-fit numerical differences observed)",
+      "Pose warm-start",
+      "Resolution/iteration/hypothesis/threshold changes"
+    ],
+    "cpu_microbenchmarks": {
+      "voting": {
+        "input": "Synthetic float32, 1 batch, 7 keypoints, 120x160, 1 CPU thread, fixed RNG, 2 warmups and 7 repetitions",
+        "reference_median_ms": 35.182,
+        "optimized_median_ms": 5.822
+      },
+      "empnp": {
+        "input": "Synthetic 144-case sweep; 8 alternating warmed sweeps",
+        "reference_median_ms": 414.475,
+        "optimized_median_ms": 386.586
+      },
+      "scope": "Component-only CPU measurements; not live end-to-end or GPU FPS."
+    }
+  },
+  "git_distribution": {
+    "prepared_date": "2026-10-14",
+    "repository": "https://github.com/Stick-0/ur_live_calibration",
+    "large_files": "Git LFS for *.pt and *.pth; run git lfs pull after cloning.",
+    "excluded": [
+      "Python bytecode caches",
+      "Local Python environments"
+    ],
+    "checksum_scope": "Actual working-tree files after LFS download, not pointer blobs."
+  }
+}

@@ -1,0 +1,23 @@
+# Dependencies for the bundled UR5e and UR10e live inference scripts.
+#
+# Install Python packages:
+#   python -m pip install -r requirements.txt
+#
+# ROS2 pose publishing is optional and supported by the UR10e script.
+# Install ROS2 packages through apt/source your ROS workspace, not pip:
+#   sudo apt install ros-$ROS_DISTRO-rclpy ros-$ROS_DISTRO-geometry-msgs ros-$ROS_DISTRO-std-msgs
+#   source /opt/ros/$ROS_DISTRO/setup.bash
+#
+# RealSense may also need system packages/udev rules depending on the machine:
+#   sudo apt install librealsense2-utils librealsense2-dev
+
+numpy
+opencv-python
+scipy
+pyrr
+
+torch
+torchvision
+
+pyrealsense2
+ur_rtde
