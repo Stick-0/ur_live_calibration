@@ -2,7 +2,7 @@
   "bundle": "ur_live_calibration",
   "prepared_date": "2026-10-12",
   "source_root": "/home/jm/Robotpose",
-  "purpose": "RealSense RGB + RTDE joint live camera-from-base pose estimation for UR5e and UR10e.",
+  "purpose": "RealSense RGB + RTDE camera-from-base estimation and moving-base relative UR collaboration.",
   "checkpoint_selection": {
     "ur5e": {
       "path": "trained_models/v3m2a3/best.pt",
@@ -83,59 +83,71 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 45,
-      "sha256": "4cb18d750ab3d36453c88d0f1b380636848f501dadf444d3e442f2b7254ffe5f",
-      "source": "Created for GitHub upload."
+      "bytes": 51,
+      "sha256": "3cd1cac19e28a3c0ffaf597fa5bfc1eb03508dc849229ce9b50eb8597c73103b",
+      "source": "Created for GitHub upload.",
+      "change": "Exclude local experiment logs in runs/ alongside existing local artifacts."
     },
     {
       "path": "README.md",
-      "bytes": 10961,
-      "sha256": "5cb896d90ff726cf6107f432b6bc14bcbbaa5b4ed81238f0faea5d6a8738b08f",
-      "source": "Created for this bundle."
+      "bytes": 47035,
+      "sha256": "ce55ec00ba976c680782070291cd967c1164ab3eab2f6056ae13632dc36a2725",
+      "source": "Created for this bundle.",
+      "change": "Full functional/module explanation, both hold modes, frame/TCP conventions, rate/progress distinction, package tree and updated execution commands."
     },
     {
-      "path": "infer_live.py",
-      "bytes": 18275,
-      "sha256": "29c67f21251e6a0ad438ee617a94fa5b644bfbe3cce9e998572ecf2ed4b6fd89",
+      "path": "urcal/inference/infer_live.py",
+      "bytes": 18427,
+      "sha256": "dafac346337a5440b7d5a3432c7ba4e158d54d3d6c4fc6e6b165bc8a403bc750",
       "source": "robotpose/infer_live.py",
       "source_sha256": "d858ca28acd5010ccfe59d657cc88e2b0251604e613ed8f1b5f2aaacc26012e3",
       "byte_identical_to_source": false,
-      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible."
+      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible. Skip debug blending when the segmentation mask is empty.",
+      "previous_path": "infer_live.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "infer_live_10.py",
-      "bytes": 93,
-      "sha256": "438500f9ae3b90a76eff0597944b02a539277b64ed3c806727a05b2e62205518",
+      "path": "urcal/inference/infer_live_10.py",
+      "bytes": 109,
+      "sha256": "3674770412784406e81521c1b9e75fe1e180d726beae3e82ee2f0fada570ef58",
       "source": "robotpose/infer_live_10.py",
       "source_sha256": "438500f9ae3b90a76eff0597944b02a539277b64ed3c806727a05b2e62205518",
-      "byte_identical_to_source": true
+      "byte_identical_to_source": false,
+      "previous_path": "infer_live_10.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "infer_live_ur10e.py",
-      "bytes": 22684,
-      "sha256": "2f9b0a0164a787b78b708e962fe420fb5ca0d56707647d80b946f796b6d7db53",
+      "path": "urcal/inference/infer_live_ur10e.py",
+      "bytes": 22836,
+      "sha256": "3dc909b29452e28d92db03e71ce0b201bec5c01f6d4e1e40878d0dba45661bcd",
       "source": "robotpose/infer_live_ur10e.py",
       "source_sha256": "8526abdd9fe081ec0bf814df430ee9a53b5c1dfd7c4559c4c73ed1e6967308f7",
       "byte_identical_to_source": false,
-      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible."
+      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible. Skip debug blending when the segmentation mask is empty.",
+      "previous_path": "infer_live_ur10e.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "my_pnp.py",
+      "path": "urcal/inference/my_pnp.py",
       "bytes": 9248,
       "sha256": "0a8147c9a1b8b9162bf8311374cfe01b12e74c37689f789c40e90c477bcab9d1",
       "source": "robotpose/my_pnp.py",
       "source_sha256": "76bf7b86a1a03c5645a5e76fb867f322ddc0fbb3ef576b6d40d4ef148b3ba31e",
       "byte_identical_to_source": false,
-      "change": "Reuse identical prior products and fixed weights; bounded cache for identical consecutive residual evaluations. Keep numerical Jacobian and solver settings."
+      "change": "Reuse identical prior products and fixed weights; bounded cache for identical consecutive residual evaluations. Keep numerical Jacobian and solver settings.",
+      "previous_path": "my_pnp.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "network3.py",
+      "path": "urcal/inference/network3.py",
       "bytes": 13349,
       "sha256": "dffa07f7094bf97ff0d95d68ff2bb74cc5841a9e2fe7e9d3b96653a148014430",
       "source": "robotpose/network3.py",
       "source_sha256": "386777a7cd7b8f3422510b935e8e5607515adf8a50d0695986d74f8093a5a8f5",
       "byte_identical_to_source": false,
-      "change": "Reuse identical LayerNorm results in eval mode, retaining distinct Q/K/V object identity, attention path and addition order."
+      "change": "Reuse identical LayerNorm results in eval mode, retaining distinct Q/K/V object identity, attention path and addition order.",
+      "previous_path": "network3.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
       "path": "reference/infer_live.py",
@@ -193,56 +205,59 @@
     },
     {
       "path": "requirements.txt",
-      "bytes": 643,
-      "sha256": "1f5a8c27bc34194efeb69a2ffba7cbe536271ccae64b255654c2fd85fa509a8f",
+      "bytes": 746,
+      "sha256": "6db3adc83badc004c55106f028163bd810564097028daa7fc7114290d8fba115",
       "source": "requirements_live_ur10e.txt",
       "source_sha256": "23942c669e40eaa657970edde95cc9c754eee7fbfc5ba7cee1c9ce46cf168a01",
       "byte_identical_to_source": false,
-      "change": "Bundle-specific comments; dependency entries unchanged."
+      "change": "Documented system Tkinter package for the dual-control GUI."
     },
     {
       "path": "run_ur10e.sh",
-      "bytes": 448,
-      "sha256": "8870d68d2d0261cfeea412d088c4d005b614be96445575d81e49d45b5489dcc9",
+      "bytes": 603,
+      "sha256": "77c3b4212e6e332bafd74d62634e722798aaea8fd12373054da40102029836f8",
       "source": "Created for this bundle.",
-      "change": "ROBOTPOSE_REFERENCE=1 selects preserved pre-optimization code with the same bundled checkpoint."
+      "change": "ROBOTPOSE_REFERENCE=1 selects preserved pre-optimization code with the same bundled checkpoint.",
+      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
     },
     {
       "path": "run_ur5e.sh",
-      "bytes": 441,
-      "sha256": "2a97d3128c39dba8e12c250ee47593de1dbec546a9b1285655d0d1c858a6af75",
+      "bytes": 589,
+      "sha256": "ea2c38837b5516d53483756cfe158b52ca7de6ab598ab3c217d2543beef59688",
       "source": "Created for this bundle.",
-      "change": "ROBOTPOSE_REFERENCE=1 selects preserved pre-optimization code with the same bundled checkpoint."
+      "change": "ROBOTPOSE_REFERENCE=1 selects preserved pre-optimization code with the same bundled checkpoint.",
+      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
     },
     {
       "path": "tests/test_live_equivalence.py",
       "source": "Created for this bundle.",
-      "bytes": 4893,
-      "sha256": "2a673ad931284aff0c99ca6eae3b824e6d8dc3bf4a5d81b704354d0d56455e4d"
+      "bytes": 6726,
+      "sha256": "76139cefb2d0103423b60b3f9accff43ac76cebb773b2b1679f1215993e5e34d",
+      "change": "Added empty-mask rendering regression coverage and exact nonempty overlay comparison."
     },
     {
       "path": "tests/test_network_equivalence.py",
       "source": "Created for this bundle.",
-      "bytes": 8074,
-      "sha256": "d2b4b531234e8ce3f93ab1c6766464c8cc0b376bf569dd7c4dcd6b6cd04c3eb8"
+      "bytes": 8087,
+      "sha256": "28c7c2a1cf71d0223535c0a1f1ede4dcecff35a25a4532f14199a8f23871856f"
     },
     {
       "path": "tests/test_pnp_equivalence.py",
       "source": "Created for this bundle.",
-      "bytes": 6028,
-      "sha256": "741fb9b1f3891b6688b1b27ce4b54e30f6e775a3d30d59c7bd0095a83e0194aa"
+      "bytes": 5983,
+      "sha256": "c9533b2a3036cca04ddae7be236eb787ea79d5a431f9cafb730aa6f4c1bb30d2"
     },
     {
       "path": "tests/test_vote_equivalence.py",
       "source": "Created for this bundle.",
-      "bytes": 9499,
-      "sha256": "4e3b2ef9bcb47f8e7cd1578aa5134dcf9179c470475ab8b208db5078f566a3ff"
+      "bytes": 9500,
+      "sha256": "c0618457400c6f114a39e778bd6fed3addce973cce950c55e402aebffd23b2ec"
     },
     {
       "path": "tests/verify_checkpoints.py",
       "source": "Created for this bundle.",
-      "bytes": 3327,
-      "sha256": "5d67f8dba5de03d5f5aaac4d0f92022624048f2457ae051bf58a812e34547ef8"
+      "bytes": 3356,
+      "sha256": "f18802bf135e4f4352374310867242187dc5828b7efaa70f389386efeac0477c"
     },
     {
       "path": "torch_cache/hub/checkpoints/resnet18-f37072fd.pth",
@@ -269,13 +284,330 @@
       "byte_identical_to_source": true
     },
     {
-      "path": "vote2.py",
+      "path": "urcal/inference/vote2.py",
       "bytes": 14379,
       "sha256": "3f24d5c183dd749379b0d0d432b61f7d3aadffe600d31a7dce6b4eda89b8efc0",
       "source": "robotpose/vote2.py",
       "source_sha256": "8279e2480b631f331c0b3de975245e97123326338578866de5a8f8a19db5987e",
       "byte_identical_to_source": false,
-      "change": "Vectorize per-bin first-maximum candidate selection; reuse segmentation probabilities, masks and neighbor pixel counts. Preserve RNG order and voting settings."
+      "change": "Vectorize per-bin first-maximum candidate selection; reuse segmentation probabilities, masks and neighbor pixel counts. Preserve RNG order and voting settings.",
+      "previous_path": "vote2.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/inference/infer_live_dual.py",
+      "source": "Created for this bundle.",
+      "bytes": 14989,
+      "sha256": "329cbc8f0764053552a0839a2138725663ec3e4487b9450d32d6fbbda205afb8",
+      "change": "Added one-camera dual inference with letterboxed left UR5e/right UR10e regions, original-image pose coordinates and independent robot state.",
+      "previous_path": "infer_live_dual.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "run_dual.sh",
+      "source": "Created for this bundle.",
+      "bytes": 330,
+      "sha256": "1aa63b8e43d1ed544396543975fcae243adb86fd3fd51934aff472f18645f2ed",
+      "change": "Added working-directory-independent dual inference launcher.",
+      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
+    },
+    {
+      "path": "tests/test_dual_inference.py",
+      "source": "Created for this bundle.",
+      "bytes": 12600,
+      "sha256": "1d09c18e837231d66ef9264add617cf72ae366a8fcbc9c2eb6e0fa41a1751e2f",
+      "change": "Extended dual-loop tests to continue across two frames when either or both segmentation masks are empty."
+    },
+    {
+      "path": "urcal/control/runtime.py",
+      "source": "Created for this bundle.",
+      "change": "Retain camera-fixed hold; dispatch follow to research runtime, share joint-velocity reads and current/future controller checks.",
+      "bytes": 29154,
+      "sha256": "25bc819eaabc25877a57266fd17a59a6f072b49160de192227ffce727491f9af",
+      "previous_path": "control_dual.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/control/geometry.py",
+      "source": "Created for this bundle.",
+      "change": "Validated model/base/flange/TCP transforms and opposing-flange target geometry.",
+      "bytes": 8821,
+      "sha256": "8cd91495762f46aa5865563e55b28e6c77c56c7028ecb4d0ace4194c2e5e31e3",
+      "previous_path": "dual_control_geometry.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/control/policy.py",
+      "source": "Created for this bundle.",
+      "change": "Preserve quality gate and allow atomic rejected-sequence consumption without overwriting accepted poses.",
+      "bytes": 12642,
+      "sha256": "eafa301532f23a012c72152f9b9087de168fa807e6338264016ae60000aa4c47",
+      "previous_path": "dual_control_policy.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/control/vision.py",
+      "source": "Created for this bundle.",
+      "change": "Independent inference process and latest camera/joint capture with original-detection reprojection checks.",
+      "bytes": 12344,
+      "sha256": "0aa7eeb4141b2689ab3dcbba3a20bdc06e3d380f46eb071bb4f0ede7d4ad945f",
+      "previous_path": "dual_control_vision.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/control/gui.py",
+      "source": "Created for this bundle.",
+      "change": "Preserve fixed-center GUI; add relative paths, progress and task pause/resume controls for research follow.",
+      "bytes": 19019,
+      "sha256": "429bbfc5c2532e40c8168fc6e03ed517387b217df8946967b8074a8ea14d6fc1",
+      "previous_path": "dual_control_gui.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "run_dual_control.sh",
+      "source": "Created for this bundle.",
+      "change": "Working-directory-independent control launcher; no arguments displays help.",
+      "bytes": 317,
+      "sha256": "9a4f321fdf5ecfbf3ab0bbe820b1d1c0aa66f3e64928b7fecd521e4318fb2698",
+      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
+    },
+    {
+      "path": "tests/test_dual_control_geometry.py",
+      "source": "Created for this bundle.",
+      "change": "Pure geometry tests including independent controller-DH frame comparison.",
+      "bytes": 10334,
+      "sha256": "e150f06ce4cf110957ed3dbab706487cb17da81c0814b105bc0eebe0c68e1222"
+    },
+    {
+      "path": "tests/test_dual_control_policy.py",
+      "source": "Created for this bundle.",
+      "change": "Calibration failure/freshness/stability and bounded Cartesian command tests.",
+      "bytes": 11376,
+      "sha256": "b847da3a32ba91a5c1fc464d40dd1e94928c4c7307972acab9352d92d08accb5"
+    },
+    {
+      "path": "tests/test_dual_control_runtime.py",
+      "source": "Created for this bundle.",
+      "change": "Mocked RTDE lifecycle, follower isolation, target updates, startup and failure-stop tests.",
+      "bytes": 35701,
+      "sha256": "e229afb77f0fe8f07c4552e9762d620773628013e40f9c3d55e25b741e9688ba"
+    },
+    {
+      "path": "tests/test_dual_control_vision.py",
+      "source": "Created for this bundle.",
+      "change": "Mocked capture clocks, raw reprojection, geometry degeneracy and paired rejection tests.",
+      "bytes": 11466,
+      "sha256": "d671cefe47dc9305a372fb275a59f7e9fa446b88a2221ce24589327c77f606ed"
+    },
+    {
+      "path": "tests/test_dual_control_gui.py",
+      "source": "Created for this bundle.",
+      "change": "Display-free tests including relative path units, active edit locking and pause/resume commands.",
+      "bytes": 15651,
+      "sha256": "2bc116d3e779b192c77d3aaa9175ed6d737664f49f79d2ac2b2776336dece22c"
+    },
+    {
+      "path": "docs/Research_Implementation_Plan.txt",
+      "source": "Provided by the user.",
+      "change": "User-provided research implementation plan, preserved unchanged.",
+      "bytes": 10056,
+      "sha256": "7cdba760afb382c18291280fbad326fde623dd97630a7662281386639c542c7a",
+      "previous_path": "Research_Implementation_Plan.txt",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/cooperative/state.py",
+      "source": "Created for this bundle.",
+      "change": "Capture/receipt timestamps, common-time relative SE(3) state, filtering and bounded prediction.",
+      "bytes": 14154,
+      "sha256": "8926cd70ee2ac003f93f7b125d2429f9e2b903bc93d8d12c45e8ea75977dce2c",
+      "previous_path": "relative_state.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/cooperative/task.py",
+      "source": "Created for this bundle.",
+      "change": "Immutable relative paths, separated compensation/task twists and feasible task-rate selection.",
+      "bytes": 18460,
+      "sha256": "c8e9cb757e404993fbe70a303a9c8b384b56b53a5850cef243be193b6853b8fb",
+      "previous_path": "cooperative_task.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/cooperative/kinematics.py",
+      "source": "Created for this bundle.",
+      "change": "Nominal controller-frame FK/Jacobian/local IK and configurable workspace/capsule clearance checks.",
+      "bytes": 9309,
+      "sha256": "4e60061650f6f842507f23d2610fff9d6fdc42972b16e4997da94d56596e1dd3",
+      "previous_path": "cooperative_kinematics.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/cooperative/controller.py",
+      "source": "Created for this bundle.",
+      "change": "Pure prepare/commit planner: fixed relative goal, compensation, feedback, path progress and classified faults.",
+      "bytes": 20011,
+      "sha256": "dfd9421a72259b4d88e148a9230f60ddf07cd3d3d93c7eac6deeee60247d8f7e",
+      "previous_path": "cooperative_controller.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/cooperative/runtime.py",
+      "source": "Created for this bundle.",
+      "change": "Research runtime with unchanged pose sensor, shared RTDE interface, preview and explicit arming.",
+      "bytes": 12259,
+      "sha256": "4675370f8e8a1c608461b20b854acbe020847a2be41034749c64cbd3f80b6221",
+      "previous_path": "control_cooperative.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/cooperative/logging.py",
+      "source": "Created for this bundle.",
+      "change": "Exclusive asynchronous JSONL experiment recording with bounded queue and failure reporting.",
+      "bytes": 5271,
+      "sha256": "f71de453533d5ff25c1b1aa6e6623298ec589035a82565d3d68ae4eb9528a94f",
+      "previous_path": "cooperative_logging.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/tools/analyze_log.py",
+      "source": "Created for this bundle.",
+      "change": "Separate estimated/reference error, path/settled completion and unfinished-path slowdown metrics.",
+      "bytes": 13662,
+      "sha256": "e8c2ec19afb79055cbc680a9d01e1ad7c5b81e8aa8c18e41124b586d5f7540c2",
+      "previous_path": "analyze_cooperative_log.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "urcal/tools/simulate.py",
+      "source": "Created for this bundle.",
+      "change": "Offline deterministic Cartesian plant comparison using the production planner; no hardware accuracy claim.",
+      "bytes": 17149,
+      "sha256": "cb32ac7831050d823f7518700eca17381ced0da007dce06da752963e4540af70",
+      "previous_path": "simulate_cooperative.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "run_cooperative.sh",
+      "source": "Created for this bundle.",
+      "change": "Working-directory-independent research control launcher; no arguments displays help.",
+      "bytes": 321,
+      "sha256": "52965932d139bfc5245199002115c0e43edbd022efbd082e06f7783ab51a1c1c",
+      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
+    },
+    {
+      "path": "configs/workspace.example.json",
+      "source": "Created for this bundle.",
+      "change": "Example joint limits, capsule radii and empty environment configuration; not a measured workspace.",
+      "bytes": 511,
+      "sha256": "ceaaef3d927ba3435d16c48ab9c6c03900b41659cf199b9d1c39389d934f263b",
+      "previous_path": "workspace.example.json",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+    },
+    {
+      "path": "tests/test_relative_state.py",
+      "source": "Created for this bundle.",
+      "change": "Time alignment, paired updates, filtering, rotation/translation prediction, stale and invalid input tests.",
+      "bytes": 14713,
+      "sha256": "c8a773ea9c8149412df8801028f9e27867e5b1930606565b84c765213ea3620a"
+    },
+    {
+      "path": "tests/test_cooperative_task.py",
+      "source": "Created for this bundle.",
+      "change": "Task derivatives, velocity decomposition, acceleration constraints and pause deceleration tests.",
+      "bytes": 20714,
+      "sha256": "ba1e27ca0f90e112365517b99ea25f57870531387871f8876e5275eb785b35ef"
+    },
+    {
+      "path": "tests/test_cooperative_kinematics.py",
+      "source": "Created for this bundle.",
+      "change": "Independent DH/Jacobian checks, local IK, segment geometry and workspace rejection tests.",
+      "bytes": 14268,
+      "sha256": "438cc0f77db2630c2a1827e3da44aa1e2ab18f537e48293ffd88bbfe244c907f"
+    },
+    {
+      "path": "tests/test_cooperative_controller.py",
+      "source": "Created for this bundle.",
+      "change": "Real planner tests for moving bases/leader, fixed goals, TCP offsets and measurement lifecycle.",
+      "bytes": 16053,
+      "sha256": "86076e674cad37e3dbe1f909204d38a50e348bfdecd5386ec89ea23c741c84e9"
+    },
+    {
+      "path": "tests/test_cooperative_regressions.py",
+      "source": "Created for this bundle.",
+      "change": "Rejected-measurement rollback, measured acceleration, future targets and settled completion regressions.",
+      "bytes": 9324,
+      "sha256": "681e97fe119749ae8987c43184f9c91bad946300823c1213e9ebeae97b3d84ce"
+    },
+    {
+      "path": "tests/test_cooperative_runtime.py",
+      "source": "Created for this bundle.",
+      "change": "Mocked research RTDE, preview, send/commit ordering, failures, cleanup and command freshness tests.",
+      "bytes": 18304,
+      "sha256": "db13e39614ec4becfe8d5766814844e1c0a4a6b3fd74412d114ed67959afe202"
+    },
+    {
+      "path": "tests/test_cooperative_logging.py",
+      "source": "Created for this bundle.",
+      "change": "Log integrity, writer failure, independent reference matching and fair completion/slowdown analysis.",
+      "bytes": 15222,
+      "sha256": "c2c3a37822a3b9d63381bf8b1f08fe30bf0caf9e9aec71859ae2bd0c6a370a33"
+    },
+    {
+      "path": "tests/test_cooperative_simulation.py",
+      "source": "Created for this bundle.",
+      "change": "Production-planner synthetic method comparison, independent synthetic truth and fault scenarios.",
+      "bytes": 8682,
+      "sha256": "560f776c180df7a0fae2fe1bcdcf0edfd46418fe82c0393728db1f4807a4360c"
+    },
+    {
+      "path": "urcal/__init__.py",
+      "source": "Created for this bundle.",
+      "change": "Package root; no eager hardware/model imports.",
+      "bytes": 62,
+      "sha256": "8792bf78a8cb2f4045b29f46d3cc73eebbfdda53682d552761bb108f6d16bb00"
+    },
+    {
+      "path": "urcal/paths.py",
+      "source": "Created for this bundle.",
+      "change": "Central repository root for weights, cache, plan and logs.",
+      "bytes": 142,
+      "sha256": "a2124c5fc4882d327a61115434a220cd968c4789d610ceef8e1ef2e96d1b7150"
+    },
+    {
+      "path": "urcal/inference/__init__.py",
+      "source": "Created for this bundle.",
+      "change": "Inference package boundary.",
+      "bytes": 68,
+      "sha256": "85ab87f1d4363a2231c4bbf773415fe81d407369b04356a9718103c92e5acf75"
+    },
+    {
+      "path": "urcal/control/__init__.py",
+      "source": "Created for this bundle.",
+      "change": "Shared control package boundary.",
+      "bytes": 67,
+      "sha256": "396546b0970840e9c79a7926d582f633c480b43552d5055419be14d0977ea16e"
+    },
+    {
+      "path": "urcal/cooperative/__init__.py",
+      "source": "Created for this bundle.",
+      "change": "Research collaboration package boundary.",
+      "bytes": 82,
+      "sha256": "518feb78468fa9dcba8dae38b4dc2e9df01bd6b630fbc7f524982c72dd9c00bb"
+    },
+    {
+      "path": "urcal/tools/__init__.py",
+      "source": "Created for this bundle.",
+      "change": "Offline tools package boundary.",
+      "bytes": 72,
+      "sha256": "d50faf46632015aa667bf6f1ad73fdd4433433f90ecb490c4e5e263609e48646"
+    },
+    {
+      "path": "tests/test_package_layout.py",
+      "source": "Created for this bundle.",
+      "change": "Six integration tests for spawn identity, original/package isolation, offline imports, asset root and launcher cwd/arguments/environment.",
+      "bytes": 10049,
+      "sha256": "c7daefa85ecf1f3bf8af633df2f1f85aeff9f45e063df083cd89e5b6f902a0e6"
     }
   ],
   "optimized_date": "2026-10-12",
@@ -313,5 +645,216 @@
       "Local Python environments"
     ],
     "checksum_scope": "Actual working-tree files after LFS download, not pointer blobs."
+  },
+  "dual_inference": {
+    "added_date": "2026-10-16",
+    "entrypoint": "run_dual.sh",
+    "assignment": "Left UR5e, right UR10e; split_ratio defaults to 0.5.",
+    "preprocessing": "Aspect-preserving 640x480 letterbox per region; exclude padding from voting and restore pixel centers/covariances to the original camera image.",
+    "execution": "Two separate models run sequentially on one captured frame. Both joint sources are sampled before inference; no camera/RTDE hardware synchronization.",
+    "poses": "Independent camera-from-base estimates and temporal state, using existing per-robot FK and EMPnP lambda defaults.",
+    "verification": {
+      "passed": [
+        "8 new dual tests passed on CPU with synthetic predictions and mocked hardware.",
+        "Full suite: 27 tests, 24 passed and 3 CUDA-only tests skipped.",
+        "Python AST and Bash syntax checks.",
+        "Dual launcher help from /tmp, including the no-argument form."
+      ],
+      "not_run": [
+        "Real checkpoint inference: the two robot checkpoints were Git LFS pointers during validation.",
+        "Physical camera and two RTDE connections.",
+        "CUDA execution, real-scene accuracy and live dual FPS."
+      ]
+    },
+    "display": {
+      "divider": "Hidden in both the main image and segmentation window.",
+      "keypoints": "Dots and names are initially visible; k toggles both robots and --hide_keypoints starts hidden.",
+      "verification": "8 existing dual tests passed. Synthetic rendering checks verified both visibility states and absent divider; CLI defaults and hidden-start option checked."
+    }
+  },
+  "segmentation_debug_fix": {
+    "date": "2026-10-16",
+    "cause": "cv2.addWeighted returns None for empty masked arrays when no segmentation pixel reaches the threshold.",
+    "change": "Skip only the empty blend in both live renderers, retaining image, legend and footer. Dual inference uses the same renderer.",
+    "verification": [
+      "Reproduced the reported TypeError before the fix with zero and below-threshold probabilities for both robots.",
+      "Empty-mask rendering passes; nonempty overlays exactly match the preserved reference.",
+      "Mocked dual live loops continue across two frames with either or both robot masks empty.",
+      "Full regression suite: 29 tests, 26 passed and 3 CUDA-only tests skipped."
+    ],
+    "limits": "No physical camera/robot or CUDA re-run for this fix. EMPnP initialization failures are separate from the rendering crash."
+  },
+  "dual_control": {
+    "added_date": "2026-10-16",
+    "entrypoint": "run_dual_control.sh",
+    "modes": {
+      "hold": "Fixed camera-frame pair center/orientation selected in GUI.",
+      "follow": "Research runtime: UR10e read-only leader / UR5e follower, fixed opposing-flange relation and relative paths."
+    },
+    "default_gap_m": 0.3,
+    "gui_units": "Center XYZ metres in camera frame, extrinsic XYZ Euler degrees, gap centimetres. CLI poses use rotation vectors in radians.",
+    "execution": "Default receive-only preview. --execute requires both explicit active TCP offsets; GUI Arm or preview a enables commands after validation. Hold requires Apply or explicit CLI center.",
+    "processes": "Separate control, vision and GUI processes; capture thread drains camera; Stop uses shared event.",
+    "frames": "T_camera_base=T_camera_model*T_model_base. UR5e model/base identity; UR10e +5mm Z and pi Z rotation. Remove active TCP offset for flange and restore for commands.",
+    "motion": "25Hz bounded speedL regulator; raw-detection reprojection, paired age/stability/jump checks, nominal FK consistency, target/envelope/speed and controller safety limits.",
+    "faults": "Active faults request stop and exit. Controller watchdog 5Hz. Disable auto script upload on reconnect; explicitly upload once at Arm. SDK short retries and OS timing remain limitations.",
+    "limits": [
+      "Camera-fixed hold has no collision model; research follow uses nominal link/tool capsules and configured spheres, without full CAD/self-collision certification.",
+      "Camera and robot joints are approximately sampled, not hardware synchronized.",
+      "Hold requires a fixed camera; left/right robot image assignment must remain valid.",
+      "No physical camera, robot motion, live inference timing, GUI display or CUDA test for this control implementation."
+    ],
+    "verification": {
+      "command": "python3 -B -m unittest discover -s tests -v",
+      "checks": [
+        "Geometry, calibration policy, mocked RTDE/vision and display-free GUI tests.",
+        "Python AST and Bash syntax checks; launcher help from /tmp.",
+        "Installed ur_rtde 1.6.3 API inspected without constructing hardware interfaces."
+      ],
+      "suite": {
+        "total": 130,
+        "passed": 127,
+        "skipped_cuda": 3
+      },
+      "control_tests_passed": 101
+    }
+  },
+  "research_collaboration": {
+    "implemented_date": "2026-10-16",
+    "source_plan": "docs/Research_Implementation_Plan.txt",
+    "plan_sha256": "7cdba760afb382c18291280fbad326fde623dd97630a7662281386639c542c7a",
+    "entrypoint": "run_cooperative.sh",
+    "legacy_entrypoint": "run_dual_control.sh --mode follow",
+    "scope": "Implement all five plan stages as software; real robot, camera timing and independent real-error experiments remain unvalidated.",
+    "unchanged": [
+      "User research plan",
+      "Network/voting/PnP pose estimator",
+      "Shared low-level RTDE speedL interface"
+    ],
+    "defaults": {
+      "leader": "ur10e",
+      "follower": "ur5e",
+      "gap_m": 0.3,
+      "method": "separated",
+      "path": "hold",
+      "execution": "receive-only preview"
+    },
+    "methods": {
+      "direct": "Common-capture-time raw bases, shared feedback and nominal task clock.",
+      "predict": "SE(3) filtering and short current-time prediction, same feedback and nominal task clock.",
+      "separated": "Predict state plus unscaled base/leader compensation, task feedforward and feasible task progress."
+    },
+    "paths": [
+      "hold",
+      "line",
+      "circle"
+    ],
+    "feasibility": [
+      "Cartesian and joint speed/acceleration",
+      "Nominal Jacobian singularity/local IK",
+      "Joint position limits/TCP boxes/start envelope",
+      "Inter-arm capsule and configured sphere clearance",
+      "Current and next target controller safety checks"
+    ],
+    "logging": "Exclusive asynchronous JSONL: measurement/capture/receipt, state, goals, commands, successful progress commits, completion and classified faults.",
+    "evaluation": "Estimate-derived errors separated from optional clock-aligned independent references; task phase and settled completion reported separately; slowdown excludes post-completion maintenance.",
+    "limits": [
+      "Capsules are approximate configurable geometry, not certified robot/tool meshes or full self-collision checks.",
+      "Synthetic Cartesian velocity integrator is not UR dynamics or real accuracy validation.",
+      "Vision/joint samples are not hardware synchronized; prediction is short and bounded.",
+      "Robot stop does not stop externally moved passive tables.",
+      "No physical camera, robot motion, GUI display, CUDA or worst-case live timing validation."
+    ],
+    "verification": {
+      "command": "python3 -B -m unittest discover -s tests -v",
+      "suite": {
+        "total": 272,
+        "passed": 269,
+        "skipped_cuda": 3
+      },
+      "checks": [
+        "Python AST and Bash syntax",
+        "Launcher/analyzer/simulator help",
+        "Deterministic synthetic three-method experiment",
+        "Mocked RTDE send failure and cleanup",
+        "Atomic rejected calibration recovery"
+      ],
+      "prepare_benchmark": {
+        "scope": "Stationary nonsingular synthetic 30 cm facing scene, real NominalKinematics/default WorkspaceGuard; 3 warmups and 10 timed samples per method; no hardware.",
+        "direct_median_ms": 10.9,
+        "direct_max_ms": 14.5,
+        "predict_median_ms": 14.66,
+        "predict_max_ms": 14.68,
+        "separated_median_ms": 14.68,
+        "separated_max_ms": 14.75,
+        "limitation": "Planner-only easy hold case, not full control loop or worst-case timing."
+      }
+    }
+  },
+  "organization": {
+    "date": "2026-10-16",
+    "package": "urcal",
+    "layout": {
+      "urcal/inference": "Single/dual inference, model, voting and EMPnP.",
+      "urcal/control": "Shared geometry, calibration gate, GUI, vision process and RTDE runtime.",
+      "urcal/cooperative": "Relative state, task planning, motion feasibility and research runtime/logging.",
+      "urcal/tools": "Module entrypoints for offline analysis and synthetic comparison.",
+      "docs": "User research plan, preserved byte-for-byte.",
+      "configs": "Workspace example, preserved byte-for-byte.",
+      "tests": "Regression, reference-equivalence and package integration tests.",
+      "reference": "Unchanged pre-optimization sources.",
+      "runs": "Existing and new local experiment logs; excluded from distribution."
+    },
+    "entrypoints": "All five root run_*.sh commands retained; PYTHONPATH and -m keep caller cwd and relative argument semantics.",
+    "python_cli": "Root Python scripts moved. Use python3 -m urcal.tools.analyze_log / urcal.tools.simulate from the repository root.",
+    "assets": "Central urcal.paths.BUNDLE retains trained_models, torch_cache and runs at repository root.",
+    "preserved": "Research plan/config/model/voting/PnP bodies, reference sources, model weights and existing experiment logs.",
+    "moved_files": {
+      "infer_live.py": "urcal/inference/infer_live.py",
+      "infer_live_ur10e.py": "urcal/inference/infer_live_ur10e.py",
+      "infer_live_dual.py": "urcal/inference/infer_live_dual.py",
+      "infer_live_10.py": "urcal/inference/infer_live_10.py",
+      "network3.py": "urcal/inference/network3.py",
+      "vote2.py": "urcal/inference/vote2.py",
+      "my_pnp.py": "urcal/inference/my_pnp.py",
+      "control_dual.py": "urcal/control/runtime.py",
+      "dual_control_geometry.py": "urcal/control/geometry.py",
+      "dual_control_policy.py": "urcal/control/policy.py",
+      "dual_control_vision.py": "urcal/control/vision.py",
+      "dual_control_gui.py": "urcal/control/gui.py",
+      "control_cooperative.py": "urcal/cooperative/runtime.py",
+      "relative_state.py": "urcal/cooperative/state.py",
+      "cooperative_controller.py": "urcal/cooperative/controller.py",
+      "cooperative_task.py": "urcal/cooperative/task.py",
+      "cooperative_kinematics.py": "urcal/cooperative/kinematics.py",
+      "cooperative_logging.py": "urcal/cooperative/logging.py",
+      "analyze_cooperative_log.py": "urcal/tools/analyze_log.py",
+      "simulate_cooperative.py": "urcal/tools/simulate.py",
+      "Research_Implementation_Plan.txt": "docs/Research_Implementation_Plan.txt",
+      "workspace.example.json": "configs/workspace.example.json"
+    },
+    "verification": {
+      "suite": {
+        "total": 278,
+        "passed": 275,
+        "skipped_cuda": 3
+      },
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests -v",
+      "checks": [
+        "All five root launchers and two reference branches show help from /tmp.",
+        "Both real checkpoints strictly load into packaged RobotJointDetection on CPU.",
+        "Actual spawn process preserves canonical CalibrationFrame and GUI/vision function identities.",
+        "Offline tools/runtime imports do not load RTDE, RealSense, Torch or Tk.",
+        "Caller cwd, argument boundaries, PYTHONPATH and asset root survive shell/module entrypoints.",
+        "Preserved reference sources and all weight hashes unchanged.",
+        "Plan/config and network/voting/PnP source bytes unchanged by relocation.",
+        "README local links, Python/Bash syntax and git diff whitespace checks passed."
+      ],
+      "not_run": [
+        "Physical camera/robot motion",
+        "GUI display",
+        "CUDA tests"
+      ]
+    }
   }
 }

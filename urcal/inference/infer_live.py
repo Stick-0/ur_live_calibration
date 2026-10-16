@@ -9,9 +9,9 @@ import numpy as np
 import torch
 from torchvision import transforms
 
-from my_pnp import EMPnP
-from network3 import RobotJointDetection
-from vote2 import PVNetVoteConfig, pvnet_vote
+from urcal.inference.my_pnp import EMPnP
+from urcal.inference.network3 import RobotJointDetection
+from urcal.inference.vote2 import PVNetVoteConfig, pvnet_vote
 
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -206,7 +206,9 @@ def make_segmentation_debug_bgr(bgr: np.ndarray, probs: np.ndarray, names: List[
     color_mask = cv2.resize(color_mask, (bgr.shape[1], bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
     mask = cv2.resize((best_prob >= threshold).astype(np.uint8), (bgr.shape[1], bgr.shape[0]), interpolation=cv2.INTER_NEAREST).astype(bool)
     out = bgr.copy()
-    out[mask] = cv2.addWeighted(out[mask], 0.45, color_mask[mask], 0.55, 0)
+    # OpenCV returns None for empty inputs when no pixel passes the threshold.
+    if np.any(mask):
+        out[mask] = cv2.addWeighted(out[mask], 0.45, color_mask[mask], 0.55, 0)
 
     y = 24
     for idx, name in enumerate(names):

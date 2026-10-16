@@ -1,5 +1,6 @@
 """Live postprocessing and option compatibility without connecting to hardware."""
 from contextlib import nullcontext
+import importlib
 import importlib.util
 from pathlib import Path
 import sys
@@ -11,11 +12,12 @@ import torch
 
 
 BUNDLE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BUNDLE))
 
 
 def load_live(directory, script, label):
-    # Each live script uses absolute imports; isolate its dependency set so the
-    # reference really uses the reference voter/PnP/network.
+    # Preserved reference scripts use bare sibling imports. Isolate those names
+    # from the application's canonical urcal.inference modules.
     names = ("vote2", "my_pnp", "network3")
     saved = {name: sys.modules.pop(name, None) for name in names}
     previous_path = sys.path[:]
@@ -56,7 +58,7 @@ class LiveEquivalenceTests(unittest.TestCase):
         for script in ("infer_live.py", "infer_live_ur10e.py"):
             cls.modules.append((
                 load_live(BUNDLE / "reference", script, "reference_" + script[:-3]),
-                load_live(BUNDLE, script, "optimized_" + script[:-3]),
+                importlib.import_module("urcal.inference." + script[:-3]),
             ))
 
     @classmethod
@@ -100,6 +102,33 @@ class LiveEquivalenceTests(unittest.TestCase):
 
     def test_cpu_debug_toggle_preserves_pose_inputs(self):
         self.compare_inference(torch.device("cpu"))
+
+    def test_segmentation_debug_empty_mask_preserves_background(self):
+        image = np.random.default_rng(47).integers(0, 256, (480, 320, 3), dtype=np.uint8)
+        before = image.copy()
+        for _, optimized in self.modules:
+            for probability in (0.0, 0.49):
+                with self.subTest(robot=optimized.DEFAULT_KEY_NAMES[0], probability=probability):
+                    probs = np.full((7, 48, 32), probability, dtype=np.float32)
+                    rendered = optimized.make_segmentation_debug_bgr(
+                        image, probs, optimized.DEFAULT_KEY_NAMES, threshold=0.5,
+                    )
+                    self.assertEqual(rendered.shape, image.shape)
+                    self.assertEqual(rendered.dtype, image.dtype)
+                    # The center band is outside the legend and footer text.
+                    np.testing.assert_array_equal(rendered[200:430], before[200:430])
+                    np.testing.assert_array_equal(image, before)
+
+    def test_segmentation_debug_nonempty_matches_reference(self):
+        image = np.random.default_rng(48).integers(0, 256, (480, 320, 3), dtype=np.uint8)
+        sparse = np.zeros((7, 48, 32), dtype=np.float32)
+        sparse[2, 20:30, 10:20] = 0.5
+        for original, optimized in self.modules:
+            for case, probs in (("sparse_threshold_boundary", sparse), ("full", np.ones_like(sparse))):
+                with self.subTest(robot=optimized.DEFAULT_KEY_NAMES[0], case=case):
+                    expected = original.make_segmentation_debug_bgr(image, probs, original.DEFAULT_KEY_NAMES, 0.5)
+                    actual = optimized.make_segmentation_debug_bgr(image, probs, optimized.DEFAULT_KEY_NAMES, 0.5)
+                    np.testing.assert_array_equal(actual, expected)
 
     @unittest.skipUnless(torch.cuda.is_available(), "CUDA is not accessible")
     def test_cuda_debug_toggle_preserves_pose_inputs(self):

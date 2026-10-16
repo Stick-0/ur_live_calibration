@@ -10,6 +10,9 @@
 #
 # RealSense may also need system packages/udev rules depending on the machine:
 #   sudo apt install librealsense2-utils librealsense2-dev
+#
+# The dual-control target GUI also needs the system Tkinter package:
+#   sudo apt install python3-tk
 
 numpy
 opencv-python

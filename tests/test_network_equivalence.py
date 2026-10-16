@@ -17,6 +17,7 @@ import torch
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 
 def load_module(name, path):
@@ -27,7 +28,7 @@ def load_module(name, path):
 
 
 ORIGINAL = load_module("network_original", ROOT / "reference" / "network3.py")
-OPTIMIZED = load_module("network_optimized", ROOT / "network3.py")
+from urcal.inference import network3 as OPTIMIZED
 BLOCKS = ("TransformerEncoder", "TransformerEncoder_Split")
 
 

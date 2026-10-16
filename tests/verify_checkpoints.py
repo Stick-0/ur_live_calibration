@@ -8,6 +8,7 @@ from contextlib import nullcontext
 import gc
 import importlib.util
 from pathlib import Path
+import sys
 
 import cv2
 import torch
@@ -15,6 +16,9 @@ from torchvision import transforms
 
 
 BUNDLE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BUNDLE))
+
+from urcal.inference import network3
 
 
 def load_network(name, path):
@@ -51,7 +55,7 @@ def main():
 
     networks = (
         load_network("checkpoint_reference", BUNDLE / "reference" / "network3.py"),
-        load_network("checkpoint_optimized", BUNDLE / "network3.py"),
+        network3,
     )
     for robot, folder in (("ur5e", "v3m2a3"), ("ur10e", "ur10e_2")):
         if args.robot not in (robot, "both"):

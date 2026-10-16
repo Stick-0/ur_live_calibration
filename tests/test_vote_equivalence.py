@@ -12,6 +12,7 @@ import torch
 
 
 BUNDLE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BUNDLE))
 
 
 def load_module(name, path):
@@ -23,7 +24,7 @@ def load_module(name, path):
 
 
 REFERENCE = load_module("robotpose_vote_reference_test", BUNDLE / "reference" / "vote2.py")
-OPTIMIZED = load_module("robotpose_vote_optimized_test", BUNDLE / "vote2.py")
+from urcal.inference import vote2 as OPTIMIZED
 DTYPES = (torch.float16, torch.float32, torch.float64)
 
 

@@ -26,11 +26,11 @@ def _load_module(name, path):
 
 
 baseline = _load_module("pnp_reference", BUNDLE / "reference" / "my_pnp.py")
-optimized = _load_module("pnp_optimized", BUNDLE / "my_pnp.py")
+from urcal.inference import my_pnp as optimized
 # Importing these modules defines FK functions; hardware connections only happen
 # when main() is called. Reuse the actual FK definitions to cover both robots.
-ur5e = _load_module("pnp_ur5e_fk", BUNDLE / "infer_live.py")
-ur10e = _load_module("pnp_ur10e_fk", BUNDLE / "infer_live_ur10e.py")
+from urcal.inference import infer_live as ur5e
+from urcal.inference import infer_live_ur10e as ur10e
 
 K = np.array([[615.0, 0.0, 320.0], [0.0, 610.0, 240.0], [0.0, 0.0, 1.0]])
 DIST = np.array([0.01, -0.005, 0.0002, -0.0001, 0.001], dtype=np.float64)
