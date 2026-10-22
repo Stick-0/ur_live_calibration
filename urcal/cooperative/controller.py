@@ -12,8 +12,11 @@ from scipy.spatial.transform import Rotation
 
 from urcal.cooperative.kinematics import NominalKinematics, WorkspaceGuard
 from urcal.cooperative.task import MotionInfeasible, MotionLimits, RelativePath, govern_task, target_components
+from urcal.cooperative.follow import govern_follow
+from urcal.control.cartesian_ramp import bounded_speedl_acceleration
 from urcal.control.geometry import facing_follower, flange_from_tcp, inverse, matrix_pose, model_from_controller_base, pose_delta, pose_matrix, rotation_distance
-from urcal.control.policy import CalibrationTracker, ControlFault
+from urcal.control.policy import CalibrationTracker, ControlFault, PreviewCalibrationRecovery
+from urcal.control.acquisition import StationaryCalibrationAcquisition, stationary_estimator
 from urcal.cooperative.state import RelativeStateEstimator, RelativeStateError
 
 
@@ -21,8 +24,11 @@ ROBOTS = ("ur5e", "ur10e")
 
 
 class ResearchFault(ControlFault):
-    def __init__(self, category, message):
+    def __init__(self, category, message, details=None):
         self.category = category
+        # Failed prepare() calls do not produce a normal control record. Keep
+        # independent diagnostics on the exception for the runtime WAIT log.
+        self.details = copy.deepcopy(details) if details is not None else {}
         super().__init__(message)
 
 
@@ -38,6 +44,12 @@ def norm_limit(vector, limit):
     return vector * min(1., limit / norm) if norm else vector.copy()
 
 
+def outside_tolerance(vector, allowance):
+    """Continuous residual outside a Euclidean/rotation-vector task allowance."""
+    norm = np.linalg.norm(vector)
+    return vector * max(0., 1. - allowance / norm) if norm else vector.copy()
+
+
 @dataclass
 class Proposal:
     goals: dict
@@ -49,6 +61,7 @@ class Proposal:
     feedback: np.ndarray
     compensation: np.ndarray
     future_tcp_goals: dict
+    tracking_offset: object = None
 
 
 class CooperativeController:
@@ -57,6 +70,19 @@ class CooperativeController:
         self.leader = args.leader
         self.follower = next(name for name in ROBOTS if name != self.leader)
         self.commanded = (self.follower,)
+        self.target_tolerance_m = float(getattr(args, "target_tolerance_m", 0.))
+        self.target_tolerance_rad = np.deg2rad(float(getattr(args, "target_tolerance_deg", 0.)))
+        if (not np.isfinite([self.target_tolerance_m, self.target_tolerance_rad]).all()
+                or min(self.target_tolerance_m, self.target_tolerance_rad) < 0):
+            raise ValueError("target tolerances must be finite and nonnegative")
+        self.approximate_targets = bool(self.target_tolerance_m or self.target_tolerance_rad)
+        response = getattr(args, "leader_response", "strict")
+        if response not in ("bounded", "strict"):
+            raise ValueError("leader_response must be bounded or strict")
+        self.bounded_leader = response == "bounded" and args.method == "separated" and self.approximate_targets
+        self.tracking_offset = None
+        self.previous_base_compensation = np.zeros(6)
+        self.previous_base_compensation_qdot = np.zeros(6)
         self.offsets = {name: pose_matrix(getattr(args, name + "_tcp_offset") or [0.]*6) for name in ROBOTS}
         self.mappings = {name: model_from_controller_base(name) for name in ROBOTS}
         self.models = models or {name: NominalKinematics(name, self.offsets[name]) for name in ROBOTS}
@@ -64,14 +90,18 @@ class CooperativeController:
         self.gate = CalibrationTracker(
             max_age=args.max_calibration_age, stable_frames=args.stable_frames, alpha=1.,
             max_jump_m=args.max_calibration_jump_m, max_jump_rad=np.deg2rad(args.max_calibration_jump_deg),
-            max_mean_px=args.max_reproj_px, max_pixel_px=args.max_point_reproj_px, min_points=args.min_points)
-        self.estimator = RelativeStateEstimator(
-            mode="direct" if args.method == "direct" else "predict", alpha=args.filter_alpha,
-            velocity_alpha=args.velocity_alpha, max_prediction_age=args.prediction_horizon,
-            max_measurement_age=args.max_calibration_age,
-            max_linear_speed=args.max_base_speed, max_angular_speed=args.max_base_angular_speed)
+            max_mean_px=args.max_reproj_px, max_pixel_px=args.max_point_reproj_px, min_points=args.min_points,
+            check_reprojection=args.check_reprojection)
+        self.estimator = self._new_estimator()
+        self.stationary_acquisition = StationaryCalibrationAcquisition(self.gate)
+        self.preview_recovery = PreviewCalibrationRecovery()
+        self.reacquisition_count = 0
+        # Keep the original phase limits in args: alignment and hold use
+        # max_speed, while following has its own TCP translation cap.
+        follow_max_speed = getattr(args, "follow_max_speed", None)
         self.limits = MotionLimits(
-            linear_speed=args.max_speed, angular_speed=args.max_angular_speed,
+            linear_speed=args.max_speed if follow_max_speed is None else follow_max_speed,
+            angular_speed=args.max_angular_speed,
             linear_accel=args.max_accel, angular_accel=args.max_angular_accel,
             joint_speed=np.full(6, args.max_joint_speed), joint_accel=np.full(6, args.max_joint_accel),
             min_singular_value=args.min_singular_value)
@@ -89,6 +119,35 @@ class CooperativeController:
         self.apply_target({"type": "target", "gap": args.gap, "path": args.path,
                            "path_delta": args.path_delta, "path_radius": args.path_radius,
                            "path_duration": args.path_duration})
+
+    def _new_estimator(self):
+        args = self.args
+        return RelativeStateEstimator(
+            mode="direct" if args.method == "direct" else "predict", alpha=args.filter_alpha,
+            velocity_alpha=args.velocity_alpha, max_prediction_age=args.prediction_horizon,
+            max_measurement_age=args.max_calibration_age,
+            max_linear_speed=args.max_base_speed, max_angular_speed=args.max_base_angular_speed)
+
+    def reset_after_stop(self):
+        """Discard motion/sensor history only after measured standstill.
+
+        The applied path, progress, pause choice and original travel origin
+        remain unchanged. New post-stop frames and a new Arm must precede any
+        new motion session; this method itself cannot authorize a command.
+        """
+        from urcal.control.recovery import fresh_calibration_tracker
+        self.gate = fresh_calibration_tracker(self.gate)
+        self.estimator = self._new_estimator()
+        self.preview_recovery.reset()
+        self.stationary_acquisition.reset()
+        self.ever_ready = False
+        self.invalid_since, self.last_rejection = None, ""
+        for attribute in ("previous_twist", "previous_qdot", "previous_compensation",
+                          "previous_compensation_qdot", "previous_feedback",
+                          "previous_base_compensation", "previous_base_compensation_qdot"):
+            getattr(self, attribute)[:] = 0.
+        self.tracking_offset = None
+        self.settle_elapsed, self.finished = 0., False
 
     def apply_target(self, command):
         if command.get("type") != "target" or "center_pose" in command:
@@ -109,8 +168,49 @@ class CooperativeController:
         self.previous_compensation[:] = 0
         self.previous_compensation_qdot[:] = 0
         self.previous_feedback[:] = 0
+        self.tracking_offset = None
+        self.previous_base_compensation[:] = 0
+        self.previous_base_compensation_qdot[:] = 0
 
-    def ingest(self, packet, received_at):
+    def _following_reference(self, nominal, current_relative):
+        """Keep one accepted task offset, without absorbing later following lag.
+
+        Only commit() captures this offset, after a successfully sent command.
+        Project an initial outside-tolerance state onto the permitted tube;
+        neither preview nor a failed proposal changes the stored reference.
+        """
+        offset = self.tracking_offset
+        if offset is None:
+            dp, dr = pose_delta(nominal, current_relative)
+            accepted = nominal.copy()
+            accepted[:3, 3] += norm_limit(dp, self.target_tolerance_m)
+            accepted[:3, :3] = Rotation.from_rotvec(norm_limit(dr, self.target_tolerance_rad)).as_matrix() @ nominal[:3, :3]
+            offset = inverse(nominal) @ accepted
+        return nominal @ offset, offset.copy()
+
+    def ingest(self, packet, received_at, *, allow_reacquire=False):
+        if (allow_reacquire and getattr(self.args, "initial_align", False)
+                and getattr(self.args, "calibration_acquisition", "consecutive") == "consensus"):
+            previous_sequence = self.stationary_acquisition.sequence
+            candidate = self.stationary_acquisition.offer(packet, received_at)
+            self.last_rejection = self.stationary_acquisition.reason if candidate is None else ""
+            if candidate is None:
+                self.gate.reject(packet.sequence, self.last_rejection)
+                return False
+            replaced = bool(self.gate.poses) and (
+                self.gate.last_capture is None or received_at - self.gate.last_capture > self.gate.max_age
+                or self.stationary_acquisition._distance(self.gate.poses, candidate.poses) > 1.)
+            self.estimator = stationary_estimator(self._new_estimator, candidate, self.mappings, received_at)
+            self.gate = candidate
+            self.invalid_since, self.last_rejection, self.ever_ready = None, "", True
+            if replaced:
+                self.reacquisition_count += 1
+            return previous_sequence != packet.sequence and candidate.last_capture == packet.captured_at
+        self.stationary_acquisition.reset()
+        # Live runtimes opt in only while no control session exists. Native
+        # preflight, active control and other callers keep the strict baseline.
+        if not allow_reacquire:
+            self.preview_recovery.reset()
         try:
             candidate_gate = copy.deepcopy(self.gate)
             accepted = candidate_gate.update(packet, received_at)
@@ -120,33 +220,68 @@ class CooperativeController:
                 self.gate = candidate_gate
                 self.invalid_since, self.last_rejection = None, ""
                 self.ever_ready = self.ever_ready or self.gate.ready
+                self.preview_recovery.reset()
             return accepted
         except (ControlFault, RelativeStateError, ValueError) as exc:
-            self.gate.reject(packet.sequence)
+            self.gate.reject(packet.sequence, reason=str(exc))
             self.last_rejection = str(exc)
             if self.invalid_since is None:
                 self.invalid_since = received_at
+            if allow_reacquire:
+                candidate = self.preview_recovery.offer(packet, received_at, self.gate)
+                if candidate is not None:
+                    # Replay only the new stable cluster. A new coordinate
+                    # baseline must not become an old-to-new velocity spike,
+                    # while speeds within the candidate cluster remain checked.
+                    estimator = self._new_estimator()
+                    try:
+                        for sample, receipt in self.preview_recovery.samples:
+                            bases = {name: sample.poses[name] @ self.mappings[name] for name in ROBOTS}
+                            estimator.update_pair(bases, sample.captured_at, receipt, sample.sequence)
+                        estimator.estimate(received_at, leader=self.leader)
+                    except (RelativeStateError, ValueError) as recovery_exc:
+                        self.last_rejection = "preview calibration recovery: " + str(recovery_exc)
+                        self.gate.reject(packet.sequence, reason=self.last_rejection)
+                        self.preview_recovery.reset()
+                    else:
+                        self.gate, self.estimator = candidate, estimator
+                        self.invalid_since, self.last_rejection = None, ""
+                        self.ever_ready = True
+                        self.reacquisition_count += 1
+                        self.preview_recovery.reset()
+                        return True
             return False
+
+    def _measurement_fault(self, category, message, now):
+        capture = self.gate.last_capture
+        details = {"last_accepted_capture": capture,
+                   "last_accepted_age": None if capture is None else now - capture,
+                   "max_measurement_age": self.args.max_calibration_age,
+                   "last_rejection": self.last_rejection}
+        if (("stale" in message or "expired" in message) and self.last_rejection
+                and self.last_rejection not in message):
+            message += "; last rejected pair: " + self.last_rejection
+        return ResearchFault(category, message, details)
 
     def state(self, now, active):
         if not active or not self.ever_ready:
             try:
                 self.gate.check_fresh(now)
             except ControlFault as exc:
-                raise ResearchFault("measurement_unavailable", str(exc)) from exc
+                raise self._measurement_fault("measurement_unavailable", str(exc), now) from exc
         if self.invalid_since is not None and now - self.invalid_since > self.args.max_invalid_duration:
-            raise ResearchFault("measurement_invalid", self.last_rejection)
+            raise self._measurement_fault("measurement_invalid", self.last_rejection, now)
         try:
             return self.estimator.estimate(now, leader=self.leader)
         except RelativeStateError as exc:
-            raise ResearchFault("measurement_expired", str(exc)) from exc
+            raise self._measurement_fault("measurement_expired", str(exc), now) from exc
 
     def prepare(self, now, states, dt, active=False):
         if not np.isfinite(dt) or dt <= 0:
             raise ResearchFault("timing", "invalid control period")
         snapshot = self.state(now, active)
         bases = snapshot.base_poses
-        flanges, nominal_tcp, jacobians, qdots = {}, {}, {}, {}
+        flanges, nominal_tcp, jacobians, qdots, fk_corrections = {}, {}, {}, {}, {}
         for name in ROBOTS:
             nominal_tcp[name], jacobians[name] = self.models[name].pose_and_jacobian(states[name].joints)
             actual = states[name].tcp  # UR computes this FK from measured joint encoders.
@@ -154,6 +289,13 @@ class CooperativeController:
             if np.linalg.norm(dp) > self.args.frame_check_m or np.linalg.norm(dr) > np.deg2rad(self.args.frame_check_deg):
                 raise ResearchFault("frame_mismatch", f"{name}: nominal FK / controller TCP mismatch")
             flanges[name] = flange_from_tcp(actual, self.offsets[name])
+            # Anchor short-horizon nominal FK at the measured controller TCP.
+            # This is a local motion model, never a replacement calibration.
+            fk_corrections[name] = inverse(nominal_tcp[name]) @ actual
+            if self.approximate_targets:
+                jacobians[name] = jacobians[name].copy()
+                jacobians[name][:3] += np.cross(
+                    jacobians[name][3:].T, actual[:3, 3] - nominal_tcp[name][:3, 3]).T
             qdots[name] = np.asarray(states[name].joint_velocity, dtype=float)
             if qdots[name].shape != (6,) or not np.isfinite(qdots[name]).all():
                 raise ResearchFault("robot_state", f"{name}: invalid joint velocity")
@@ -163,42 +305,110 @@ class CooperativeController:
         measured_twist = np.asarray(states[follower].speed, dtype=float)
         if measured_twist.shape != (6,) or not np.isfinite(measured_twist).all():
             raise ResearchFault("robot_state", "invalid follower TCP velocity")
-        if (np.linalg.norm(measured_twist[:3]) > self.args.max_speed * 1.1 + .001
+        if (np.linalg.norm(measured_twist[:3]) > self.limits.linear_speed * 1.1 + .001
                 or np.linalg.norm(measured_twist[3:]) > self.args.max_angular_speed * 1.1 + .005):
             raise ResearchFault("tcp_speed", "measured follower TCP speed exceeded limit")
         if self.initial_tcp is None:
             self.initial_tcp = states[follower].tcp.copy()
         current_relative = inverse(bases[leader] @ flanges[leader]) @ bases[follower] @ flanges[follower]
         relative_goal = self.path.pose(self.progress)
+        tracking_relative, tracking_offset = relative_goal, None
+        if self.bounded_leader:
+            tracking_relative, tracking_offset = self._following_reference(relative_goal, current_relative)
         if min(np.linalg.norm(current_relative[:3, 3]), np.linalg.norm(relative_goal[:3, 3])) < self.args.min_gap:
             raise ResearchFault("clearance", "flange-origin separation below min_gap")
         dp_rel, dr_rel = pose_delta(current_relative, relative_goal)
         error_m, error_rad = np.linalg.norm(dp_rel), np.linalg.norm(dr_rel)
-        _, leader_jacobian = self.models[leader].pose_and_jacobian(states[leader].joints, flange=True)
+        nominal_leader_flange, leader_jacobian = self.models[leader].pose_and_jacobian(states[leader].joints, flange=True)
+        if self.approximate_targets:
+            leader_jacobian = leader_jacobian.copy()
+            leader_jacobian[:3] += np.cross(
+                leader_jacobian[3:].T, flanges[leader][:3, 3] - nominal_leader_flange[:3, 3]).T
         target, base_comp, leader_comp, task_twist = target_components(
             bases, snapshot.base_twists, leader, follower, flanges[leader],
             leader_jacobian @ qdots[leader], relative_goal,
             self.path.derivative(self.progress), self.offsets[follower])
+        nominal_base_comp, nominal_leader_comp, nominal_task_twist = (
+            base_comp.copy(), leader_comp.copy(), task_twist.copy())
+        if self.approximate_targets:
+            # Carry the currently achieved relative pose with the moving bases
+            # and leader. A feasible offset inside the task allowance must not
+            # become an artificial lever-arm error under leader rotation.
+            _, base_comp, leader_comp, task_twist = target_components(
+                bases, snapshot.base_twists, leader, follower, flanges[leader],
+                leader_jacobian @ qdots[leader], current_relative,
+                self.path.derivative(self.progress), self.offsets[follower])
+        if self.bounded_leader:
+            # The fixed allowed offset follows the nominal relative path.
+            # Include the lever arm introduced by its translated origin.
+            tracking_derivative = self.path.derivative(self.progress).copy()
+            tracking_derivative[:3] += np.cross(
+                tracking_derivative[3:], relative_goal[:3, :3] @ tracking_offset[:3, 3])
+            _, _, _, task_twist = target_components(
+                bases, snapshot.base_twists, leader, follower, flanges[leader],
+                leader_jacobian @ qdots[leader], tracking_relative,
+                tracking_derivative, self.offsets[follower])
         current = states[follower].tcp
         dp, dr = pose_delta(current, target)
-        if np.linalg.norm(dp) > self.args.max_target_m or np.linalg.norm(dr) > np.deg2rad(self.args.max_target_deg):
-            raise ResearchFault("tracking_error", "relative target exceeds allowed tracking error")
-        for pose in (current, target):
+        tcp_error_m, tcp_error_rad = float(np.linalg.norm(dp)), float(np.linalg.norm(dr))
+        tracking_error_m, tracking_error_rad = ((error_m, error_rad) if self.approximate_targets
+                                                else (tcp_error_m, tcp_error_rad))
+        rotation_limit = np.deg2rad(self.args.max_target_deg)
+        if tracking_error_m > self.args.max_target_m or tracking_error_rad > rotation_limit:
+            raise ResearchFault(
+                "tracking_error",
+                f"{follower} relative target error: {tracking_error_m * 1000:.1f}/{self.args.max_target_m * 1000:.1f} mm, "
+                f"{np.rad2deg(tracking_error_rad):.1f}/{self.args.max_target_deg:.1f} deg (actual/limit)",
+                {"leader": leader, "follower": follower, "frame": follower + "_controller_base",
+                 "error_origin": "flange" if self.approximate_targets else "TCP",
+                 "position_error_m": tracking_error_m, "rotation_error_rad": tracking_error_rad,
+                 "position_limit_m": self.args.max_target_m, "rotation_limit_rad": float(rotation_limit),
+                 "position_exceeded": tracking_error_m > self.args.max_target_m,
+                 "rotation_exceeded": bool(tracking_error_rad > rotation_limit),
+                 "current_tcp": current, "target_tcp": target,
+                 "current_relative_flange": current_relative, "desired_relative_flange": relative_goal})
+        for pose in ((current,) if self.approximate_targets else (current, target)):
             if np.linalg.norm(pose[:3, 3] - self.initial_tcp[:3, 3]) > self.args.max_travel:
                 raise ResearchFault("workspace", "TCP outside start-position travel envelope")
+            if self.approximate_targets and not self.guard.pose_allowed(follower, pose):
+                raise ResearchFault("workspace", "controller TCP outside workspace")
         valid, reason, clearance = self.guard.check(bases, {name: states[name].joints for name in ROBOTS})
         if not valid:
             raise ResearchFault("clearance", reason)
-        # A deadband reduces stationary sensor jitter. Saturate/ramp FEEDBACK,
-        # then assess the complete command; compensation itself is never clipped.
-        desired_feedback = np.concatenate((
-            norm_limit(dp * self.args.kp_linear, self.args.feedback_speed) if np.linalg.norm(dp) > self.args.position_deadband else np.zeros(3),
-            norm_limit(dr * self.args.kp_angular, self.args.feedback_angular_speed) if np.linalg.norm(dr) > np.deg2rad(self.args.rotation_deadband_deg) else np.zeros(3)))
+        # A deadband reduces stationary sensor jitter. Bound the requested
+        # feedback before assessing the whole command. Bounded following may
+        # ramp leader+feedback, while the base component remains mandatory.
+        if self.approximate_targets:
+            if self.bounded_leader:
+                follow_dp, follow_dr = pose_delta(current_relative, tracking_relative)
+                effective_dp = outside_tolerance(follow_dp, self.args.position_deadband)
+                effective_dr = outside_tolerance(follow_dr, np.deg2rad(self.args.rotation_deadband_deg))
+            else:
+                effective_dp = outside_tolerance(dp_rel, self.target_tolerance_m)
+                effective_dr = outside_tolerance(dr_rel, self.target_tolerance_rad)
+            relative_to_base = bases[follower][:3, :3].T @ (bases[leader] @ flanges[leader])[:3, :3]
+            flange_linear = norm_limit(relative_to_base @ effective_dp * self.args.kp_linear,
+                                       self.args.feedback_speed)
+            angular = norm_limit(relative_to_base @ effective_dr * self.args.kp_angular,
+                                 self.args.feedback_angular_speed)
+            tcp_linear = flange_linear + np.cross(angular, current[:3, 3] - flanges[follower][:3, 3])
+            desired_feedback = np.r_[tcp_linear, angular]
+            # Preserve the flange/TCP lever-arm relation when a long tool makes
+            # the rotational correction exceed the TCP feedback speed budget.
+            linear_norm = np.linalg.norm(tcp_linear)
+            if linear_norm > self.args.feedback_speed:
+                desired_feedback *= self.args.feedback_speed / linear_norm
+        else:
+            effective_dp, effective_dr = dp_rel.copy(), dr_rel.copy()
+            desired_feedback = np.concatenate((
+                norm_limit(dp * self.args.kp_linear, self.args.feedback_speed) if np.linalg.norm(dp) > self.args.position_deadband else np.zeros(3),
+                norm_limit(dr * self.args.kp_angular, self.args.feedback_angular_speed) if np.linalg.norm(dr) > np.deg2rad(self.args.rotation_deadband_deg) else np.zeros(3)))
         feedback = self.previous_feedback.copy()
         feedback[:3] += norm_limit(desired_feedback[:3] - feedback[:3], self.args.max_accel * dt * .5)
         feedback[3:] += norm_limit(desired_feedback[3:] - feedback[3:], self.args.max_angular_accel * dt * .5)
         separated = self.args.method == "separated"
         compensation = base_comp + leader_comp if separated else np.zeros(6)
+        mandatory_compensation = base_comp if self.bounded_leader else compensation
         work_twist = task_twist if separated else np.zeros(6)
         rho_cap = 1.
         if separated:
@@ -207,13 +417,13 @@ class CooperativeController:
                               np.deg2rad(self.args.max_target_deg - self.args.slow_error_deg)))
         if self.task_paused or self.invalid_since is not None or self.progress >= 1.:
             rho_cap = 0.
-        next_targets = {}
+        next_targets, next_nominal_targets, next_relative_commands = {}, {}, {}
         geometry_failure = None
 
         # Even with task rate zero, externally moving bases require motion.
         # Check that mandatory compensation itself has geometric room.
         try:
-            compensation_qdot = np.linalg.solve(jacobians[follower], compensation)
+            compensation_qdot = np.linalg.solve(jacobians[follower], mandatory_compensation)
         except np.linalg.LinAlgError as exc:
             raise ResearchFault("singularity", "cannot solve mandatory compensation joints") from exc
         for fraction in (.5, 1.):
@@ -241,19 +451,24 @@ class CooperativeController:
             future_bases = {name: advance_origin_pose(bases[name], snapshot.base_twists[name], dt) for name in ROBOTS}
             future_leader = advance_origin_pose(flanges[leader], leader_jacobian @ qdots[leader], dt)
             next_target = inverse(future_bases[follower]) @ future_bases[leader] @ future_leader @ desired @ self.offsets[follower]
-            if (not self.guard.pose_allowed(follower, next_target)
+            nominal_next_target = next_target.copy()
+            if not self.approximate_targets and (not self.guard.pose_allowed(follower, next_target)
                     or np.linalg.norm(next_target[:3, 3] - self.initial_tcp[:3, 3]) > self.args.max_travel):
                 geometry_failure = ("workspace_infeasible", "next target outside TCP workspace/travel envelope")
                 return False
-            goal_q = self.models[follower].inverse(next_target, states[follower].joints,
-                                                   self.guard.lower[follower], self.guard.upper[follower])
-            if goal_q is None:
-                geometry_failure = ("reachability_infeasible", "next target has no nominal local IK solution within joint limits")
-                return False
-            # Check the nominal goal and sampled near-term swept configuration.
-            if not self.guard.check(future_bases, {leader: states[leader].joints + qdots[leader] * dt, follower: goal_q})[0]:
-                geometry_failure = ("clearance_infeasible", "next target violates geometric clearance")
-                return False
+            if not self.approximate_targets:
+                goal_q = self.models[follower].inverse(next_target, states[follower].joints,
+                                                       self.guard.lower[follower], self.guard.upper[follower])
+                if goal_q is None:
+                    geometry_failure = ("reachability_infeasible", "next target has no nominal local IK solution within joint limits")
+                    return False
+                if not self.guard.check(future_bases, {leader: states[leader].joints + qdots[leader] * dt, follower: goal_q})[0]:
+                    geometry_failure = ("clearance_infeasible", "next target violates geometric clearance")
+                    return False
+            # With task tolerance, feasibility concerns the command actually
+            # being issued, not an exact IK solution of the noisy nominal goal.
+            # The joint-space sweep remains bounded by all motion/geometry
+            # limits and the original (larger) tracking-error envelope.
             for fraction in (.5, 1.):
                 trial_bases = {name: advance_origin_pose(bases[name], snapshot.base_twists[name], dt * fraction) for name in ROBOTS}
                 trial_q = {leader: states[leader].joints + qdots[leader] * dt * fraction,
@@ -261,20 +476,85 @@ class CooperativeController:
                 if not self.guard.check(trial_bases, trial_q)[0]:
                     geometry_failure = ("clearance_infeasible", "next command sweep violates geometric clearance")
                     return False
+                if self.approximate_targets:
+                    trial_tcp, trial_flange = {}, {}
+                    for name in ROBOTS:
+                        predicted, predicted_jacobian = self.models[name].pose_and_jacobian(trial_q[name])
+                        trial_tcp[name] = predicted @ fk_corrections[name]
+                        trial_flange[name] = flange_from_tcp(trial_tcp[name], self.offsets[name])
+                        if name == follower:
+                            predicted_jacobian = predicted_jacobian.copy()
+                            predicted_jacobian[:3] += np.cross(
+                                predicted_jacobian[3:].T, trial_tcp[name][:3, 3] - predicted[:3, 3]).T
+                            if np.linalg.svd(predicted_jacobian, compute_uv=False)[-1] < self.args.min_singular_value:
+                                geometry_failure = ("singularity", "next command approaches a joint singularity")
+                                return False
+                            if self.bounded_leader:
+                                # Follow uses speedL: the requested TCP twist
+                                # stays constant while its required joint
+                                # velocity changes with the local Jacobian.
+                                # Check that future inverse mapping as well as
+                                # the constant-qdot sweep approximation below.
+                                try:
+                                    future_qdot = np.linalg.solve(predicted_jacobian, twist)
+                                except np.linalg.LinAlgError:
+                                    geometry_failure = ("singularity", "cannot solve predicted following joint velocity")
+                                    return False
+                                if (not np.isfinite(future_qdot).all()
+                                        or np.any(np.abs(future_qdot) > self.args.max_joint_speed + 1e-9)
+                                        or np.any(np.abs(future_qdot - qdots[follower]) > self.args.max_joint_accel * dt + 1e-9)
+                                        or np.any(np.abs(future_qdot - self.previous_qdot) > self.args.max_joint_accel * dt + 1e-9)):
+                                    geometry_failure = ("transition_infeasible", "predicted following joint speed/acceleration limit")
+                                    return False
+                                predicted_twist = predicted_jacobian @ qdot
+                                for part, speed_limit, acceleration_limit in (
+                                        (slice(0, 3), self.limits.linear_speed, self.args.max_accel),
+                                        (slice(3, 6), self.args.max_angular_speed, self.args.max_angular_accel)):
+                                    if (np.linalg.norm(predicted_twist[part]) > speed_limit + 1e-9
+                                            or np.linalg.norm(predicted_twist[part] - measured_twist[part]) > acceleration_limit * dt + 1e-9
+                                            or np.linalg.norm(predicted_twist[part] - self.previous_twist[part]) > acceleration_limit * dt + 1e-9):
+                                        geometry_failure = ("transition_infeasible", "predicted following TCP speed/acceleration limit")
+                                        return False
+                    executed = trial_tcp[follower]
+                    if (not self.guard.pose_allowed(follower, executed)
+                            or np.linalg.norm(executed[:3, 3] - self.initial_tcp[:3, 3]) > self.args.max_travel):
+                        geometry_failure = ("workspace_infeasible", "next command outside TCP workspace/travel envelope")
+                        return False
+                    trial_relative = inverse(trial_bases[leader] @ trial_flange[leader]) @ trial_bases[follower] @ trial_flange[follower]
+                    if np.linalg.norm(trial_relative[:3, 3]) < self.args.min_gap:
+                        geometry_failure = ("clearance_infeasible", "next command flange gap below min_gap")
+                        return False
+                    trial_progress = self.progress + fraction * (next_progress - self.progress)
+                    trial_dp, trial_dr = pose_delta(trial_relative, self.path.pose(trial_progress))
+                    if np.linalg.norm(trial_dp) > self.args.max_target_m or np.linalg.norm(trial_dr) > rotation_limit:
+                        geometry_failure = ("tracking_error", "next command exceeds allowed relative tracking error")
+                        return False
+                    if fraction == 1.:
+                        next_target = executed
+                        next_relative_commands[float(rho)] = trial_relative
             next_targets[float(rho)] = next_target
+            next_nominal_targets[float(rho)] = nominal_next_target
             return True
 
         failure = None
         decision = None
         for feedback_scale in (1., .75, .5, .25, 0.):
             try:
-                decision = govern_task(
-                    compensation, feedback * feedback_scale, work_twist, jacobians[follower],
-                    measured_twist, qdots[follower], dt, self.limits,
-                    rho_cap=rho_cap, extra_feasible=candidate_allowed, grid_samples=9,
-                    previous_compensation=self.previous_compensation,
-                    previous_compensation_qdot=self.previous_compensation_qdot,
-                    allow_deceleration=separated)
+                if self.bounded_leader:
+                    decision = govern_follow(
+                        base_comp, leader_comp + feedback * feedback_scale, work_twist, jacobians[follower],
+                        measured_twist, qdots[follower], self.previous_twist, self.previous_qdot, dt, self.limits,
+                        previous_base=self.previous_base_compensation,
+                        previous_base_qdot=self.previous_base_compensation_qdot,
+                        rho_cap=rho_cap, extra_feasible=candidate_allowed)
+                else:
+                    decision = govern_task(
+                        compensation, feedback * feedback_scale, work_twist, jacobians[follower],
+                        measured_twist, qdots[follower], dt, self.limits,
+                        rho_cap=rho_cap, extra_feasible=candidate_allowed, grid_samples=9,
+                        previous_compensation=self.previous_compensation,
+                        previous_compensation_qdot=self.previous_compensation_qdot,
+                        allow_deceleration=separated)
                 feedback = feedback * feedback_scale
                 break
             except MotionInfeasible as exc:
@@ -287,6 +567,9 @@ class CooperativeController:
             raise failure
         rho = decision.task_scale
         next_progress = min(1., self.progress + rho * dt / self.path.duration) if self.path.kind != "hold" else self.progress
+        finish_m = max(self.args.finish_position_m, self.target_tolerance_m)
+        finish_rad = max(np.deg2rad(self.args.finish_rotation_deg), self.target_tolerance_rad)
+        command_target = current.copy() if self.approximate_targets else target
         record = {
             "kind": "control", "at": now, "active": active, "method": self.args.method,
             "leader": leader, "follower": follower, "path": self.path.kind, "path_duration": self.path.duration,
@@ -294,7 +577,14 @@ class CooperativeController:
             "task_scale": rho, "requested_task_scale": rho_cap, "task_paused": self.task_paused,
             "path_finished": self.path.kind != "hold" and self.progress >= 1.,
             "finished": self.finished,
-            "within_finish_tolerance": error_m <= self.args.finish_position_m and error_rad <= np.deg2rad(self.args.finish_rotation_deg),
+            "within_finish_tolerance": error_m <= finish_m and error_rad <= finish_rad,
+            "within_nominal_finish_tolerance": error_m <= self.args.finish_position_m and error_rad <= np.deg2rad(self.args.finish_rotation_deg),
+            "finish_position_tolerance_m": finish_m, "finish_rotation_tolerance_rad": finish_rad,
+            "approximate_targets": self.approximate_targets,
+            "target_tolerance_m": self.target_tolerance_m, "target_tolerance_rad": self.target_tolerance_rad,
+            "within_target_tolerance": error_m <= self.target_tolerance_m and error_rad <= self.target_tolerance_rad,
+            "feedback_residual_m": float(np.linalg.norm(effective_dp)),
+            "feedback_residual_rad": float(np.linalg.norm(effective_dr)),
             "control_dt": dt, "settle_elapsed": self.settle_elapsed,
             "state_at": snapshot.at, "measurement_age": snapshot.measurement_age,
             "measurement_times": snapshot.measurement_times, "received_times": snapshot.received_times,
@@ -303,18 +593,40 @@ class CooperativeController:
             "base_twists": snapshot.base_twists, "estimated_relative_pose": current_relative,
             "desired_relative_pose": relative_goal, "relative_error_m": error_m,
             "relative_error_rad": error_rad, "target_tcp": target,
-            "next_target_tcp": next_targets[float(rho)], "twist": decision.twist,
+            "next_target_tcp": next_nominal_targets[float(rho)],
+            "commanded_target_tcp": command_target, "next_commanded_target_tcp": next_targets[float(rho)],
+            "native_safety_target_mode": "current_and_predicted_motion" if self.approximate_targets else "nominal_task_goal",
+            "commanded_relative_pose": current_relative.copy() if self.approximate_targets else relative_goal.copy(),
+            "next_commanded_relative_pose": next_relative_commands.get(float(rho), self.path.pose(next_progress)),
+            "twist": decision.twist,
             "joint_command": decision.qdot, "base_compensation": base_comp,
-            "leader_compensation": leader_comp, "applied_compensation": compensation,
-            "task_twist_nominal": task_twist, "feedback": feedback,
+            "leader_compensation": leader_comp, "requested_compensation": compensation,
+            "applied_compensation": mandatory_compensation,
+            "base_compensation_nominal": nominal_base_comp, "leader_compensation_nominal": nominal_leader_comp,
+            "task_twist_nominal": nominal_task_twist, "task_twist_at_command": task_twist, "feedback": feedback,
             "feedback_scale": feedback_scale, "decision": decision.reason,
+            "leader_response": "bounded" if self.bounded_leader else "strict",
+            "follow_max_speed": self.limits.linear_speed,
+            "tracking_relative_target": tracking_relative,
+            "tracking_offset": tracking_offset,
+            "tracking_limited": bool(decision.components.get("tracking_limited", False)),
+            "tracking_scale": decision.components.get("tracking_scale", 1.),
+            "tracking_speed_scale": decision.components.get("tracking_speed_scale", 1.),
+            "tracking_endpoint": decision.components.get("tracking_endpoint", leader_comp + feedback),
+            "tracking_applied": decision.components.get("tracking_applied", leader_comp + feedback),
+            "tracking_requested": leader_comp + feedback,
+            "feedback_is_requested": self.bounded_leader,
             "capsule_clearance_m": clearance, "last_rejection": self.last_rejection,
             "robots": {name: {"q": states[name].joints, "qd": qdots[name], "tcp": states[name].tcp,
                               "tcp_speed": states[name].speed, "robot_timestamp": states[name].robot_timestamp}
                        for name in ROBOTS}}
+        if self.bounded_leader:
+            record["speedl_acceleration"] = bounded_speedl_acceleration(
+                jacobians[follower], measured_twist, decision.twist, dt, self.limits)
         return Proposal({follower: bases[follower] @ target @ inverse(self.offsets[follower])},
-                        {follower: target}, {follower: decision.twist}, record, next_progress,
-                        decision, feedback, compensation, {follower: next_targets[float(rho)]})
+                        {follower: command_target}, {follower: decision.twist}, record, next_progress,
+                        decision, feedback, mandatory_compensation, {follower: next_targets[float(rho)]},
+                        tracking_offset if active else None)
 
     def commit(self, proposal):
         self.progress = proposal.next_progress
@@ -323,6 +635,11 @@ class CooperativeController:
         self.previous_compensation = proposal.compensation.copy()
         self.previous_compensation_qdot = np.asarray(proposal.decision.components["compensation_qdot"]).copy()
         self.previous_feedback = proposal.feedback.copy()
+        if self.bounded_leader:
+            self.previous_base_compensation = proposal.compensation.copy()
+            self.previous_base_compensation_qdot = np.asarray(proposal.decision.components["compensation_qdot"]).copy()
+            if self.tracking_offset is None and proposal.tracking_offset is not None:
+                self.tracking_offset = proposal.tracking_offset.copy()
         if proposal.record["path_finished"] and proposal.record["within_finish_tolerance"]:
             self.settle_elapsed += proposal.record["control_dt"]
         else:

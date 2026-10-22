@@ -93,6 +93,7 @@ import urcal.tools.analyze_log
 import urcal.tools.simulate
 import urcal.control.runtime
 import urcal.cooperative.runtime
+import urcal.simulation.runtime
 unexpected = {'rtde_control', 'rtde_receive', 'pyrealsense2', 'torch', 'tkinter'} & set(sys.modules)
 assert not unexpected, unexpected
 """)
@@ -125,6 +126,7 @@ print(json.dumps({'cwd': str(Path.cwd()), 'bundle': str(BUNDLE)}))
             "run_dual.sh": "urcal.inference.infer_live_dual",
             "run_dual_control.sh": "urcal.control.runtime",
             "run_cooperative.sh": "urcal.cooperative.runtime",
+            "run_simulation.sh": "urcal.simulation.runtime",
         }
         with tempfile.TemporaryDirectory() as working:
             interpreter = Path(working) / "capture_interpreter"

@@ -7,7 +7,10 @@ from pathlib import Path
 import time
 from typing import Callable, Optional
 
-import cv2
+from urcal.inference.display import import_opencv
+
+cv2 = import_opencv()
+
 import numpy as np
 import torch
 
@@ -175,6 +178,10 @@ def draw_results(bgr, regions, estimators, results, K, dist, axis_len, fps, show
             )
     cv2.putText(vis, f"Dual FPS {fps:.1f}", (8, bgr.shape[0] - 12),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+    split_x = regions[0][2]
+    for display in (vis, seg_vis):
+        if display is not None:
+            cv2.line(display, (split_x, 0), (split_x, bgr.shape[0] - 1), (255, 255, 255), 1)
     return vis, seg_vis
 
 

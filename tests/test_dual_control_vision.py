@@ -84,9 +84,36 @@ class CalibrationFrameTests(unittest.TestCase):
         self.results[1].ok = False
         frame = self.frame()
         self.assertIn("ur10e", frame.reason)
+        self.assertEqual(frame.valid_counts["ur10e"], 7)
         self.assertEqual(set(frame.poses), {"ur5e"})
         with self.assertRaises(ControlFault):
             CalibrationTracker(stable_frames=1).update(frame, 100.1)
+
+    def test_pose_diagnostics_preserve_failed_inputs_without_changing_acceptance(self):
+        regions = ((0, 0, 320, 480), (320, 0, 640, 480))
+        for name, estimator in zip(("ur5e", "ur10e"), self.estimators):
+            estimator.key_names = [name + f"_link{i}" for i in range(7)]
+        self.results[0].ok = False
+        self.results[0].rvec = self.results[0].tvec = None
+        plain = self.frame()
+        logged = calibration_frame(17, 100., self.results, self.estimators, self.joints,
+                                   self.K, self.dist, .08, .04, regions=regions)
+        self.assertEqual(logged.reason, plain.reason)
+        self.assertEqual(logged.captured_at, plain.captured_at)
+        self.assertEqual(logged.valid_counts, plain.valid_counts)
+        self.assertEqual(logged.raw_mean_px, plain.raw_mean_px)
+        self.assertEqual(logged.raw_max_px, plain.raw_max_px)
+        self.assertEqual(set(logged.poses), {"ur10e"})
+        np.testing.assert_array_equal(logged.poses["ur10e"], plain.poses["ur10e"])
+        for frame in (plain, logged):
+            with self.assertRaisesRegex(ControlFault, "ur5e: EMPnP failed"):
+                CalibrationTracker(stable_frames=1).update(frame, 100.1)
+        self.assertIsNone(plain.pose_diagnostics)
+        robot = logged.pose_diagnostics["robots"]["ur5e"]
+        self.assertFalse(robot["empnp_ok"])
+        np.testing.assert_array_equal(robot["detected_px"], self.results[0].points)
+        np.testing.assert_array_equal(robot["q_rad"], self.joints[0])
+        self.assertEqual(robot["region"], list(regions[0]))
 
     def test_nonpositive_and_nonfinite_depths_are_rejected(self):
         self.results[0].rvec = np.zeros(3)

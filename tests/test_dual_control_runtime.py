@@ -22,6 +22,7 @@ from urcal.control.policy import CalibrationFrame, ControlFault
 def args(mode="hold", *extra):
     return runtime.parse_args([
         "--mode", mode, "--ur5e_ip", "192.0.2.1", "--ur10e_ip", "192.0.2.2",
+        "--target_tolerance_m", "0", "--target_tolerance_deg", "0", "--fault_response", "exit",
         "--ur5e_tcp_offset", "0", "0", "0", "0", "0", "0",
         "--ur10e_tcp_offset", "0", "0", "0", "0", "0", "0", *extra,
     ])
@@ -46,6 +47,25 @@ def controller(offset=None):
                  "kickWatchdog", "speedL", "speedStop", "stopScript"):
         getattr(result, name).return_value = True
     return result
+
+
+class CommandInboxTests(unittest.TestCase):
+    def test_abandoned_iteration_preserves_later_target_and_stop(self):
+        for after_failure in (False, True):
+            with self.subTest(after_failure=after_failure):
+                queue = Queue()
+                inbox = runtime.CommandInbox(queue)
+                invalid_target = {"type": "target", "gap": -.1}
+                valid_target = {"type": "target", "gap": .3}
+                for command in (invalid_target, valid_target, "stop"):
+                    queue.put_nowait(command)
+                if after_failure:
+                    inbox.cancel_arm_requests()
+                # A target handler can raise, abandoning this iterator early.
+                iterator = inbox.read()
+                self.assertEqual(next(iterator), invalid_target)
+                iterator.close()
+                self.assertEqual(list(inbox.read()), [valid_target, "stop"])
 
 
 class StateReaderTests(unittest.TestCase):
@@ -510,9 +530,11 @@ class _Event:
 class RuntimeModeTests(unittest.TestCase):
     def mocked_run(self, config, session=None, *, planner=None, initial_commands=None,
                    later_commands=None, expect_fault=None, clock=None, stop_after_waits=None,
-                   lifecycle=None):
+                   lifecycle=None, frozen_joints=False, initial_frame=None):
         frames, commands, statuses, gui_statuses = (_LocalQueue() for _ in range(4))
-        frames.put(CalibrationFrame(1, 10.0, {name: np.eye(4) for name in runtime.ROBOTS},
+        self.gui_statuses = gui_statuses
+        frames.put(initial_frame if initial_frame is not None else CalibrationFrame(
+                                    1, 10.0, {name: np.eye(4) for name in runtime.ROBOTS},
                                     {name: 1. for name in runtime.ROBOTS},
                                     {name: 2. for name in runtime.ROBOTS},
                                     {name: 7 for name in runtime.ROBOTS}))
@@ -541,7 +563,7 @@ class RuntimeModeTests(unittest.TestCase):
             planner.plan.return_value = ({"ur10e": np.eye(4)}, {"ur10e": np.eye(4)})
         receivers = [receiver(), receiver()]
         for index, item in enumerate(receivers):
-            item.getTimestamp.side_effect = itertools.count(1., 0.02)
+            item.getTimestamp.side_effect = None if frozen_joints else itertools.count(1., 0.02)
             if lifecycle is not None:
                 item.disconnect.side_effect = lambda i=index: lifecycle.append(("receiver", i))
         source_factory = Mock(side_effect=receivers)
@@ -566,6 +588,58 @@ class RuntimeModeTests(unittest.TestCase):
             else:
                 runtime.run(config)
         return control_factory, statuses, receivers
+
+    def test_initial_rejection_is_retained_in_gui_and_console_status_between_frames(self):
+        config = args("hold", "--execute", "--stable_frames", "1", "--check_reprojection")
+        packet = CalibrationFrame(1, 10., {name: np.eye(4) for name in runtime.ROBOTS},
+                                  {"ur5e": 4.2, "ur10e": 1.}, {"ur5e": 12.5, "ur10e": 2.},
+                                  {name: 7 for name in runtime.ROBOTS})
+        factory, statuses, _ = self.mocked_run(config, initial_frame=packet, stop_after_waits=3)
+        factory.assert_not_called()
+        messages = []
+        while not statuses.empty():
+            status = statuses.get_nowait()
+            self.assertFalse(status["ready"])
+            self.assertFalse(status["active"])
+            self.assertIn("ur5e raw reprojection", status["message"])
+            self.assertIn("mean=4.20px limit=5.00px", status["message"])
+            messages.append(status["message"])
+        self.assertEqual(len(messages), 3)
+        self.assertEqual(len(set(messages)), 1)
+        gui = runtime.take_latest(self.gui_statuses)
+        self.assertEqual(gui["message"], messages[-1])
+        self.assertIsNone(gui["scene"])
+
+    def test_reprojection_is_disabled_by_default_and_explicitly_reenabled_in_all_modes(self):
+        for mode in ("hold", "follow"):
+            for execute in ((), ("--execute",)):
+                with self.subTest(mode=mode, execute=bool(execute)):
+                    self.assertFalse(args(mode, *execute).check_reprojection)
+                    checked = args(mode, *execute, "--check_reprojection")
+                    self.assertTrue(checked.check_reprojection)
+                    self.assertEqual((checked.max_reproj_px, checked.max_point_reproj_px), (5., 8.))
+
+    def test_high_reprojection_allows_preview_and_mocked_execution_when_disabled(self):
+        for execute in (False, True):
+            with self.subTest(execute=execute):
+                config = args("hold", "--stable_frames", "1", *(["--execute"] if execute else []))
+                packet = CalibrationFrame(1, 10., {name: np.eye(4) for name in runtime.ROBOTS},
+                                          {name: 100. for name in runtime.ROBOTS},
+                                          {name: 300. for name in runtime.ROBOTS},
+                                          {name: 7 for name in runtime.ROBOTS})
+                session = Mock() if execute else None
+                factory, statuses, _ = self.mocked_run(config, session=session,
+                                                       initial_frame=packet, expect_fault=False)
+                status = runtime.take_latest(statuses)
+                self.assertNotIn("WAIT", status["message"])
+                if execute:
+                    factory.assert_called_once()
+                    session.send.assert_called_once()
+                    self.assertTrue(status["active"])
+                else:
+                    factory.assert_not_called()
+                    self.assertTrue(status["ready"])
+                    self.assertFalse(status["active"])
 
     def test_preview_arm_request_never_constructs_motion_session(self):
         config = args("follow", "--leader", "ur5e", "--stable_frames", "1")
@@ -659,6 +733,91 @@ class RuntimeModeTests(unittest.TestCase):
         session.close.side_effect = lambda: lifecycle.append(("motion", None))
         self.mocked_run(config, session, lifecycle=lifecycle)
         self.assertEqual(lifecycle[0], ("motion", None))
+
+    def test_gui_shows_current_arms_and_hold_goal_when_envelope_rejects_motion(self):
+        config = args("hold", "--stable_frames", "1", "--center_pose", "0", "0", "1", "0", "0", "0")
+        planner = runtime.FacingPlanner(config)
+        planner.plan = Mock(return_value=({name: np.eye(4) for name in runtime.ROBOTS},
+                                          {name: np.eye(4) for name in runtime.ROBOTS}))
+        planner.check_envelope = Mock(side_effect=ControlFault("outside envelope"))
+        factory, statuses, _ = self.mocked_run(config, planner=planner)
+        vision = runtime.take_latest(statuses)
+        gui = runtime.take_latest(self.gui_statuses)
+        self.assertFalse(gui["ready"])
+        self.assertNotIn("scene", vision)
+        self.assertEqual(set(gui["scene"]["robots"]), set(runtime.ROBOTS))
+        self.assertEqual(set(gui["scene"]["goals"]), set(runtime.ROBOTS))
+        self.assertGreater(gui["scene"]["measurement_age"], 0.)
+        self.assertIsNone(planner.hold_targets)  # Display generation has no planning side effects.
+        factory.assert_not_called()
+
+    def test_valid_calibration_before_stability_shows_nonready_scene(self):
+        config = args("hold", "--stable_frames", "5", "--center_pose", "0", "0", "1", "0", "0", "0")
+        planner = runtime.FacingPlanner(config)
+        factory, _, _ = self.mocked_run(config, planner=planner)
+        gui = runtime.take_latest(self.gui_statuses)
+        self.assertFalse(gui["ready"])
+        self.assertFalse(gui["scene"]["calibration_valid"])
+        self.assertIn("not ready", gui["scene"]["reason"])
+        self.assertIsNone(planner.hold_targets)
+        factory.assert_not_called()
+
+    def test_frozen_joints_do_not_refresh_gui_scene(self):
+        config = args("hold", "--stable_frames", "5", "--center_pose", "0", "0", "1", "0", "0", "0")
+        self.mocked_run(config, planner=runtime.FacingPlanner(config), frozen_joints=True, stop_after_waits=2)
+        self.assertIsNotNone(self.gui_statuses.get_nowait()["scene"])
+        self.assertIsNone(self.gui_statuses.get_nowait()["scene"])
+
+
+class GuiSceneSnapshotTests(unittest.TestCase):
+    def inputs(self):
+        bases = {name: np.eye(4) for name in runtime.ROBOTS}
+        states = {name: runtime.RobotState(np.eye(4), np.zeros(6), np.zeros(6), robot_timestamp=1.)
+                  for name in runtime.ROBOTS}
+        offsets = {name: np.eye(4) for name in runtime.ROBOTS}
+        readers = {name: SimpleNamespace(last_advance=10.) for name in runtime.ROBOTS}
+        return bases, states, offsets, readers
+
+    def test_snapshot_copies_arrays_and_uses_original_joint_receipt_time(self):
+        bases, states, offsets, readers = self.inputs()
+        goals = {"ur5e": np.eye(4)}
+        previous = {}
+        scene = runtime.make_gui_scene(10.02, bases, states, offsets, goals, .12, readers, previous, .15)
+        self.assertEqual(scene["at"], 10.)
+        self.assertEqual(scene["measurement_age"], .12)
+        bases["ur5e"][0, 3] = 9.
+        states["ur5e"].joints[0] = 9.
+        states["ur5e"].tcp[0, 3] = 9.
+        offsets["ur5e"][0, 3] = 9.
+        goals["ur5e"][0, 3] = 9.
+        np.testing.assert_array_equal(scene["bases"]["ur5e"], np.eye(4))
+        np.testing.assert_array_equal(scene["robots"]["ur5e"]["q"], np.zeros(6))
+        for name in ("tcp", "tcp_offset"):
+            np.testing.assert_array_equal(scene["robots"]["ur5e"][name], np.eye(4))
+        np.testing.assert_array_equal(scene["goals"]["ur5e"], np.eye(4))
+
+    def test_invalid_stale_or_duplicate_data_never_advance_display_timestamps(self):
+        bases, states, offsets, readers = self.inputs()
+        previous = {name: 1. for name in runtime.ROBOTS}
+        states["ur5e"].robot_timestamp = 2.
+        self.assertIsNone(runtime.make_gui_scene(10., bases, states, offsets, {}, .1, readers, previous, .15))
+        self.assertEqual(previous, {name: 1. for name in runtime.ROBOTS})
+        states["ur10e"].robot_timestamp = 2.
+        self.assertIsNone(runtime.make_gui_scene(10.2, bases, states, offsets, {}, .3, readers, previous, .15))
+        bases["ur5e"][0, 0] = 2.
+        self.assertIsNone(runtime.make_gui_scene(10., bases, states, offsets, {}, .1, readers, previous, .15))
+        self.assertEqual(previous, {name: 1. for name in runtime.ROBOTS})
+
+    def test_current_arms_remain_visible_when_hold_direction_cannot_be_defined(self):
+        bases, states, offsets, readers = self.inputs()
+        planner = runtime.FacingPlanner(args("hold"))
+        tracker = SimpleNamespace(last_capture=9.9, max_age=.5, ready=True,
+                                  poses={name: inverse(planner.mappings[name]) for name in runtime.ROBOTS})
+        scene = runtime.facing_gui_scene(10., tracker, planner, states, readers, {}, .15)
+        self.assertIsNotNone(scene)
+        self.assertEqual(set(scene["robots"]), set(runtime.ROBOTS))
+        self.assertEqual(scene["goals"], {})
+        self.assertIn("target preview unavailable", scene["reason"])
 
 
 if __name__ == "__main__":

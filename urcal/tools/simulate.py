@@ -120,8 +120,8 @@ def simulation_args(method, path="line", path_duration=8.):
     return SimpleNamespace(
         method=method, leader="ur10e", ur5e_tcp_offset=[0.]*6, ur10e_tcp_offset=[0.]*6,
         workspace_config=None, max_calibration_age=.5, stable_frames=3,
-        max_calibration_jump_m=.15, max_calibration_jump_deg=20., max_reproj_px=3.,
-        max_point_reproj_px=8., min_points=5, filter_alpha=.45, velocity_alpha=.4,
+        max_calibration_jump_m=.15, max_calibration_jump_deg=20., max_reproj_px=5.,
+        max_point_reproj_px=8., check_reprojection=False, min_points=5, filter_alpha=.45, velocity_alpha=.4,
         prediction_horizon=.3, max_base_speed=2., max_base_angular_speed=1.,
         max_speed=.035, max_angular_speed=.25, max_accel=.25, max_angular_accel=1.,
         max_joint_speed=.5, max_joint_accel=2., min_singular_value=.05,

@@ -4,7 +4,10 @@ import time
 from contextlib import nullcontext
 from typing import Dict, List, Optional, Tuple
 
-import cv2
+from urcal.inference.display import import_opencv
+
+cv2 = import_opencv()
+
 import numpy as np
 import torch
 from torchvision import transforms

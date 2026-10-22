@@ -284,6 +284,50 @@ class LogAnalysisTests(unittest.TestCase):
         self.assertEqual(report["record_counts"]["stop"], 2)
         self.assertEqual([fault["category"] for fault in report["faults"]], ["measurement", "infeasible"])
 
+    def test_recoverable_motion_stop_survives_a_later_normal_operator_exit(self):
+        self.write([self.control(1., path="hold"),
+                    {"kind": "motion_stopped", "at": 2., "category": "measurement_expired",
+                     "reason": "calibration stale", "new_arm_required": True},
+                    {"kind": "wait", "at": 5., "reason": "collecting fresh calibration"},
+                    {"kind": "end", "at": 10., "reason": "operator_stop"}])
+        report = summarize_log(self.path)
+        self.assertEqual(report["faults"], [])
+        self.assertEqual(report["recoverable_motion_stop_count"], 1)
+        self.assertEqual(report["recoverable_motion_stops"], [{
+            "at": 2., "category": "measurement_expired", "message": "calibration stale"}])
+        self.assertEqual(report["active_control_records"], 1)
+        self.assertEqual(report["estimated_relative_error"]["position_m"]["count"], 1)
+        self.assertEqual(report["elapsed_active_time_s"], 1.)
+        self.assertEqual(report["maintenance_time_s"], 1.)
+
+    def test_recovery_wait_is_excluded_from_active_duration_after_explicit_rearm(self):
+        self.write([self.control(1., path="line", task_scale=.5),
+                    {"kind": "motion_stopped", "at": 2., "category": "tracking_error", "reason": "target error"},
+                    self.control(10., active=False, path="line", task_scale=0.,
+                                 estimated_relative_pose=[5, 0, 0, 0, 0, 0]),
+                    self.control(12., path="line", progress=.5, task_scale=1.),
+                    self.control(14., path="line", progress=1., finished=True),
+                    {"kind": "motion_stopped", "at": 15., "category": "measurement_expired", "reason": "stale"},
+                    {"kind": "end", "at": 30., "reason": "operator_stop"}])
+        report = summarize_log(self.path)
+        self.assertEqual(report["recoverable_motion_stop_count"], 2)
+        self.assertEqual(report["elapsed_active_time_s"], 4.)
+        self.assertEqual(report["active_time_until_completion_s"], 3.)
+        self.assertEqual(report["completion_time_s"], 13.)  # Explicitly wall time.
+        self.assertEqual(report["path_active_time_s"], 3.)
+        self.assertEqual(report["maintenance_time_s"], 1.)
+        self.assertAlmostEqual(report["slowdown_ratio"], 1. / 3.)
+        self.assertAlmostEqual(report["mean_task_scale"], 2.5 / 3.)
+        self.assertEqual(report["estimated_relative_error"]["position_m"]["count"], 3)
+        self.assertEqual(report["estimated_relative_error"]["position_m"]["max"], 0.)
+
+    def test_recovery_stop_timestamp_must_be_finite_and_ordered(self):
+        for at in (None, float("nan"), .5):
+            with self.subTest(at=at):
+                self.write([self.control(1.), {"kind": "motion_stopped", "at": at}])
+                with self.assertRaises(ValueError):
+                    summarize_log(self.path)
+
     def test_backwards_control_clock_invalid_transform_and_partial_json_fail(self):
         cases = ([self.control(2.), self.control(1.)],
                  [self.control(1., desired_relative_pose=np.zeros((4, 4)).tolist())],

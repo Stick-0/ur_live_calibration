@@ -11,9 +11,15 @@ from queue import Full
 import threading
 import time
 
-import cv2
 import numpy as np
 
+from urcal.inference.display import import_opencv
+
+cv2 = import_opencv()
+
+from urcal.control.diagnostics import (
+    calibration_debug_record, draw_calibration_debug, pose_input_diagnostics, save_calibration_debug,
+)
 from urcal.control.geometry import matrix_pose, pose_matrix
 from urcal.control.policy import CalibrationFrame
 
@@ -103,18 +109,19 @@ class LatestCapture:
         self.thread.join(timeout=1.5)
 
 
-def calibration_frame(sequence, captured, results, estimators, joints, K, dist, max_skew, joint_skew):
+def calibration_frame(sequence, captured, results, estimators, joints, K, dist, max_skew, joint_skew,
+                      *, regions=None):
     """Measure errors against ORIGINAL detections, not EM-corrected points."""
     poses, means, maxima, counts = {}, {}, {}, {}
     reason = ""
     if not np.isfinite(joint_skew) or joint_skew > max_skew:
         reason = f"camera/joint sampling skew {joint_skew:.3f}s exceeds {max_skew:.3f}s"
     for name, result, estimator, q in zip(("ur5e", "ur10e"), results, estimators, joints):
+        valid = result.valid & np.isfinite(result.points).all(axis=1)
+        counts[name] = int(valid.sum())
         if not result.ok:
             reason = reason or f"{name}: EMPnP failed"
             continue
-        valid = result.valid & np.isfinite(result.points).all(axis=1)
-        counts[name] = int(valid.sum())
         if counts[name] < 4:
             reason = reason or f"{name}: too few original detections"
             continue
@@ -132,7 +139,20 @@ def calibration_frame(sequence, captured, results, estimators, joints, K, dist, 
         projected = cv2.projectPoints(X, result.rvec, result.tvec, K, dist)[0].reshape(-1, 2)
         errors = np.linalg.norm(projected - points, axis=1)
         poses[name], means[name], maxima[name] = T, float(errors.mean()), float(errors.max())
-    return CalibrationFrame(sequence, captured, poses, means, maxima, counts, reason)
+    diagnostics = (None if regions is None else
+                   pose_input_diagnostics(results, estimators, joints, K, dist, regions))
+    return CalibrationFrame(sequence, captured, poses, means, maxima, counts, reason, diagnostics)
+
+
+def make_pose_args(args, robot):
+    """Pass the control CLI's per-robot settings to the shared EMPnP wrapper."""
+    default_lambda = {"ur5e": .5, "ur10e": .2}[robot]
+    return argparse.Namespace(
+        camera_w=args.camera_w, camera_h=args.camera_h,
+        empnp_use_prev=getattr(args, "empnp_use_prev", False),
+        empnp_sigma=3., empnp_prior=.9, empnp_max_iter=50, empnp_tol=1e-6,
+        empnp_lambda=getattr(args, robot + "_empnp_lambda", default_lambda), seg_thr=.5,
+    )
 
 
 def vision_worker(args, frames, commands, statuses, stop):
@@ -152,16 +172,14 @@ def vision_worker(args, frames, commands, statuses, stop):
         transform = dual.make_transform(*dual.MODEL_HW, normalize=True)
         vote_cfg = dual.PVNetVoteConfig(num_hypotheses=8)
         estimators = []
-        for name, keys, fk, lam in (
-            ("ur5e", dual.UR5E_KEY_NAMES, dual.ur5e_keypoints_from_joints, .5),
-            ("ur10e", dual.UR10E_KEY_NAMES, dual.ur10e_keypoints_from_joints, .2),
+        for name, keys, fk in (
+            ("ur5e", dual.UR5E_KEY_NAMES, dual.ur5e_keypoints_from_joints),
+            ("ur10e", dual.UR10E_KEY_NAMES, dual.ur10e_keypoints_from_joints),
         ):
             print(f"[vision] loading {name} on {device}", flush=True)
-            pose_args = argparse.Namespace(
-                camera_w=args.camera_w, camera_h=args.camera_h, empnp_use_prev=True,
-                empnp_sigma=3., empnp_prior=.9, empnp_max_iter=50, empnp_tol=1e-6,
-                empnp_lambda=lam, seg_thr=.5,
-            )
+            pose_args = make_pose_args(args, name)
+            print(f"[vision] {name} EMPnP previous pose: {'ON' if pose_args.empnp_use_prev else 'OFF'}; "
+                  f"lambda={pose_args.empnp_lambda:g}; max_iter={pose_args.empnp_max_iter}", flush=True)
             estimators.append(dual.RobotEstimator(
                 name, dual.load_model(getattr(args, name + "_checkpoint"), device), keys, fk, pose_args,
             ))
@@ -195,7 +213,7 @@ def vision_worker(args, frames, commands, statuses, stop):
                     transform, vote_cfg, device, show_seg,
                 )
                 packet = calibration_frame(sequence, captured, results, estimators, joints,
-                                           stream.K, stream.dist, args.max_joint_skew, skew)
+                                           stream.K, stream.dist, args.max_joint_skew, skew, regions=regions)
                 put_latest(frames, packet)
                 update = take_latest(statuses)
                 if update is not None:
@@ -204,6 +222,12 @@ def vision_worker(args, frames, commands, statuses, stop):
                 vis, seg_vis = dual.draw_results(
                     bgr, regions, estimators, results, stream.K, stream.dist, .06, fps, show_seg, show_keypoints,
                 )
+                debug = calibration_debug_record(
+                    packet, results, estimators, joints, stream.K, stream.dist, regions,
+                    args.max_reproj_px, args.max_point_reproj_px, args.min_points,
+                    check_reprojection=args.check_reprojection,
+                )
+                draw_calibration_debug(vis, debug, show_keypoints)
                 for name, goal in status.get("goals", {}).items():
                     pose = matrix_pose(goal)
                     if pose[2] <= 0:
@@ -214,7 +238,7 @@ def vision_worker(args, frames, commands, statuses, stop):
                         cv2.putText(vis, name + " TARGET", tuple(np.rint(pixel).astype(int)),
                                     cv2.FONT_HERSHEY_SIMPLEX, .45, (0, 255, 255), 1, cv2.LINE_AA)
                 cv2.putText(vis, status["message"][:95], (8, 52), cv2.FONT_HERSHEY_SIMPLEX, .42, (0, 255, 255), 1, cv2.LINE_AA)
-                cv2.putText(vis, "a: arm | SPACE: stop | q: quit | k: keypoints | s: seg", (8, 73),
+                cv2.putText(vis, "a: arm | SPACE: stop | q: quit | k: points | s: seg | d: save", (8, 73),
                             cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255), 1, cv2.LINE_AA)
                 cv2.imshow(window, vis)
                 if seg_vis is not None:
@@ -225,11 +249,21 @@ def vision_worker(args, frames, commands, statuses, stop):
                     stop.set()
                 elif key == ord("a"):
                     try:
-                        commands.put_nowait("arm")
+                        commands.put_nowait(("arm", time.monotonic()))
                     except Full:
                         print("[vision] command queue busy; review target and press Arm again", flush=True)
                 elif key == ord("k"):
                     show_keypoints = not show_keypoints
+                elif key == ord("d"):
+                    if args.execute:
+                        print("[vision] diagnostic saving is available in preview without --execute", flush=True)
+                    else:
+                        try:
+                            path = save_calibration_debug(dual.BUNDLE / "runs/calibration-debug", bgr, vis,
+                                                          debug, status.get("message", ""))
+                            print(f"[vision] diagnostic snapshot: {path}", flush=True)
+                        except (OSError, ValueError, cv2.error) as exc:
+                            print(f"[vision] could not save diagnostic snapshot: {exc}", flush=True)
                 elif key == ord("s"):
                     show_seg = not show_seg
                     if not show_seg:

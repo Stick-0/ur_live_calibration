@@ -90,64 +90,62 @@
     },
     {
       "path": "README.md",
-      "bytes": 47035,
-      "sha256": "ce55ec00ba976c680782070291cd967c1164ab3eab2f6056ae13632dc36a2725",
+      "bytes": 107606,
+      "sha256": "dc46b26d7c3c6ad15f3b4311790970c26d701d0b93e09f0c7f5d0cb7e36c135d",
       "source": "Created for this bundle.",
-      "change": "Full functional/module explanation, both hold modes, frame/TCP conventions, rate/progress distinction, package tree and updated execution commands."
+      "change": "Full functional/module explanation, both hold modes, frame/TCP conventions, rate/progress distinction, package tree and updated execution commands.",
+      "visual_gui_change": "Document the interactive current-pose/target GUI, offline demo, synthetic screenshot and updated validation.",
+      "calibration_diagnostics_change": "Explain raw-error WAIT diagnostics, residual overlays, preview snapshots and Qt font fallback.",
+      "divider_change": "Restore a white line at the actual left/right split in both video and segmentation windows.",
+      "mean_threshold_change": "Document 5 pixel default and the unvalidated provisional origin of the earlier 3/8 pixel thresholds.",
+      "reprojection_toggle_change": "Document default-disabled mean/max upper bounds in preview and actual control, re-enable flag, and updated verification.",
+      "simulation_change": "Add captured initial-state simulation entry, explicit virtual GUI state, documentation or isolation verification.",
+      "initial_alignment_change": "Bounded simulator IK retry, separate checked initial alignment or corresponding UI/documentation/regression update; physical control limits retained.",
+      "active_calibration_recovery_change": "Document transient rejection handling, time bounds, one-frame active recovery and unchanged execution commands.",
+      "preview_calibration_recovery_change": "Explain stale baseline lock, independent preview candidate collection and updated offline validation.",
+      "alignment_governor_change": "Document bounded alignment command selection, quantitative diagnostics, timestamp provenance and offline verification limits.",
+      "pnp_input_diagnostics_change": "Document automatic follow-mode input logging, distinct RANSAC threshold, replay limits and updated verification.",
+      "alignment_speed_change": "Document faster default, scale1 rollback, slider60 bottleneck and offline model comparisons.",
+      "native_ik_preview_recovery_change": "Explain native IK rejection, changed-base reachability, preview recovery, explicit new Arm and failure diagnostics; update offline validation.",
+      "preflight_rejected_vision_change": "Document bounded no-motion preflight recovery after rejected vision, accepted-base/encoder drift checks, watchdog boundary and offline validation.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "rtde_fault_diagnostics_change": "Retain failure/status before cleanup and SDK operation timing; no motion limit or watchdog changes.",
+      "follower_tcp_speed_change": "Document follower TCP cap, CLI precedence, specification source and remaining speed constraints.",
+      "recovery_position_window_change": "Explain recovery stationarity window and regression verification.",
+      "control_empnp_options_change": "Document control-mode weak previous-pose correction and separate downstream filter_alpha option.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
     },
     {
-      "path": "urcal/inference/infer_live.py",
-      "bytes": 18427,
-      "sha256": "dafac346337a5440b7d5a3432c7ba4e158d54d3d6c4fc6e6b165bc8a403bc750",
-      "source": "robotpose/infer_live.py",
-      "source_sha256": "d858ca28acd5010ccfe59d657cc88e2b0251604e613ed8f1b5f2aaacc26012e3",
-      "byte_identical_to_source": false,
-      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible. Skip debug blending when the segmentation mask is empty.",
-      "previous_path": "infer_live.py",
+      "path": "configs/workspace.example.json",
+      "source": "Created for this bundle.",
+      "change": "Example joint limits, capsule radii and empty environment configuration; not a measured workspace.",
+      "bytes": 511,
+      "sha256": "ceaaef3d927ba3435d16c48ab9c6c03900b41659cf199b9d1c39389d934f263b",
+      "previous_path": "workspace.example.json",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "urcal/inference/infer_live_10.py",
-      "bytes": 109,
-      "sha256": "3674770412784406e81521c1b9e75fe1e180d726beae3e82ee2f0fada570ef58",
-      "source": "robotpose/infer_live_10.py",
-      "source_sha256": "438500f9ae3b90a76eff0597944b02a539277b64ed3c806727a05b2e62205518",
-      "byte_identical_to_source": false,
-      "previous_path": "infer_live_10.py",
+      "path": "docs/CURRENT_IMPLEMENTATION.md",
+      "source": "Current implementation reference for the repository: capabilities, frames, acquisition and control phases, settings, CLI, GUI, simulation, logs and code map; no change history.",
+      "bytes": 40539,
+      "sha256": "952894c89b90f0be99487f3c27fe925d36745bc522bcd46282d41382c4fc9b24"
+    },
+    {
+      "path": "docs/Research_Implementation_Plan.txt",
+      "source": "Provided by the user.",
+      "change": "User-provided research implementation plan, preserved unchanged.",
+      "bytes": 10056,
+      "sha256": "7cdba760afb382c18291280fbad326fde623dd97630a7662281386639c542c7a",
+      "previous_path": "Research_Implementation_Plan.txt",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "urcal/inference/infer_live_ur10e.py",
-      "bytes": 22836,
-      "sha256": "3dc909b29452e28d92db03e71ce0b201bec5c01f6d4e1e40878d0dba45661bcd",
-      "source": "robotpose/infer_live_ur10e.py",
-      "source_sha256": "8526abdd9fe081ec0bf814df430ee9a53b5c1dfd7c4559c4c73ed1e6967308f7",
-      "byte_identical_to_source": false,
-      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible. Skip debug blending when the segmentation mask is empty.",
-      "previous_path": "infer_live_ur10e.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
-    },
-    {
-      "path": "urcal/inference/my_pnp.py",
-      "bytes": 9248,
-      "sha256": "0a8147c9a1b8b9162bf8311374cfe01b12e74c37689f789c40e90c477bcab9d1",
-      "source": "robotpose/my_pnp.py",
-      "source_sha256": "76bf7b86a1a03c5645a5e76fb867f322ddc0fbb3ef576b6d40d4ef148b3ba31e",
-      "byte_identical_to_source": false,
-      "change": "Reuse identical prior products and fixed weights; bounded cache for identical consecutive residual evaluations. Keep numerical Jacobian and solver settings.",
-      "previous_path": "my_pnp.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
-    },
-    {
-      "path": "urcal/inference/network3.py",
-      "bytes": 13349,
-      "sha256": "dffa07f7094bf97ff0d95d68ff2bb74cc5841a9e2fe7e9d3b96653a148014430",
-      "source": "robotpose/network3.py",
-      "source_sha256": "386777a7cd7b8f3422510b935e8e5607515adf8a50d0695986d74f8093a5a8f5",
-      "byte_identical_to_source": false,
-      "change": "Reuse identical LayerNorm results in eval mode, retaining distinct Q/K/V object identity, attention path and addition order.",
-      "previous_path": "network3.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+      "path": "docs/images/gui_preview.png",
+      "source": "Actual Tk GUI screenshot using synthetic states on an isolated Xvfb display; not a hardware experiment.",
+      "bytes": 112314,
+      "sha256": "a5766212f70f732b69ef4aff1e2cf4c568e6e6f3c3f83c5cbaf0f3c4ba559814"
     },
     {
       "path": "reference/infer_live.py",
@@ -205,12 +203,44 @@
     },
     {
       "path": "requirements.txt",
-      "bytes": 746,
-      "sha256": "6db3adc83badc004c55106f028163bd810564097028daa7fc7114290d8fba115",
+      "bytes": 759,
+      "sha256": "140bba2f064c8a3511d5527c4d84813db83075f93e974e1d09df04a039888d1e",
       "source": "requirements_live_ur10e.txt",
       "source_sha256": "23942c669e40eaa657970edde95cc9c754eee7fbfc5ba7cee1c9ce46cf168a01",
       "byte_identical_to_source": false,
-      "change": "Documented system Tkinter package for the dual-control GUI."
+      "change": "Documented system Tkinter package for the dual-control GUI.",
+      "visual_gui_change": "Clarify that the 3D viewer uses the existing system Tkinter dependency."
+    },
+    {
+      "path": "run_cooperative.sh",
+      "source": "Created for this bundle.",
+      "change": "Working-directory-independent research control launcher; no arguments displays help.",
+      "bytes": 321,
+      "sha256": "52965932d139bfc5245199002115c0e43edbd022efbd082e06f7783ab51a1c1c",
+      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
+    },
+    {
+      "path": "run_dual.sh",
+      "source": "Created for this bundle.",
+      "bytes": 330,
+      "sha256": "1aa63b8e43d1ed544396543975fcae243adb86fd3fd51934aff472f18645f2ed",
+      "change": "Added working-directory-independent dual inference launcher.",
+      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
+    },
+    {
+      "path": "run_dual_control.sh",
+      "source": "Created for this bundle.",
+      "change": "Working-directory-independent control launcher; no arguments displays help.",
+      "bytes": 317,
+      "sha256": "9a4f321fdf5ecfbf3ab0bbe820b1d1c0aa66f3e64928b7fecd521e4318fb2698",
+      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
+    },
+    {
+      "path": "run_simulation.sh",
+      "source": "Created for captured-state simulation.",
+      "change": "Launch capture-once or saved-state virtual joint control from any working directory.",
+      "bytes": 320,
+      "sha256": "083f33b8d179eee522ee8a7cfe41767248714e3fa741975bd612fa33670203f5"
     },
     {
       "path": "run_ur10e.sh",
@@ -229,11 +259,436 @@
       "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
     },
     {
+      "path": "tests/fixtures/alignment_governor_cases.json",
+      "source": "Created for live initial-alignment command governor regression.",
+      "change": "Minimal recorded-state fixtures with explicit approximate snapshot and inferred control-period provenance; no runtime log dependency.",
+      "bytes": 19147,
+      "sha256": "fe75a1756001b9bf78a19add7d1c02efbf37f0dbb6559a6a2ffb35b80c51ccbf"
+    },
+    {
+      "path": "tests/fixtures/alignment_leader_rest_speed.json",
+      "source": "Initial, endpoint and fault encoder states from 20261021T074706Z-separated-fac76815; captures the UR10e 2.158828 mm/s stationary-threshold rejection.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs.",
+      "bytes": 8701,
+      "sha256": "efef5a78b1eeb4ee64d72259a9615067c81598bb39c957a6f0580d5a1a5854eb"
+    },
+    {
+      "path": "tests/fixtures/alignment_speed_reserve.json",
+      "source": "Recorded overspeed diagnosis and imperfect virtual-response regression; no hardware validation.",
+      "bytes": 6783,
+      "sha256": "779b1e6f5bc55349718fb17afe17de25de7435c677d8f79052be4e17d7e88e61"
+    },
+    {
+      "path": "tests/fixtures/calibration_handoff_shift.json",
+      "source": "Five recorded post-alignment calibration pairs and robot endpoint snapshots from 20261021T071813Z-separated-810368d7; reproduces the 121.4 mm nominal target shift. Not a physical motion replay.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs.",
+      "bytes": 13484,
+      "sha256": "7300b52c9f0e5aea9523e27339ae1ff7140b9457b4507540973d7186768b2855"
+    },
+    {
+      "path": "tests/fixtures/follow_calibration_rejection.json",
+      "source": "Stopped preview recovery and offline lifecycle/recorded regression; no hardware validation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "bytes": 15331,
+      "sha256": "a5bc0f0b4085b46d92407908fe77b35f2f6a8c97cc2e3cc6462f51da42252c26"
+    },
+    {
+      "path": "tests/fixtures/follow_leader_start.json",
+      "source": "Bounded leader following implementation or offline recorded/model regression; no hardware validation.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "bytes": 14069,
+      "sha256": "4e8731600897a90333af579b78de08213da32338c551c8ad00d92b5b49168225"
+    },
+    {
+      "path": "tests/fixtures/recovery_stationary_pose_noise.json",
+      "source": "58 sparse UR5e stationary WAIT snapshots from the reported run; offline noise stress fixture, not a full-rate replay.",
+      "recovery_position_window_change": "58 sparse UR5e stationary WAIT snapshots from the reported run; offline noise stress fixture, not a full-rate replay.",
+      "bytes": 57177,
+      "sha256": "8892be22df7bcc0475553023fee81ae244eca429fc7bb482d5251ecabd935a61"
+    },
+    {
+      "path": "tests/fixtures/stationary_acquisition.json",
+      "source": "Trimmed stationary preview and post-alignment observations from 20261021T075444Z-separated-02a49058.jsonl.",
+      "bytes": 77581,
+      "sha256": "886dbb419ad312661a1844faa5e10f91efb55310e0808fbd7c630fe82ad3f5df"
+    },
+    {
+      "path": "tests/test_active_calibration.py",
+      "source": "Created for active calibration rejection grace regression tests.",
+      "bytes": 7049,
+      "sha256": "79addb06f1fe256a36f949fff507b8f0c8b3087b260851bbc1ced6e2b5f79c9c"
+    },
+    {
+      "path": "tests/test_alignment_handoff_hold.py",
+      "source": "Virtual encoder tests for completed alignment zero speedJ proposals and preserved safety bounds.",
+      "bytes": 8061,
+      "sha256": "dd91570901ccd60d9f478e57337785d60e581e7b0dc53cdb6fcf627a0a1fc9f0"
+    },
+    {
+      "path": "tests/test_alignment_speed_reserve.py",
+      "source": "Recorded overspeed diagnosis and imperfect virtual-response regression; no hardware validation.",
+      "bytes": 10079,
+      "sha256": "442f47f5305b91da2fb4ecb6634cf5c170bf6807a7b44702e604c4257b05d40c"
+    },
+    {
+      "path": "tests/test_approximate_runtime.py",
+      "source": "Created for bounded flange task tolerance with approximate calibration.",
+      "bytes": 14346,
+      "sha256": "1bf1eb3148bf172937ca30e5b8587ecc497806f20dc5ea14eb360d9e01cde6c6",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_approximate_simulation.py",
+      "source": "Created for bounded flange task tolerance with approximate calibration.",
+      "bytes": 8346,
+      "sha256": "dca25adce367f01b9ea05cabd994cfd5a1c2626977a87a430b7161cf3aee0cbc"
+    },
+    {
+      "path": "tests/test_approximate_startup.py",
+      "source": "Created for bounded flange task tolerance with approximate calibration.",
+      "bytes": 10288,
+      "sha256": "3d0dcdd093947ede8c6f5fcc74e29fef33ee5ef05986d3de4e659e7ed2b3cf81",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_approximate_tracking.py",
+      "source": "Created for bounded flange task tolerance with approximate calibration.",
+      "bytes": 12613,
+      "sha256": "0a0c0afc84e7ec658c7342186193807c3dbc4e9bf07d98a6c68c752cdb68c0e7"
+    },
+    {
+      "path": "tests/test_arm_conditioning_recovery.py",
+      "source": "Regression coverage for bounded native IK conditioning retries.",
+      "bytes": 7698,
+      "sha256": "0cfffd62af77902f8e60dc23cff14142fc0b0d812bf5dc48ca0517a6df4c87e3"
+    },
+    {
+      "path": "tests/test_arm_connection.py",
+      "source": "Created for the remote-mode Arm rejection fix.",
+      "change": "Mock remote rejection, typed diagnostics, pre-upload disconnect-only cleanup and unrecognized/post-upload errors.",
+      "bytes": 3874,
+      "sha256": "e2896f48f461d3bde77b0bf79c5bd63de56abe29d1563f1b295148c3a0623c1f"
+    },
+    {
+      "path": "tests/test_bounded_follow.py",
+      "source": "Bounded leader following implementation or offline recorded/model regression; no hardware validation.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "bytes": 20410,
+      "sha256": "3a1be4b2cde78fb5e0ad7e9edba1ac7e0f4b0214ccf40873d395c331f8e74be7"
+    },
+    {
+      "path": "tests/test_calibration_diagnostics.py",
+      "source": "Raw residuals, failed/invalid keypoints, drawing and unique strict-JSON/PNG snapshot tests.",
+      "bytes": 12398,
+      "sha256": "501c17518841fb4ab17a6c577d9c8f1926553ebce070a0a0ce7407f47d7ddd82",
+      "reprojection_toggle_change": "Cover OFF text, persistent raw metrics and snapshot setting; PnP failure stays visible.",
+      "pnp_input_diagnostics_change": "Test exact solver row selection, failed-result preservation, detached inputs/outputs and shape validation."
+    },
+    {
+      "path": "tests/test_calibration_handoff.py",
+      "source": "Offline gate/estimator freshness, rejection, timeout and velocity reset regressions for alignment handoff.",
+      "bytes": 6432,
+      "sha256": "1563be002cdee48fe6112c32bc40562b02ae30522f7963a92a50632b348b8ee7",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_calibration_relaxation.py",
+      "source": "Offline calibration-limit boundary, fresh-frame retry, default/override, recorded target-shift and hold/follow lifecycle checks; no hardware IO.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs.",
+      "bytes": 11417,
+      "sha256": "de9fc0aa1a970169007f154904819e37c37fda3514dffcbf47231739bb48890a"
+    },
+    {
+      "path": "tests/test_cartesian_ramp.py",
+      "source": "Bounded leader following implementation or offline recorded/model regression; no hardware validation.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "bytes": 10130,
+      "sha256": "5d28e0c802da3e2ee2970c4744f24cf35b1249ff366d6a08677294b0acccaebf"
+    },
+    {
+      "path": "tests/test_control_empnp_options.py",
+      "source": "Check CLI defaults/overrides/validation and actual worker-estimator-solver configuration delivery without hardware IO.",
+      "control_empnp_options_change": "Check CLI defaults/overrides/validation and actual worker-estimator-solver configuration delivery without hardware IO.",
+      "bytes": 6589,
+      "sha256": "c25302d2e27450be59c193c09732bb0616b1f045d9efbe616bd4948bf413c26f"
+    },
+    {
+      "path": "tests/test_control_recovery.py",
+      "source": "Stopped preview recovery and offline lifecycle/recorded regression; no hardware validation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "bytes": 19114,
+      "sha256": "dfb56b994771cdbf781e69c273416e20ea913633415d7d19439d70e9fa6da24e",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_control_scene.py",
+      "source": "Display geometry, frame/TCP offset, copy isolation and projection tests.",
+      "bytes": 11539,
+      "sha256": "fce8071b39e91a07916217edfec775db464b1212777b5eebc3985de16bc0d5af"
+    },
+    {
+      "path": "tests/test_cooperative_controller.py",
+      "source": "Created for this bundle.",
+      "change": "Real planner tests for moving bases/leader, fixed goals, TCP offsets and measurement lifecycle.",
+      "bytes": 28618,
+      "sha256": "7cc1379fb41e4ea7bee68e507f9c535626de634e48f34d97dd78cdad3cda51ea",
+      "calibration_diagnostics_change": "Confirm research preview preserves rejection details.",
+      "mean_threshold_change": "Expect the updated 5 pixel limit in diagnostic status.",
+      "reprojection_toggle_change": "Cover high-error acceptance for preview/active planning and rejection of nonfinite statistics.",
+      "preview_calibration_recovery_change": "Check atomic recovery, candidate velocity validation and strict/default rejection behavior.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "follower_tcp_speed_change": "Pin historical numerical fixture to shared speed inheritance.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_cooperative_diagnostics.py",
+      "source": "Created for authorized live initial alignment.",
+      "change": "Fault snapshots, copying, nonfinite values and WAIT rate limiting.",
+      "bytes": 3996,
+      "sha256": "16fe9fa6dae7af0dced6ca8cab96f52dd8ed3b265f43f4a1b610a59435e1caec"
+    },
+    {
+      "path": "tests/test_cooperative_kinematics.py",
+      "source": "Created for this bundle.",
+      "change": "Independent DH/Jacobian checks, local IK, segment geometry and workspace rejection tests.",
+      "bytes": 14268,
+      "sha256": "438cc0f77db2630c2a1827e3da44aa1e2ab18f537e48293ffd88bbfe244c907f"
+    },
+    {
+      "path": "tests/test_cooperative_logging.py",
+      "source": "Created for this bundle.",
+      "change": "Log integrity, writer failure, independent reference matching and fair completion/slowdown analysis.",
+      "bytes": 18141,
+      "sha256": "37410d3750bd6fd105e4ac62f6e5e548decac9a58f6ce99ed6bdb0c2a6f1f5af",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis."
+    },
+    {
+      "path": "tests/test_cooperative_regressions.py",
+      "source": "Created for this bundle.",
+      "change": "Rejected-measurement rollback, measured acceleration, future targets and settled completion regressions.",
+      "bytes": 9324,
+      "sha256": "681e97fe119749ae8987c43184f9c91bad946300823c1213e9ebeae97b3d84ce"
+    },
+    {
+      "path": "tests/test_cooperative_runtime.py",
+      "source": "Created for this bundle.",
+      "change": "Mocked research RTDE, preview, send/commit ordering, failures, cleanup and command freshness tests.",
+      "bytes": 29017,
+      "sha256": "5c0802392241b77f48352574b0f0aabf2b9a72a738fbb573bddccdb5ed7bc723",
+      "visual_gui_change": "Cover research scene freshness, path metadata, calibration gating and display-only accepted-pair fallback.",
+      "active_calibration_recovery_change": "Give runtime gate fixtures explicit accepted capture and rejection state.",
+      "preview_calibration_recovery_change": "Verify preview/active recovery scope and explicit Arm after baseline replacement.",
+      "pnp_input_diagnostics_change": "Test successful/failed diagnostics serialization, nonfinite nulls, copied payload and legacy packets.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "rtde_fault_diagnostics_change": "Retain failure/status before cleanup and SDK operation timing; no motion limit or watchdog changes.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_cooperative_simulation.py",
+      "source": "Created for this bundle.",
+      "change": "Production-planner synthetic method comparison, independent synthetic truth and fault scenarios.",
+      "bytes": 8682,
+      "sha256": "560f776c180df7a0fae2fe1bcdcf0edfd46418fe82c0393728db1f4807a4360c"
+    },
+    {
+      "path": "tests/test_cooperative_task.py",
+      "source": "Created for this bundle.",
+      "change": "Task derivatives, velocity decomposition, acceleration constraints and pause deceleration tests.",
+      "bytes": 20714,
+      "sha256": "ba1e27ca0f90e112365517b99ea25f57870531387871f8876e5275eb785b35ef"
+    },
+    {
+      "path": "tests/test_dual_control_geometry.py",
+      "source": "Created for this bundle.",
+      "change": "Pure geometry tests including independent controller-DH frame comparison.",
+      "bytes": 10334,
+      "sha256": "e150f06ce4cf110957ed3dbab706487cb17da81c0814b105bc0eebe0c68e1222"
+    },
+    {
+      "path": "tests/test_dual_control_gui.py",
+      "source": "Created for this bundle.",
+      "change": "Display-free tests including relative path units, active edit locking and pause/resume commands.",
+      "bytes": 25280,
+      "sha256": "d99f8b0d5e433333c3022c8101d3154bbcb39cd847cccb2357ca3006b624b86c",
+      "visual_gui_change": "Cover scene updates, target drafts, camera-space units, input preservation and command guards.",
+      "native_ik_preview_recovery_change": "Check live worker timestamps Arm and preserves simulation string commands."
+    },
+    {
+      "path": "tests/test_dual_control_policy.py",
+      "source": "Created for this bundle.",
+      "change": "Calibration failure/freshness/stability and bounded Cartesian command tests.",
+      "bytes": 17658,
+      "sha256": "3be4c50ed050202ba1d4adb048fcf381f28b5a3ae3d4dea71b387b6b0d77bdb0",
+      "calibration_diagnostics_change": "Regression coverage for rejected-pair reason lifetime and numeric reprojection details.",
+      "mean_threshold_change": "Check inclusive mean=5/max=8 acceptance and rejection immediately above each threshold; update rejection fixtures.",
+      "reprojection_toggle_change": "Cover disabled upper bounds while preserving invalid-statistic, age, keypoint, failure and jump rejection."
+    },
+    {
+      "path": "tests/test_dual_control_runtime.py",
+      "source": "Created for this bundle.",
+      "change": "Mocked RTDE lifecycle, follower isolation, target updates, startup and failure-stop tests.",
+      "bytes": 44993,
+      "sha256": "613098587ad9096486ea3ba96d64ada5fd8b5d848cdf575fee28c444fb244307",
+      "visual_gui_change": "Cover display snapshots, current-state freshness, goal visibility under motion gating and copy isolation.",
+      "calibration_diagnostics_change": "Confirm rejected first pair remains WAIT with persistent diagnostic and no usable scene/arm state.",
+      "mean_threshold_change": "Expect the updated 5 pixel limit in diagnostic status.",
+      "reprojection_toggle_change": "Cover both modes and execution settings, restored limits and high-error mocked motion execution.",
+      "native_ik_preview_recovery_change": "Ensure command iteration abandoned by a target error preserves subsequent target/Stop in both the source queue and deferred inbox.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis."
+    },
+    {
+      "path": "tests/test_dual_control_vision.py",
+      "source": "Created for this bundle.",
+      "change": "Mocked capture clocks, raw reprojection, geometry degeneracy and paired rejection tests.",
+      "bytes": 13109,
+      "sha256": "8314ca4e5dc012593eaf53e7d0319354cbcf0c7354dd6de5712212145707d835",
+      "calibration_diagnostics_change": "Failed PnP retains the valid detection count for diagnostics.",
+      "pnp_input_diagnostics_change": "Test failed packet diagnostics without altering acceptance, quality metrics or capture time."
+    },
+    {
+      "path": "tests/test_dual_inference.py",
+      "source": "Created for this bundle.",
+      "bytes": 12600,
+      "sha256": "1d09c18e837231d66ef9264add617cf72ae366a8fcbc9c2eb6e0fa41a1751e2f",
+      "change": "Extended dual-loop tests to continue across two frames when either or both segmentation masks are empty."
+    },
+    {
+      "path": "tests/test_follow_fault_recovery.py",
+      "source": "Stopped preview recovery and offline lifecycle/recorded regression; no hardware validation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "bytes": 21557,
+      "sha256": "b5a743d3f6aa28e8135deba1d8d13c4c8f21da43ee70afc04ce3dccdc9422bcb"
+    },
+    {
+      "path": "tests/test_follow_future_jacobian.py",
+      "source": "Bounded leader following implementation or offline recorded/model regression; no hardware validation.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "bytes": 4107,
+      "sha256": "758ec969c2d8e9e0961c7e49105122756400c94253b5e90442390704059f27da"
+    },
+    {
+      "path": "tests/test_follow_governor.py",
+      "source": "Bounded leader following implementation or offline recorded/model regression; no hardware validation.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "bytes": 9336,
+      "sha256": "f2497c71134bcb0380f99431d93b1cc1c6b5565d8d7c4e3a8291a81594543028"
+    },
+    {
+      "path": "tests/test_follow_speed_limit.py",
+      "source": "Offline follower TCP speed limit and phase-isolation regression tests.",
+      "follower_tcp_speed_change": "Test phase isolation, defaults/overrides, old namespaces, ramping, measured overspeed and future Jacobian limits.",
+      "bytes": 11986,
+      "sha256": "8ab769a410e5366bb610d3d3f2f133834d6da46ca8405c3c62c8d9a341dbba3f"
+    },
+    {
+      "path": "tests/test_hold_fault_recovery.py",
+      "source": "Stopped preview recovery and offline lifecycle/recorded regression; no hardware validation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "bytes": 8375,
+      "sha256": "b6f3f4383b6d4ea4be84bc3057825653269d7e1fe3657cdacffdea1f4682a4cb"
+    },
+    {
+      "path": "tests/test_inference_display.py",
+      "source": "Missing Qt font fallback and explicit environment preference tests.",
+      "bytes": 2783,
+      "sha256": "0c6cbccbf3d74ec8a4750da88617d597b69b938c15bd06c9674e56415f3e78a5"
+    },
+    {
+      "path": "tests/test_leader_rest_limits.py",
+      "source": "Role-specific stationary speed tests, both leader choices, unchanged follower/hold bounds, displacement checks and recorded 2.1588 mm/s sample; no hardware IO.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs.",
+      "bytes": 7175,
+      "sha256": "796f3b77041457ce72b135d3e5b45b9c6d42f94a2ab39ffc9fde0f735aa8af24"
+    },
+    {
+      "path": "tests/test_live_alignment.py",
+      "source": "Created for authorized live initial alignment.",
+      "change": "Pure kinematic plant tests for live alignment including measured lag, geometry, drift, settling and failures.",
+      "bytes": 15083,
+      "sha256": "f6695f0f89de0277420cbee65310ecf9736489cf953624a649f1d65b8e8a943f",
+      "alignment_speed_change": "Pin legacy regression fixture at scale1 and verify scale2 two-arm hold convergence.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_live_alignment_governor.py",
+      "source": "Created for live initial-alignment command governor regression.",
+      "change": "Offline regression for recorded predicted-Jacobian boundary and measured-velocity lag; independent constraint checks and bounded failure behavior.",
+      "bytes": 9430,
+      "sha256": "02853fd686b7b4c9d955c68870f2ed3c5fb135af9c7b8750479347b3ff1f54ad"
+    },
+    {
+      "path": "tests/test_live_alignment_reacquisition.py",
+      "source": "Created for this bundle.",
+      "change": "Offline initial-alignment calibration reacquisition, cumulative wait budget, drift and strict watchdog regression tests.",
+      "bytes": 18485,
+      "sha256": "8e13742303aaf777f6a0e2dc72ca65c4a4a5587fa8e39a842d5b8eb8c0b85137",
+      "preflight_rejected_vision_change": "Use production readiness helper with real calibration gate; six new regressions cover path outlier recovery, frozen targets, duplicate rejection, aggregate timeout, robot/base movement and watchdog boundary."
+    },
+    {
+      "path": "tests/test_live_alignment_runtime.py",
+      "source": "Created for authorized live initial alignment.",
+      "change": "Mock physical hold/follow startup, send/commit/handoff ordering and failure handling without hardware.",
+      "bytes": 84547,
+      "sha256": "dd58cb034a8f60fe77cd47015d8b421c625b82c3ed196a39ce44e6b974aa144f",
+      "active_calibration_recovery_change": "Exercise real calibration gate jumps and recovery in mocked hold/follow runtimes, with and without initial alignment.",
+      "preview_calibration_recovery_change": "Verify strict native preflight and actual hold tracker replacement with queued Arm cancellation.",
+      "alignment_governor_change": "Check Arm snapshot timestamps, proposal dt/bases/predictions and fault control-period logging.",
+      "alignment_speed_change": "Verify applied alignment speed and no-motion status are reported during native preflight.",
+      "native_ik_preview_recovery_change": "Cover hold/follow native IK rejection, preview/session cleanup, new Arm retry, queued and delayed old Arm rejection, preservation of target/Stop, active-fault behavior and exact request logs.",
+      "preflight_rejected_vision_change": "Update idle vision rejection contract and add real queued-jump coverage for both hold and follow readers, preserving last accepted poses and five-frame readiness.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_live_alignment_speed.py",
+      "source": "Created for user-requested faster live initial alignment.",
+      "change": "Default/invalid/legacy scale and full virtual endpoint tests preserving all speed/acceleration limits.",
+      "bytes": 7668,
+      "sha256": "54c27bbc1efcbcf40e9b8f64f19f976f2096f155744587b91e1e716a1940ac68"
+    },
+    {
+      "path": "tests/test_live_alignment_startup.py",
+      "source": "Created for authorized live initial alignment.",
+      "change": "Alignment readiness preserves frame, travel, rest, clearance and cumulative drift checks.",
+      "bytes": 8236,
+      "sha256": "fb2f10213699dad917b282d5d4791b337c171eb1f34e264d45bc50bd02e7bff2",
+      "alignment_governor_change": "Check quantitative current/target envelope faults and independent copied diagnostic poses.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
+    },
+    {
+      "path": "tests/test_live_alignment_transport.py",
+      "source": "Created for authorized live initial alignment.",
+      "change": "Mock native controller IK/FK, safety, watchdog and speedJ transport checks.",
+      "bytes": 31042,
+      "sha256": "e691fc20407c53ebf5703fa5477ac661e87805d218a6aa760799e90f5b410f6a",
+      "native_ik_preview_recovery_change": "Verify native false never queries fallback IK/FK or sends velocity/watchdog; exact diagnostic target/seed/offset are copied."
+    },
+    {
       "path": "tests/test_live_equivalence.py",
       "source": "Created for this bundle.",
       "bytes": 6726,
       "sha256": "76139cefb2d0103423b60b3f9accff43ac76cebb773b2b1679f1215993e5e34d",
       "change": "Added empty-mask rendering regression coverage and exact nonempty overlay comparison."
+    },
+    {
+      "path": "tests/test_motion_transport_diagnostics.py",
+      "source": "Passive RTDE fault/timing diagnostics and offline regression tests.",
+      "rtde_fault_diagnostics_change": "Retain failure/status before cleanup and SDK operation timing; no motion limit or watchdog changes.",
+      "bytes": 11509,
+      "sha256": "7bc3e700374dd60aac1c4524004916ffd0425fd7e40bf58582303e019b96c362"
+    },
+    {
+      "path": "tests/test_native_alignment_retry.py",
+      "source": "Regression coverage for bounded native IK conditioning retries.",
+      "bytes": 12744,
+      "sha256": "2b0d6aa31464f25d5108e03a081835bf66e66f215f2d698b376e565963e2c500"
+    },
+    {
+      "path": "tests/test_native_candidate_margin.py",
+      "source": "Regression coverage for bounded native IK conditioning retries.",
+      "bytes": 11464,
+      "sha256": "993f3449a28e6c3ca02d00ac0346c33e658055c8a5120550aca75777ecfd1d03"
     },
     {
       "path": "tests/test_network_equivalence.py",
@@ -242,10 +697,106 @@
       "sha256": "28c7c2a1cf71d0223535c0a1f1ede4dcecff35a25a4532f14199a8f23871856f"
     },
     {
+      "path": "tests/test_package_layout.py",
+      "source": "Created for this bundle.",
+      "change": "Six integration tests for spawn identity, original/package isolation, offline imports, asset root and launcher cwd/arguments/environment.",
+      "bytes": 10142,
+      "sha256": "98d41d20320c85ea97334aa2e3dc8e65b1b5669697781f75ce1223ff4c9ebab6",
+      "simulation_change": "Add captured initial-state simulation entry, explicit virtual GUI state, documentation or isolation verification."
+    },
+    {
       "path": "tests/test_pnp_equivalence.py",
       "source": "Created for this bundle.",
       "bytes": 5983,
       "sha256": "c9533b2a3036cca04ddae7be236eb787ea79d5a431f9cafb730aa6f4c1bb30d2"
+    },
+    {
+      "path": "tests/test_preview_calibration.py",
+      "source": "Created for independent unarmed preview calibration cluster recovery regression tests.",
+      "bytes": 12458,
+      "sha256": "22406a58a07c0d85af1a3f27ec6a720e1722f1b8378a5a3df3ad9db33b1cd7d5"
+    },
+    {
+      "path": "tests/test_recovery_position_window.py",
+      "source": "Observed zero-speed pose-noise stress test, actual movement/drift rejection and full recovery calibration retention.",
+      "recovery_position_window_change": "Observed zero-speed pose-noise stress test, actual movement/drift rejection and full recovery calibration retention.",
+      "bytes": 5868,
+      "sha256": "f31cb98c470bcf7431f70a80664f9571d0db643a738b287da9366f70a6313fd4"
+    },
+    {
+      "path": "tests/test_relative_state.py",
+      "source": "Created for this bundle.",
+      "change": "Time alignment, paired updates, filtering, rotation/translation prediction, stale and invalid input tests.",
+      "bytes": 14713,
+      "sha256": "c8a773ea9c8149412df8801028f9e27867e5b1930606565b84c765213ea3620a"
+    },
+    {
+      "path": "tests/test_scene_view.py",
+      "source": "Viewer rendering, interaction, path, fit and stale-state tests.",
+      "bytes": 13765,
+      "sha256": "e4c9a98feb49206187dbf190dd9a52b603365a9993d5ce1844bfd4ee639d0915"
+    },
+    {
+      "path": "tests/test_simulation_alignment_runtime.py",
+      "source": "Created for initial-alignment simulation fix.",
+      "change": "Large synthetic roll alignment, hold/follow handoff, external-motion phase, pause/reset and rejected-step commit isolation.",
+      "bytes": 10378,
+      "sha256": "59d62e9aa86d457a5c3bc1e60a11cde75ce55f284c3755766458c60716a1ac3f"
+    },
+    {
+      "path": "tests/test_simulation_approach.py",
+      "source": "Created for initial-alignment simulation fix.",
+      "change": "Initial alignment path, timing, limit rejection, alternate branches and propose/commit unit checks.",
+      "bytes": 10285,
+      "sha256": "a044e772a44a877f3cdedfaae005a89c11b4861c050b8002c1057ca6509af190"
+    },
+    {
+      "path": "tests/test_simulation_gui.py",
+      "source": "Created for captured-state simulation.",
+      "change": "Simulation start/pause/reset UI, CLI restrictions and isolated dispatch checks.",
+      "bytes": 11695,
+      "sha256": "5227c123f1eda55418be439b4dbf869d3d24e369a8a85d4f320348c7ed200a36"
+    },
+    {
+      "path": "tests/test_simulation_plant.py",
+      "source": "Created for captured-state simulation.",
+      "change": "Initial TCP preservation, independent Jacobian differences, uniform joint slew limiting and atomic feasibility checks.",
+      "bytes": 18229,
+      "sha256": "157e71f018a0ce143ee553ff577cd4d4ff0ddca8e90144b7f6c6ea3495a3ebc8",
+      "initial_alignment_change": "Bounded simulator IK retry, separate checked initial alignment or corresponding UI/documentation/regression update; physical control limits retained."
+    },
+    {
+      "path": "tests/test_simulation_runtime.py",
+      "source": "Created for captured-state simulation.",
+      "change": "Synthetic nominal UR closed-loop hold/follow convergence, pause/reset, rejected-step commit and offline SDK isolation.",
+      "bytes": 16649,
+      "sha256": "4462e21a6b9e702f12616652d01803fed4995127d278e57872c6618a219a7f3c"
+    },
+    {
+      "path": "tests/test_simulation_snapshot.py",
+      "source": "Created for captured-state simulation.",
+      "change": "Snapshot validation, persistence, mocked receive-only capture and resource-cleanup regressions.",
+      "bytes": 17200,
+      "sha256": "562d88555fe37aeaa95c5e1554b2c456bd609b4e4514e64abcfb9e66d99b6252"
+    },
+    {
+      "path": "tests/test_stationary_acquisition.py",
+      "source": "Offline consensus, stale/duplicate, hold/follow handoff and recorded PnP regression tests.",
+      "bytes": 12389,
+      "sha256": "b5c6d1b2a8c88c7eb629b223da52336540cbc2a5e881cf272a3d7291074d727c"
+    },
+    {
+      "path": "tests/test_target_approximation.py",
+      "source": "Created for bounded flange task tolerance with approximate calibration.",
+      "bytes": 11127,
+      "sha256": "3f2a266ea1e2ff2986f55a2ad22bf1d6e5f125bf885fbc4ed1d5130547c98cd1"
+    },
+    {
+      "path": "tests/test_transport_diagnostics.py",
+      "source": "Passive RTDE fault/timing diagnostics and offline regression tests.",
+      "rtde_fault_diagnostics_change": "Retain failure/status before cleanup and SDK operation timing; no motion limit or watchdog changes.",
+      "bytes": 9457,
+      "sha256": "08fd91a359bd43a275849e6284b4c0be43cd0ccd5c9d0fdf394f8e9e21faeb13"
     },
     {
       "path": "tests/test_vote_equivalence.py",
@@ -284,48 +835,57 @@
       "byte_identical_to_source": true
     },
     {
-      "path": "urcal/inference/vote2.py",
-      "bytes": 14379,
-      "sha256": "3f24d5c183dd749379b0d0d432b61f7d3aadffe600d31a7dce6b4eda89b8efc0",
-      "source": "robotpose/vote2.py",
-      "source_sha256": "8279e2480b631f331c0b3de975245e97123326338578866de5a8f8a19db5987e",
-      "byte_identical_to_source": false,
-      "change": "Vectorize per-bin first-maximum candidate selection; reuse segmentation probabilities, masks and neighbor pixel counts. Preserve RNG order and voting settings.",
-      "previous_path": "vote2.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+      "path": "urcal/__init__.py",
+      "source": "Created for this bundle.",
+      "change": "Package root; no eager hardware/model imports.",
+      "bytes": 62,
+      "sha256": "8792bf78a8cb2f4045b29f46d3cc73eebbfdda53682d552761bb108f6d16bb00"
     },
     {
-      "path": "urcal/inference/infer_live_dual.py",
+      "path": "urcal/control/__init__.py",
       "source": "Created for this bundle.",
-      "bytes": 14989,
-      "sha256": "329cbc8f0764053552a0839a2138725663ec3e4487b9450d32d6fbbda205afb8",
-      "change": "Added one-camera dual inference with letterboxed left UR5e/right UR10e regions, original-image pose coordinates and independent robot state.",
-      "previous_path": "infer_live_dual.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+      "change": "Shared control package boundary.",
+      "bytes": 67,
+      "sha256": "396546b0970840e9c79a7926d582f633c480b43552d5055419be14d0977ea16e"
     },
     {
-      "path": "run_dual.sh",
-      "source": "Created for this bundle.",
-      "bytes": 330,
-      "sha256": "1aa63b8e43d1ed544396543975fcae243adb86fd3fd51934aff472f18645f2ed",
-      "change": "Added working-directory-independent dual inference launcher.",
-      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
+      "path": "urcal/control/acquisition.py",
+      "source": "Stationary consensus acquisition downstream of PnP; no hardware IO.",
+      "bytes": 6832,
+      "sha256": "d5be30f244352fdfab9fddc07efe94e6ec174854ced7c47156c898439ec7ce2e"
     },
     {
-      "path": "tests/test_dual_inference.py",
-      "source": "Created for this bundle.",
-      "bytes": 12600,
-      "sha256": "1d09c18e837231d66ef9264add617cf72ae366a8fcbc9c2eb6e0fa41a1751e2f",
-      "change": "Extended dual-loop tests to continue across two frames when either or both segmentation masks are empty."
+      "path": "urcal/control/alignment.py",
+      "source": "Created for authorized live initial alignment.",
+      "change": "Measured-joint initial alignment with bounded commands, path guards, frozen-base/leader checks and measured completion.",
+      "bytes": 30737,
+      "sha256": "dd25f902a5b34e4d9dd8dbe238df8317f4c4486472b0a1aa1ceca3d0b8463586",
+      "alignment_governor_change": "Bounded future-Jacobian command backoff and measured-velocity fallback with all prior speed/acceleration constraints retained; structured quantitative faults.",
+      "alignment_speed_change": "Scale only live alignment speed budgets and duration estimate; preserve gain, accelerations, global hard limits and measured settling. Missing historical option uses scale1.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
     },
     {
-      "path": "urcal/control/runtime.py",
-      "source": "Created for this bundle.",
-      "change": "Retain camera-fixed hold; dispatch follow to research runtime, share joint-velocity reads and current/future controller checks.",
-      "bytes": 29154,
-      "sha256": "25bc819eaabc25877a57266fd17a59a6f072b49160de192227ffce727491f9af",
-      "previous_path": "control_dual.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+      "path": "urcal/control/approximation.py",
+      "source": "Created for bounded flange task tolerance with approximate calibration.",
+      "bytes": 11595,
+      "sha256": "91bf6fa65ae13c0243238b4bd924ae20edcf4fa1f61d61b73c62fe7d1bec8502"
+    },
+    {
+      "path": "urcal/control/cartesian_ramp.py",
+      "source": "Bounded leader following implementation or offline recorded/model regression; no hardware validation.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "bytes": 5888,
+      "sha256": "173d60d81b60b782a56cf3144432bf81269cc7933f11cb7e42f10613c46f69a6"
+    },
+    {
+      "path": "urcal/control/diagnostics.py",
+      "source": "Raw reprojection residual overlays and explicit preview-only PNG/JSON diagnostic snapshots.",
+      "bytes": 9999,
+      "sha256": "85c06d0226ad092521c82796e28d709f2aaceda8576bab035148f799a949e809",
+      "mean_threshold_change": "Display a default mean limit of 5 pixels, matching controller configuration.",
+      "reprojection_toggle_change": "Record check_reprojection in snapshots; show RAW limits OFF with raw error values instead of active thresholds.",
+      "pnp_input_diagnostics_change": "Copy compact PnP initialization input snapshots, effective finite point indices and current initializer metadata without running the solver."
     },
     {
       "path": "urcal/control/geometry.py",
@@ -337,90 +897,208 @@
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
+      "path": "urcal/control/gui.py",
+      "source": "Created for this bundle.",
+      "change": "Preserve fixed-center GUI; add relative paths, progress and task pause/resume controls for research follow.",
+      "bytes": 28139,
+      "sha256": "f972477899612e018d7da85cd2b7d63acd89bcfae13464d7e2d6f5365bc2c320",
+      "previous_path": "dual_control_gui.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "visual_gui_change": "Integrate the interactive 3D scene, editable target preview, dirty-target Arm guard and resizable scrollable controls.",
+      "reprojection_toggle_change": "Display whether mean/max reprojection rejection is enabled.",
+      "simulation_change": "Add captured initial-state simulation entry, explicit virtual GUI state, documentation or isolation verification.",
+      "initial_alignment_change": "Bounded simulator IK retry, separate checked initial alignment or corresponding UI/documentation/regression update; physical control limits retained.",
+      "native_ik_preview_recovery_change": "Timestamp live Arm requests before IPC so failed preflight cannot reuse delayed clicks; simulation callback format stays unchanged."
+    },
+    {
+      "path": "urcal/control/handoff.py",
+      "source": "Fresh post-endpoint calibration acquisition while live alignment remains stationary; no hardware IO.",
+      "bytes": 7281,
+      "sha256": "28790726ea8a9afc6c9cee62276c8302877f3956ea5624d780159cad1fae7d7a",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs."
+    },
+    {
       "path": "urcal/control/policy.py",
       "source": "Created for this bundle.",
       "change": "Preserve quality gate and allow atomic rejected-sequence consumption without overwriting accepted poses.",
-      "bytes": 12642,
-      "sha256": "eafa301532f23a012c72152f9b9087de168fa807e6338264016ae60000aa4c47",
+      "bytes": 26989,
+      "sha256": "51de189245604a3ea467c231419250dfbbeb853e236eba2c6daeaa41bb7ad553",
       "previous_path": "dual_control_policy.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "calibration_diagnostics_change": "Preserve the latest rejection reason until a new accepted pair; show mean/max limits and keypoint counts without changing acceptance criteria.",
+      "mean_threshold_change": "Set the default per-robot mean raw reprojection limit to 5 pixels; retain maximum 8 pixels.",
+      "reprojection_toggle_change": "Add explicit check_reprojection switch; skip only mean/max upper bounds when false, retaining finite and consistent statistics and other calibration checks.",
+      "active_calibration_recovery_change": "Add active-only bounded rejection grace, strict explicit Arm, original capture-age enforcement and terminal fault latch.",
+      "preview_calibration_recovery_change": "Collect an independent stable replacement cluster only after the accepted baseline expires; preserve jump/quality/time checks and report last rejection with stale errors.",
+      "pnp_input_diagnostics_change": "Append optional pose_diagnostics to CalibrationFrame for logging only; acceptance ignores the field.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
+    },
+    {
+      "path": "urcal/control/recovery.py",
+      "source": "Stopped preview recovery and offline lifecycle/recorded regression; no hardware validation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "bytes": 9614,
+      "sha256": "482efad17c09049a0fc646270b32fd814eba4b06d1ed62678b6a51e2de36e11f",
+      "recovery_position_window_change": "Judge TCP translation over the stationary dwell window while retaining immediate reported-velocity/joint/angular checks."
+    },
+    {
+      "path": "urcal/control/runtime.py",
+      "source": "Created for this bundle.",
+      "change": "Retain camera-fixed hold; dispatch follow to research runtime, share joint-velocity reads and current/future controller checks.",
+      "bytes": 97375,
+      "sha256": "8234a0b85c818da60ecb88f69ca77e8d67ab6a97181a613c6c9c9fd970b7b717",
+      "previous_path": "control_dual.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "visual_gui_change": "Publish fresh paired display snapshots and intended goals independently of motion readiness.",
+      "mean_threshold_change": "Set --max_reproj_px default to 5 pixels; explain it is a tuning parameter.",
+      "reprojection_toggle_change": "Default CLI mean/max reprojection rejection to OFF in preview and execution, wire tracker switch and log setting; --check_reprojection restores it.",
+      "simulation_change": "Add captured initial-state simulation entry, explicit virtual GUI state, documentation or isolation verification.",
+      "active_calibration_recovery_change": "Use last accepted calibration during bounded active hold/alignment rejection; recheck at transmission and display hold/recovery.",
+      "preview_calibration_recovery_change": "Allow preview-only baseline recovery for hold; discard pending Arm on replacement; preserve active/preflight calibration behavior.",
+      "alignment_speed_change": "Add align_speed_scale option default2, validate finite (0,2] range; global limits and tracking remain unchanged.",
+      "native_ik_preview_recovery_change": "Classify explicit native no-solution before motion; close failed preflight and retain hold preview. Preserve exact queried target/seed/offset and invalidate pre-failure Arm requests.",
+      "preflight_rejected_vision_change": "Hold preflight catches only paired-calibration update failures and waits via shared readiness helper; encoder/stop failures stay outside the retry scope.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "rtde_fault_diagnostics_change": "Retain failure/status before cleanup and SDK operation timing; no motion limit or watchdog changes.",
+      "follower_tcp_speed_change": "Resolve independent follower TCP speed cap; explicit legacy max_speed remains inherited.",
+      "control_empnp_options_change": "Expose explicit EMPnP previous-pose on/off switches and per-robot lambda options, validating finite [0,1] values.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
+    },
+    {
+      "path": "urcal/control/scene.py",
+      "source": "Pure NumPy camera-frame display geometry and orthographic projection.",
+      "bytes": 13287,
+      "sha256": "722597a4ebfa2638df9b8abbeda451e6a9276378435f2fa9255ee12f5a957a0f"
+    },
+    {
+      "path": "urcal/control/scene_view.py",
+      "source": "Interactive Tk Canvas robot/current flange/target viewer with stale-state display.",
+      "bytes": 16808,
+      "sha256": "93ea95c0e2e51d895d2277a956895b86015f8fdbd72d4293d0b38fc86a7b5f37",
+      "simulation_change": "Add captured initial-state simulation entry, explicit virtual GUI state, documentation or isolation verification."
+    },
+    {
+      "path": "urcal/control/startup.py",
+      "source": "Created for authorized live initial alignment.",
+      "change": "Receive-only alignment readiness, native IK/FK path preflight, stationary/freshness checks and watchdog handoff.",
+      "bytes": 23743,
+      "sha256": "a24de5100177cd4b640d329632b1b9f0166ccc26bf51873ff3014025fd4b6505",
+      "alignment_governor_change": "Start-position envelope faults include distance, limit and copied current/target/origin poses; thresholds unchanged.",
+      "alignment_speed_change": "Report applied speed multiplier and joint/TCP command caps in preflight before watchdog or movement.",
+      "preflight_rejected_vision_change": "Share readiness helper that exposes last accepted bases and fresh encoders when vision is rejected, stale or unstable; reuse existing aggregate five-second wait without recapturing Arm targets.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
+    },
+    {
+      "path": "urcal/control/transport_diagnostics.py",
+      "source": "Passive RTDE fault/timing diagnostics and offline regression tests.",
+      "rtde_fault_diagnostics_change": "Retain failure/status before cleanup and SDK operation timing; no motion limit or watchdog changes.",
+      "bytes": 5695,
+      "sha256": "1d41f88933dd1acb156718b17c456ed6c90c7410406775af8e315bd4e22c474d"
     },
     {
       "path": "urcal/control/vision.py",
       "source": "Created for this bundle.",
       "change": "Independent inference process and latest camera/joint capture with original-detection reprojection checks.",
-      "bytes": 12344,
-      "sha256": "0aa7eeb4141b2689ab3dcbba3a20bdc06e3d380f46eb071bb4f0ede7d4ad945f",
+      "bytes": 14327,
+      "sha256": "8612a41143b59f7eb325920fe3dc3f393dfb2ce2734944964eb1c743cfbb4dbf",
       "previous_path": "dual_control_vision.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "calibration_diagnostics_change": "Retain keypoint counts on PnP failure, display raw reprojection diagnostics and save on d only without --execute; initialize OpenCV fonts.",
+      "reprojection_toggle_change": "Pass actual gate configuration to video diagnostics.",
+      "pnp_input_diagnostics_change": "Attach diagnostics from captured joint samples and same-frame inference before publishing the packet.",
+      "native_ik_preview_recovery_change": "Timestamp preview keyboard Arm requests before IPC to reject delayed pre-failure requests.",
+      "control_empnp_options_change": "Pass CLI settings to each shared RobotEstimator and print effective prior/weight settings; preserve current default OFF."
+    },
+    {
+      "path": "urcal/cooperative/__init__.py",
+      "source": "Created for this bundle.",
+      "change": "Research collaboration package boundary.",
+      "bytes": 82,
+      "sha256": "518feb78468fa9dcba8dae38b4dc2e9df01bd6b630fbc7f524982c72dd9c00bb"
+    },
+    {
+      "path": "urcal/cooperative/controller.py",
+      "source": "Created for this bundle.",
+      "change": "Pure prepare/commit planner: fixed relative goal, compensation, feedback, path progress and classified faults.",
+      "bytes": 42531,
+      "sha256": "70e9772949c077234f36c08ba0ea7d836d5c4d9d3dc476f273d89c7b9c6b486b",
+      "previous_path": "cooperative_controller.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "calibration_diagnostics_change": "Pass rejected calibration reason to the shared gate for preview diagnostics.",
+      "reprojection_toggle_change": "Forward explicit configuration to the shared calibration gate.",
+      "preview_calibration_recovery_change": "Replay new candidate history into a separate estimator, then atomically replace gate and estimator only when explicitly enabled by preview.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "follower_tcp_speed_change": "Use follower TCP cap consistently for commands and measured/future checks; record applied cap."
+    },
+    {
+      "path": "urcal/cooperative/diagnostics.py",
+      "source": "Created for authorized live initial alignment.",
+      "change": "Fault state snapshots and bounded WAIT diagnostics.",
+      "bytes": 2716,
+      "sha256": "bbd41fadd9f0e2b5d607d0d1d1be0cec876dd797e2d94ff95e70c368922ff6b8"
+    },
+    {
+      "path": "urcal/cooperative/follow.py",
+      "source": "Bounded leader following implementation or offline recorded/model regression; no hardware validation.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "bytes": 10377,
+      "sha256": "733fa265acd29470b544b5f6b93f090a1ed0e8422f4550d12411d16c731913d6"
+    },
+    {
+      "path": "urcal/cooperative/kinematics.py",
+      "source": "Created for this bundle.",
+      "change": "Nominal controller-frame FK/Jacobian/local IK and configurable workspace/capsule clearance checks.",
+      "bytes": 9309,
+      "sha256": "4e60061650f6f842507f23d2610fff9d6fdc42972b16e4997da94d56596e1dd3",
+      "previous_path": "cooperative_kinematics.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "urcal/control/gui.py",
+      "path": "urcal/cooperative/logging.py",
       "source": "Created for this bundle.",
-      "change": "Preserve fixed-center GUI; add relative paths, progress and task pause/resume controls for research follow.",
-      "bytes": 19019,
-      "sha256": "429bbfc5c2532e40c8168fc6e03ed517387b217df8946967b8074a8ea14d6fc1",
-      "previous_path": "dual_control_gui.py",
+      "change": "Exclusive asynchronous JSONL experiment recording with bounded queue and failure reporting.",
+      "bytes": 5271,
+      "sha256": "f71de453533d5ff25c1b1aa6e6623298ec589035a82565d3d68ae4eb9528a94f",
+      "previous_path": "cooperative_logging.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "run_dual_control.sh",
+      "path": "urcal/cooperative/runtime.py",
       "source": "Created for this bundle.",
-      "change": "Working-directory-independent control launcher; no arguments displays help.",
-      "bytes": 317,
-      "sha256": "9a4f321fdf5ecfbf3ab0bbe820b1d1c0aa66f3e64928b7fecd521e4318fb2698",
-      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
-    },
-    {
-      "path": "tests/test_dual_control_geometry.py",
-      "source": "Created for this bundle.",
-      "change": "Pure geometry tests including independent controller-DH frame comparison.",
-      "bytes": 10334,
-      "sha256": "e150f06ce4cf110957ed3dbab706487cb17da81c0814b105bc0eebe0c68e1222"
-    },
-    {
-      "path": "tests/test_dual_control_policy.py",
-      "source": "Created for this bundle.",
-      "change": "Calibration failure/freshness/stability and bounded Cartesian command tests.",
-      "bytes": 11376,
-      "sha256": "b847da3a32ba91a5c1fc464d40dd1e94928c4c7307972acab9352d92d08accb5"
-    },
-    {
-      "path": "tests/test_dual_control_runtime.py",
-      "source": "Created for this bundle.",
-      "change": "Mocked RTDE lifecycle, follower isolation, target updates, startup and failure-stop tests.",
-      "bytes": 35701,
-      "sha256": "e229afb77f0fe8f07c4552e9762d620773628013e40f9c3d55e25b741e9688ba"
-    },
-    {
-      "path": "tests/test_dual_control_vision.py",
-      "source": "Created for this bundle.",
-      "change": "Mocked capture clocks, raw reprojection, geometry degeneracy and paired rejection tests.",
-      "bytes": 11466,
-      "sha256": "d671cefe47dc9305a372fb275a59f7e9fa446b88a2221ce24589327c77f606ed"
-    },
-    {
-      "path": "tests/test_dual_control_gui.py",
-      "source": "Created for this bundle.",
-      "change": "Display-free tests including relative path units, active edit locking and pause/resume commands.",
-      "bytes": 15651,
-      "sha256": "2bc116d3e779b192c77d3aaa9175ed6d737664f49f79d2ac2b2776336dece22c"
-    },
-    {
-      "path": "docs/Research_Implementation_Plan.txt",
-      "source": "Provided by the user.",
-      "change": "User-provided research implementation plan, preserved unchanged.",
-      "bytes": 10056,
-      "sha256": "7cdba760afb382c18291280fbad326fde623dd97630a7662281386639c542c7a",
-      "previous_path": "Research_Implementation_Plan.txt",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
+      "change": "Research runtime with unchanged pose sensor, shared RTDE interface, preview and explicit arming.",
+      "bytes": 48464,
+      "sha256": "a85f596dffd89f2428045c06878a4296e32b30c4cbb489668691505cfdc64a79",
+      "previous_path": "control_cooperative.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "visual_gui_change": "Publish relative-task display snapshots and targets with task metadata; show accepted unstable calibration as invalid.",
+      "reprojection_toggle_change": "Report mean/max rejection setting at startup; existing settings log records new flag.",
+      "simulation_change": "Add captured initial-state simulation entry, explicit virtual GUI state, documentation or isolation verification.",
+      "active_calibration_recovery_change": "Cache accepted bases during alignment outliers; retain ordinary follow prediction, strict preflight and log hold/recovery events.",
+      "preview_calibration_recovery_change": "Enable recovery only before a control session, log progress/reacquisition and cancel Arm requests from the replacement tick.",
+      "alignment_governor_change": "Log original Arm snapshot, accepted bases, per-tick dt, predicted joints and fault control time separately from cleanup time.",
+      "pnp_input_diagnostics_change": "Include diagnostics in consumed measurement logs for successful and failed pose estimates with original timestamps and finite JSON.",
+      "native_ik_preview_recovery_change": "Retain follow preview on explicit native no-solution, log exact alignment_request before controller construction, discard stale Arm tokens and require a new explicit Arm.",
+      "preflight_rejected_vision_change": "Follow preflight uses shared readiness helper on rejected or unstable vision; estimator/encoder/stop failures still propagate and preview baseline replacement stays disabled.",
+      "bounded_follow_change": "Bounded leader tracking, fixed accepted offset, local Cartesian ramp transport, or associated diagnostics/regression/documentation.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
+      "rtde_fault_diagnostics_change": "Retain failure/status before cleanup and SDK operation timing; no motion limit or watchdog changes.",
+      "follower_tcp_speed_change": "Display resolved tracking and alignment caps at startup.",
+      "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs.",
+      "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs."
     },
     {
       "path": "urcal/cooperative/state.py",
       "source": "Created for this bundle.",
       "change": "Capture/receipt timestamps, common-time relative SE(3) state, filtering and bounded prediction.",
-      "bytes": 14154,
-      "sha256": "8926cd70ee2ac003f93f7b125d2429f9e2b903bc93d8d12c45e8ea75977dce2c",
+      "bytes": 15291,
+      "sha256": "63ae491371547d530e84358289d3fcdf1b282c37c8d04f246b52e3dad32f2d8e",
       "previous_path": "relative_state.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
@@ -434,138 +1112,95 @@
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "urcal/cooperative/kinematics.py",
+      "path": "urcal/inference/__init__.py",
       "source": "Created for this bundle.",
-      "change": "Nominal controller-frame FK/Jacobian/local IK and configurable workspace/capsule clearance checks.",
-      "bytes": 9309,
-      "sha256": "4e60061650f6f842507f23d2610fff9d6fdc42972b16e4997da94d56596e1dd3",
-      "previous_path": "cooperative_kinematics.py",
+      "change": "Inference package boundary.",
+      "bytes": 68,
+      "sha256": "85ab87f1d4363a2231c4bbf773415fe81d407369b04356a9718103c92e5acf75"
+    },
+    {
+      "path": "urcal/inference/display.py",
+      "source": "OpenCV import helper preserving valid user font directories and repairing missing Qt wheel font paths.",
+      "bytes": 1761,
+      "sha256": "05dc6075174d9da20c9d11872b4f3f3c7a1bb6f696ed9d83ef7196e301a9a39e"
+    },
+    {
+      "path": "urcal/inference/infer_live.py",
+      "bytes": 18490,
+      "sha256": "2b349d5cef3c07437f73055e37868865568cd94d65dc8ed67b2e63a8192e7032",
+      "source": "robotpose/infer_live.py",
+      "source_sha256": "d858ca28acd5010ccfe59d657cc88e2b0251604e613ed8f1b5f2aaacc26012e3",
+      "byte_identical_to_source": false,
+      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible. Skip debug blending when the segmentation mask is empty.",
+      "previous_path": "infer_live.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "calibration_diagnostics_change": "Use OpenCV import helper to repair the optional Qt font directory."
+    },
+    {
+      "path": "urcal/inference/infer_live_10.py",
+      "bytes": 109,
+      "sha256": "3674770412784406e81521c1b9e75fe1e180d726beae3e82ee2f0fada570ef58",
+      "source": "robotpose/infer_live_10.py",
+      "source_sha256": "438500f9ae3b90a76eff0597944b02a539277b64ed3c806727a05b2e62205518",
+      "byte_identical_to_source": false,
+      "previous_path": "infer_live_10.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "urcal/cooperative/controller.py",
+      "path": "urcal/inference/infer_live_dual.py",
       "source": "Created for this bundle.",
-      "change": "Pure prepare/commit planner: fixed relative goal, compensation, feedback, path progress and classified faults.",
-      "bytes": 20011,
-      "sha256": "dfd9421a72259b4d88e148a9230f60ddf07cd3d3d93c7eac6deeee60247d8f7e",
-      "previous_path": "cooperative_controller.py",
+      "bytes": 15240,
+      "sha256": "08c2ecde91eb5de26702ec2fed3efdd1cbf5750543b2ad0d0561b374fd5aada0",
+      "change": "Added one-camera dual inference with letterboxed left UR5e/right UR10e regions, original-image pose coordinates and independent robot state.",
+      "previous_path": "infer_live_dual.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "calibration_diagnostics_change": "Use OpenCV import helper to repair the optional Qt font directory.",
+      "divider_change": "Restore a white line at the actual left/right split in both video and segmentation windows."
+    },
+    {
+      "path": "urcal/inference/infer_live_ur10e.py",
+      "bytes": 22899,
+      "sha256": "207905b8c0b3d3f0ac42d419e3f7dd78b70e9f8eaee4c03f09154f252bdc1bca",
+      "source": "robotpose/infer_live_ur10e.py",
+      "source_sha256": "8526abdd9fe081ec0bf814df430ee9a53b5c1dfd7c4559c4c73ed1e6967308f7",
+      "byte_identical_to_source": false,
+      "change": "Skip segmentation debug probability generation and CPU transfer when the window is hidden; existing infer_keypoints default stays compatible. Skip debug blending when the segmentation mask is empty.",
+      "previous_path": "infer_live_ur10e.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "calibration_diagnostics_change": "Use OpenCV import helper to repair the optional Qt font directory."
+    },
+    {
+      "path": "urcal/inference/my_pnp.py",
+      "bytes": 9248,
+      "sha256": "0a8147c9a1b8b9162bf8311374cfe01b12e74c37689f789c40e90c477bcab9d1",
+      "source": "robotpose/my_pnp.py",
+      "source_sha256": "76bf7b86a1a03c5645a5e76fb867f322ddc0fbb3ef576b6d40d4ef148b3ba31e",
+      "byte_identical_to_source": false,
+      "change": "Reuse identical prior products and fixed weights; bounded cache for identical consecutive residual evaluations. Keep numerical Jacobian and solver settings.",
+      "previous_path": "my_pnp.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "urcal/cooperative/runtime.py",
-      "source": "Created for this bundle.",
-      "change": "Research runtime with unchanged pose sensor, shared RTDE interface, preview and explicit arming.",
-      "bytes": 12259,
-      "sha256": "4675370f8e8a1c608461b20b854acbe020847a2be41034749c64cbd3f80b6221",
-      "previous_path": "control_cooperative.py",
+      "path": "urcal/inference/network3.py",
+      "bytes": 13349,
+      "sha256": "dffa07f7094bf97ff0d95d68ff2bb74cc5841a9e2fe7e9d3b96653a148014430",
+      "source": "robotpose/network3.py",
+      "source_sha256": "386777a7cd7b8f3422510b935e8e5607515adf8a50d0695986d74f8093a5a8f5",
+      "byte_identical_to_source": false,
+      "change": "Reuse identical LayerNorm results in eval mode, retaining distinct Q/K/V object identity, attention path and addition order.",
+      "previous_path": "network3.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
     {
-      "path": "urcal/cooperative/logging.py",
-      "source": "Created for this bundle.",
-      "change": "Exclusive asynchronous JSONL experiment recording with bounded queue and failure reporting.",
-      "bytes": 5271,
-      "sha256": "f71de453533d5ff25c1b1aa6e6623298ec589035a82565d3d68ae4eb9528a94f",
-      "previous_path": "cooperative_logging.py",
+      "path": "urcal/inference/vote2.py",
+      "bytes": 14379,
+      "sha256": "3f24d5c183dd749379b0d0d432b61f7d3aadffe600d31a7dce6b4eda89b8efc0",
+      "source": "robotpose/vote2.py",
+      "source_sha256": "8279e2480b631f331c0b3de975245e97123326338578866de5a8f8a19db5987e",
+      "byte_identical_to_source": false,
+      "change": "Vectorize per-bin first-maximum candidate selection; reuse segmentation probabilities, masks and neighbor pixel counts. Preserve RNG order and voting settings.",
+      "previous_path": "vote2.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
-    },
-    {
-      "path": "urcal/tools/analyze_log.py",
-      "source": "Created for this bundle.",
-      "change": "Separate estimated/reference error, path/settled completion and unfinished-path slowdown metrics.",
-      "bytes": 13662,
-      "sha256": "e8c2ec19afb79055cbc680a9d01e1ad7c5b81e8aa8c18e41124b586d5f7540c2",
-      "previous_path": "analyze_cooperative_log.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
-    },
-    {
-      "path": "urcal/tools/simulate.py",
-      "source": "Created for this bundle.",
-      "change": "Offline deterministic Cartesian plant comparison using the production planner; no hardware accuracy claim.",
-      "bytes": 17149,
-      "sha256": "cb32ac7831050d823f7518700eca17381ced0da007dce06da752963e4540af70",
-      "previous_path": "simulate_cooperative.py",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
-    },
-    {
-      "path": "run_cooperative.sh",
-      "source": "Created for this bundle.",
-      "change": "Working-directory-independent research control launcher; no arguments displays help.",
-      "bytes": 321,
-      "sha256": "52965932d139bfc5245199002115c0e43edbd022efbd082e06f7783ab51a1c1c",
-      "organization_change": "Keep root command and caller cwd/relative arguments; prepend package root to PYTHONPATH and run qualified module. Original-mode single-robot launchers retain reference script path."
-    },
-    {
-      "path": "configs/workspace.example.json",
-      "source": "Created for this bundle.",
-      "change": "Example joint limits, capsule radii and empty environment configuration; not a measured workspace.",
-      "bytes": 511,
-      "sha256": "ceaaef3d927ba3435d16c48ab9c6c03900b41659cf199b9d1c39389d934f263b",
-      "previous_path": "workspace.example.json",
-      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
-    },
-    {
-      "path": "tests/test_relative_state.py",
-      "source": "Created for this bundle.",
-      "change": "Time alignment, paired updates, filtering, rotation/translation prediction, stale and invalid input tests.",
-      "bytes": 14713,
-      "sha256": "c8a773ea9c8149412df8801028f9e27867e5b1930606565b84c765213ea3620a"
-    },
-    {
-      "path": "tests/test_cooperative_task.py",
-      "source": "Created for this bundle.",
-      "change": "Task derivatives, velocity decomposition, acceleration constraints and pause deceleration tests.",
-      "bytes": 20714,
-      "sha256": "ba1e27ca0f90e112365517b99ea25f57870531387871f8876e5275eb785b35ef"
-    },
-    {
-      "path": "tests/test_cooperative_kinematics.py",
-      "source": "Created for this bundle.",
-      "change": "Independent DH/Jacobian checks, local IK, segment geometry and workspace rejection tests.",
-      "bytes": 14268,
-      "sha256": "438cc0f77db2630c2a1827e3da44aa1e2ab18f537e48293ffd88bbfe244c907f"
-    },
-    {
-      "path": "tests/test_cooperative_controller.py",
-      "source": "Created for this bundle.",
-      "change": "Real planner tests for moving bases/leader, fixed goals, TCP offsets and measurement lifecycle.",
-      "bytes": 16053,
-      "sha256": "86076e674cad37e3dbe1f909204d38a50e348bfdecd5386ec89ea23c741c84e9"
-    },
-    {
-      "path": "tests/test_cooperative_regressions.py",
-      "source": "Created for this bundle.",
-      "change": "Rejected-measurement rollback, measured acceleration, future targets and settled completion regressions.",
-      "bytes": 9324,
-      "sha256": "681e97fe119749ae8987c43184f9c91bad946300823c1213e9ebeae97b3d84ce"
-    },
-    {
-      "path": "tests/test_cooperative_runtime.py",
-      "source": "Created for this bundle.",
-      "change": "Mocked research RTDE, preview, send/commit ordering, failures, cleanup and command freshness tests.",
-      "bytes": 18304,
-      "sha256": "db13e39614ec4becfe8d5766814844e1c0a4a6b3fd74412d114ed67959afe202"
-    },
-    {
-      "path": "tests/test_cooperative_logging.py",
-      "source": "Created for this bundle.",
-      "change": "Log integrity, writer failure, independent reference matching and fair completion/slowdown analysis.",
-      "bytes": 15222,
-      "sha256": "c2c3a37822a3b9d63381bf8b1f08fe30bf0caf9e9aec71859ae2bd0c6a370a33"
-    },
-    {
-      "path": "tests/test_cooperative_simulation.py",
-      "source": "Created for this bundle.",
-      "change": "Production-planner synthetic method comparison, independent synthetic truth and fault scenarios.",
-      "bytes": 8682,
-      "sha256": "560f776c180df7a0fae2fe1bcdcf0edfd46418fe82c0393728db1f4807a4360c"
-    },
-    {
-      "path": "urcal/__init__.py",
-      "source": "Created for this bundle.",
-      "change": "Package root; no eager hardware/model imports.",
-      "bytes": 62,
-      "sha256": "8792bf78a8cb2f4045b29f46d3cc73eebbfdda53682d552761bb108f6d16bb00"
     },
     {
       "path": "urcal/paths.py",
@@ -575,25 +1210,41 @@
       "sha256": "a2124c5fc4882d327a61115434a220cd968c4789d610ceef8e1ef2e96d1b7150"
     },
     {
-      "path": "urcal/inference/__init__.py",
-      "source": "Created for this bundle.",
-      "change": "Inference package boundary.",
-      "bytes": 68,
-      "sha256": "85ab87f1d4363a2231c4bbf773415fe81d407369b04356a9718103c92e5acf75"
+      "path": "urcal/simulation/__init__.py",
+      "source": "Created for captured-state simulation.",
+      "change": "Captured initial-state simulation package.",
+      "bytes": 79,
+      "sha256": "667ae7be12b63e21d874b55edcdab366c06a03aaddfce55900ca0acc3a3ba815"
     },
     {
-      "path": "urcal/control/__init__.py",
-      "source": "Created for this bundle.",
-      "change": "Shared control package boundary.",
-      "bytes": 67,
-      "sha256": "396546b0970840e9c79a7926d582f633c480b43552d5055419be14d0977ea16e"
+      "path": "urcal/simulation/approach.py",
+      "source": "Created for initial-alignment simulation fix.",
+      "change": "Simulation-only bounded IK endpoint selection, checked joint alignment path, speed/acceleration time scaling and zero-velocity handoff.",
+      "bytes": 15785,
+      "sha256": "1cd52f625cd3b60e3e65a0a02e21c11dbd474b4eb75dcdff9dab3280d5d92646"
     },
     {
-      "path": "urcal/cooperative/__init__.py",
-      "source": "Created for this bundle.",
-      "change": "Research collaboration package boundary.",
-      "bytes": 82,
-      "sha256": "518feb78468fa9dcba8dae38b4dc2e9df01bd6b630fbc7f524982c72dd9c00bb"
+      "path": "urcal/simulation/plant.py",
+      "source": "Created for captured-state simulation.",
+      "change": "Seeded FK/Jacobian and atomic bounded joint-velocity integration with workspace checks.",
+      "bytes": 13305,
+      "sha256": "ae842e607889a5d52854e8e262aa8114b6ffb9a302c4db7ef9ebd7e7b2c9cfca",
+      "initial_alignment_change": "Bounded simulator IK retry, separate checked initial alignment or corresponding UI/documentation/regression update; physical control limits retained."
+    },
+    {
+      "path": "urcal/simulation/runtime.py",
+      "source": "Created for captured-state simulation.",
+      "change": "Existing hold/follow controllers coupled to virtual joints, fixed virtual clock, GUI and explicit simulation logging.",
+      "bytes": 29541,
+      "sha256": "c78c5456b0be083e4777ccf8e501ea9f167b7819b50cc93561af97f0254602cd",
+      "initial_alignment_change": "Bounded simulator IK retry, separate checked initial alignment or corresponding UI/documentation/regression update; physical control limits retained."
+    },
+    {
+      "path": "urcal/simulation/snapshot.py",
+      "source": "Created for captured-state simulation.",
+      "change": "Receive-only live initial capture, complete hardware teardown, strict exclusive JSON persistence.",
+      "bytes": 14962,
+      "sha256": "645c728bbf0b82252a933b6bfd7b9cd1293358a25fe151c93fbad5b98be4404a"
     },
     {
       "path": "urcal/tools/__init__.py",
@@ -603,11 +1254,31 @@
       "sha256": "d50faf46632015aa667bf6f1ad73fdd4433433f90ecb490c4e5e263609e48646"
     },
     {
-      "path": "tests/test_package_layout.py",
+      "path": "urcal/tools/analyze_log.py",
       "source": "Created for this bundle.",
-      "change": "Six integration tests for spawn identity, original/package isolation, offline imports, asset root and launcher cwd/arguments/environment.",
-      "bytes": 10049,
-      "sha256": "c7daefa85ecf1f3bf8af633df2f1f85aeff9f45e063df083cd89e5b6f902a0e6"
+      "change": "Separate estimated/reference error, path/settled completion and unfinished-path slowdown metrics.",
+      "bytes": 14945,
+      "sha256": "41d9a0918d41ec46e3deec1b18cf093e85cac87bac04b274c71f5753cc32a51c",
+      "previous_path": "analyze_cooperative_log.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis."
+    },
+    {
+      "path": "urcal/tools/preview_gui.py",
+      "source": "Synthetic GUI demonstration without robot or camera connections.",
+      "bytes": 6804,
+      "sha256": "1ca9d0bbddb38f1ab17c5b153d311fd8c35c6d86d893b8855b8a9e23f5cd6634"
+    },
+    {
+      "path": "urcal/tools/simulate.py",
+      "source": "Created for this bundle.",
+      "change": "Offline deterministic Cartesian plant comparison using the production planner; no hardware accuracy claim.",
+      "bytes": 17175,
+      "sha256": "e33e2604a78dbb2dcb323ae8363e1f0d554c89ed915379109d7ca3cccf7a1bf7",
+      "previous_path": "simulate_cooperative.py",
+      "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
+      "mean_threshold_change": "Use the same 5 pixel mean reprojection default in the synthetic shared configuration.",
+      "reprojection_toggle_change": "Use check_reprojection=False consistently in synthetic runtime configuration."
     }
   ],
   "optimized_date": "2026-10-12",
@@ -667,9 +1338,9 @@
       ]
     },
     "display": {
-      "divider": "Hidden in both the main image and segmentation window.",
+      "divider": "White 1 px line at the actual split boundary in both video and segmentation windows, restored 2026-10-18; shared by dual inference and both control modes.",
       "keypoints": "Dots and names are initially visible; k toggles both robots and --hide_keypoints starts hidden.",
-      "verification": "8 existing dual tests passed. Synthetic rendering checks verified both visibility states and absent divider; CLI defaults and hidden-start option checked."
+      "verification": "Synthetic rendering checked the default and custom split positions, segmentation on/off and unchanged source pixels. Keypoint toggling is unchanged."
     }
   },
   "segmentation_debug_fix": {
@@ -855,6 +1526,1669 @@
         "GUI display",
         "CUDA tests"
       ]
+    }
+  },
+  "visual_gui": {
+    "date": "2026-10-18",
+    "purpose": "Show current UR5e/UR10e link poses and flange targets together in the camera coordinate frame.",
+    "modules": [
+      "urcal/control/scene.py",
+      "urcal/control/scene_view.py",
+      "urcal/tools/preview_gui.py",
+      "tests/test_control_scene.py",
+      "tests/test_scene_view.py",
+      "docs/images/gui_preview.png"
+    ],
+    "features": [
+      "UR5e blue / UR10e orange nominal link geometry; actual controller TCP and offset-derived flange markers.",
+      "Applied target axes, unapplied edit preview, relative path preview, position and rotation errors.",
+      "Orbit, pan, zoom, camera-plane presets and fit-to-scene.",
+      "Invalid or expired state retains the last geometry in gray; GUI rendering does not authorize robot motion.",
+      "Fixed-camera hold and leader-follower modes share the same visual panel and existing runtime entrypoints."
+    ],
+    "snapshot_contract": "Copied paired joint/TCP states, TCP offsets, camera-from-base transforms, camera-frame flange goals, source age/validity and optional relative task metadata. No controller reference in the viewer.",
+    "offline_demo": "python3 -m urcal.tools.preview_gui --mode follow (or --mode hold)",
+    "dependencies": "Existing NumPy and system Tkinter; no additional plotting or rendering package.",
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests -v",
+      "suite": {
+        "total": 325,
+        "passed": 322,
+        "skipped_cuda": 3
+      },
+      "checks": [
+        "All 34 GUI tests passed again after adaptive initial window sizing.",
+        "Actual Tk hold/follow windows on an isolated Xvfb display with synthetic poses.",
+        "Target editing, Apply, invalid input, disabled demo Arm/Pause, mouse orbit/pan/zoom, stale display and Stop without callback errors.",
+        "Inputs and control buttons remain visible at 1000x650 and 1380x900, including sash extremes.",
+        "Demo opens without loading robot/RealSense interfaces or model checkpoints."
+      ],
+      "not_run": [
+        "Physical camera or robot motion",
+        "CUDA tests",
+        "Worst-case live timing"
+      ]
+    },
+    "limits": [
+      "Link geometry is nominal FK, not CAD meshes or a collision/dynamics validation.",
+      "Camera-from-base placement follows calibration estimates; display errors are not independent accuracy measurements.",
+      "Demo and documentation screenshot use invented poses and calibration transforms."
+    ]
+  },
+  "calibration_diagnostics": {
+    "date": "2026-10-18",
+    "trigger": "Hold PREVIEW repeatedly rejected UR5e raw reprojection and obscured the reason with no accepted calibration pair; OpenCV also reported a missing Qt font directory.",
+    "changes": [
+      "Preserve and display the latest rejection reason, raw mean/max pixel values, limits and valid keypoint counts.",
+      "Show per-robot raw metrics, worst landmark and optional original-detection-to-reprojection residual lines/crosses in the control video.",
+      "Explicit d key saves raw and overlay PNGs plus strict JSON with joints, camera intrinsics, detections and estimated poses into runs/calibration-debug; disabled with --execute.",
+      "Preserve valid explicit QT_QPA_FONTDIR and replace nonexistent wheel directory with installed fonts before opening windows."
+    ],
+    "unchanged": "Calibration acceptance thresholds, model/voting/EMPnP algorithms and motion authorization remain unchanged; rejected pairs cannot establish a new accepted 3D scene.",
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests -v",
+      "suite": {
+        "total": 343,
+        "passed": 340,
+        "skipped_cuda": 3
+      },
+      "checks": [
+        "Synthetic raw outlier, missing/invalid detections, source-copy isolation and drawing bounds.",
+        "PNG lossless roundtrip and unique strict JSON snapshots with nonfinite values encoded as null.",
+        "Rejected first-pair preview state, rejection lifetime and cooperative shared-gate diagnostics.",
+        "Actual OpenCV synthetic window on isolated Xvfb: clean exit, no QFontDatabase warning.",
+        "Both real checkpoint metadata and crop/full-camera coordinates audited; no confirmed frame/normalization defect found."
+      ],
+      "not_run": [
+        "Physical camera or robot connection",
+        "Live confirmation that calibration is accepted",
+        "CUDA tests"
+      ]
+    },
+    "limitation": "The user reports detections look approximately aligned; actual failing-frame residuals are still needed to identify the calibration failure cause. Synthetic regression checks do not establish live accuracy."
+  },
+  "reprojection_threshold": {
+    "date": "2026-10-18",
+    "request": "Increase mean original-detection reprojection acceptance to 5 pixels.",
+    "default_mean_px": 5.0,
+    "default_max_px": 8.0,
+    "scope": "Per robot, arithmetic mean of original valid detection residuals in the full-resolution camera image. Shared by hold, follow, diagnostic defaults and synthetic configuration.",
+    "basis": "The earlier 3 pixel mean / 8 pixel maximum were provisional implementation choices, not values established by the research plan, cited experiments or live accuracy measurements. The new 5 pixel mean is user-selected, not independently validated.",
+    "estimator": "EMPnP initialization RANSAC threshold and sigma are separate; model, voting and EMPnP algorithms remain unchanged.",
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests -v",
+      "suite": {
+        "total": 344,
+        "passed": 341,
+        "skipped_cuda": 3
+      },
+      "boundary_cases": "Mean=5/max=8 passes the quality checks; mean>5 or max>8 is rejected. Other readiness requirements still apply.",
+      "not_run": [
+        "Physical camera or robot motion",
+        "Independent live accuracy validation",
+        "CUDA tests"
+      ]
+    },
+    "enabled_by_default": false,
+    "reenable_flag": "--check_reprojection"
+  },
+  "reprojection_check_disable": {
+    "date": "2026-10-18",
+    "authorization": "User explicitly requested disabling reprojection limits for actual control as well as preview.",
+    "default": "CLI mean/max original-detection reprojection rejection OFF in hold and follow, including --execute; no additional flag is needed.",
+    "reenable": "--check_reprojection, with configured mean 5 px and maximum 8 px unless overridden.",
+    "core_api": "CalibrationTracker keeps check_reprojection=True as its standalone API default; runtime and synthetic callers explicitly pass their configured flag.",
+    "display": "Startup log, GUI label and video RAW limits OFF identify the selected setting; diagnostic JSON and research settings logs preserve it.",
+    "scope": "Only mean/max reprojection upper-bound rejection is disabled. Statistical validity, complete paired poses, PnP/geometry, ages, stability, jumps and motion constraints retain their checks. EMPnP internal RANSAC and sigma are unchanged.",
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests -v",
+      "suite": {
+        "total": 354,
+        "passed": 351,
+        "skipped_cuda": 3
+      },
+      "checks": [
+        "High finite raw mean/max accepted with switch off and rejected with switch on.",
+        "Hold preview and mocked --execute arm/send proceed with high raw errors while other checks pass.",
+        "Cooperative preview and active planning accept high raw errors with switch off.",
+        "Nonfinite/negative/inconsistent statistics, incomplete/invalid poses, age, keypoint and jump checks remain effective.",
+        "OFF diagnostics retain values and PnP failures and save the switch into strict JSON."
+      ],
+      "not_run": [
+        "Physical camera or robot motion",
+        "Live calibration accuracy",
+        "CUDA tests"
+      ]
+    }
+  },
+  "current_state_simulation": {
+    "date": "2026-10-18",
+    "request": "Use current robot values and calibration as initial conditions and simulate subsequent control.",
+    "entry": "./run_simulation.sh --mode hold|follow; existing control launchers also accept --simulate.",
+    "initial_capture": "Receive-only paired q, TCP, qd, speed and accepted filtered T_C_model; convert to controller bases once, close receivers and camera worker before simulation.",
+    "snapshot": "runs/simulation/<UTC timestamp>-<id>/initial_state.json; --initial_state loads it without importing RTDE, RealSense or neural runtime.",
+    "tcp_offsets": "Use explicit installation offsets during capture; otherwise zero_assumed is recorded and printed. Offline runs reuse the saved offsets.",
+    "plant": "Nominal FK plus a fixed local flange correction to preserve exact initial q and TCP. Bounded joint velocities are integrated only after midpoint/end workspace checks.",
+    "control": "Reuse FacingPlanner/bounded_twist in hold and CooperativeController/governor in follow. Commit task progress only after accepted plant step.",
+    "gui": "Current and target virtual poses, Apply target, Start simulation, Pause/Resume simulation, Reset and Exit. Reset retains applied target and restores capture.",
+    "virtual_motion": "none, leader, bases, both; leader/both only in follow. Deterministic 20 second motions, no hardware input after capture.",
+    "clock": "One fixed 1/control_hz virtual step per accepted integration; wall-clock delays slow playback. Pause freezes virtual state and history. Reset increments log episode.",
+    "logging": "simulation.jsonl with simulation=true and hardware_commands=false, initial snapshot provenance, settings, controller results, joint/base states and lifecycle events.",
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests -v",
+      "suite": {
+        "total": 414,
+        "passed": 411,
+        "skipped_cuda": 3
+      },
+      "checks": [
+        "60 new tests across snapshot (19), plant (15), simulation GUI/CLI (15), runtime (11).",
+        "Synthetic hold with fixed/moving bases, small-rotation joint-slew regression and follow line with fixed/moving leader and bases.",
+        "Pause freezes virtual time, reset restores exact seed, failed plant step does not commit controller progress.",
+        "Mock capture requires both fresh robot clocks and stable paired calibration; cancellation, timeout, failed connection and worker shutdown cleanup.",
+        "Saved-state run blocks hardware SDK imports and does not call live capture.",
+        "Actual Tk hold/follow windows on isolated Xvfb: Apply, Start, joint motion, Pause/Resume, Reset, editing, task pause, small resize, rendering and Exit; zero callback errors.",
+        "Python/Bash syntax, six launcher path tests and full regression suite."
+      ],
+      "not_run": [
+        "Physical initial-state capture",
+        "Physical robot motion",
+        "CUDA tests",
+        "Live accuracy or hardware dynamics validation"
+      ]
+    },
+    "limitations": [
+      "Joint-velocity kinematics, not dynamics, contacts or actual servo behavior; collision geometry remains proxy capsules.",
+      "Single-pose flange correction is approximate away from the capture; virtual velocities start at zero.",
+      "Initial camera/RTDE samples are fresh but not hardware synchronized; subsequent base sensor is ideal virtual data, not live calibration or replayed inference latency."
+    ]
+  },
+  "simulation_initial_alignment_fix": {
+    "date": "2026-10-18",
+    "trigger": "User screenshot: hold simulation cannot start; UR5e target IK failed despite small position error, UR10e final orientation error about 139 degrees.",
+    "findings": [
+      "The original short IK stopped after 16 iterations or left one joint branch, although bounded solutions existed.",
+      "The requested facing pose shares flange X axes; the large UR10e full rotation includes roll, not only the flange normal direction.",
+      "The existing 25 degree tracking-error limit assumes an already aligned pair and is unsuitable as the only initialization mechanism."
+    ],
+    "changes": [
+      "SeededKinematics keeps the short IK fast path, then tries bounded SciPy least_squares and independently checks final pose error and joint bounds.",
+      "When an initial target exceeds tracking limits, simulation plans a checked joint approach to the same target, with configured joint/TCP speeds, accelerations, travel, flange gap and capsule constraints.",
+      "Endpoint candidates can use alternative wrist seeds; the approach is a checked straight joint path, not a general obstacle-avoidance planner.",
+      "The trajectory ends with a zero-velocity step before existing hold/follow control takes over.",
+      "Leader/base external motion remains frozen during alignment and starts at phase zero afterward; task progress does not advance during alignment.",
+      "GUI shows alignment duration/progress and clears the stale synchronous target-submission notice.",
+      "Physical control code, tracking thresholds and the captured initial state/final requested pose are preserved."
+    ],
+    "verification": {
+      "commands": [
+        "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests -v",
+        "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_simulation_approach -v"
+      ],
+      "regression_suite": {
+        "total": 422,
+        "passed": 419,
+        "skipped_cuda": 3
+      },
+      "additional_approach_unit_suite": {
+        "total": 11,
+        "passed": 11
+      },
+      "combined_unique_tests": {
+        "total": 433,
+        "passed": 430,
+        "skipped_cuda": 3
+      },
+      "saved_state_reproduction": {
+        "initial_alignment_seconds": 52.64,
+        "alignment_steps": 1316,
+        "result": "Original saved capture and original GUI target accepted, alignment completed, then 100 hold control steps without fault; no hardware SDK imports."
+      },
+      "gui": "Isolated Xvfb with the saved capture: Apply enables Start, duration/progress rendered, initial q preserved, virtual movement, Pause/Resume, Reset and Exit; zero Tk callback errors and hardware imports.",
+      "other_checks": [
+        "Python syntax and whitespace",
+        "SHA-256 inventory"
+      ],
+      "not_run": [
+        "Physical robot motion",
+        "New live capture",
+        "CUDA-only tests"
+      ]
+    }
+  },
+  "live_initial_alignment": {
+    "date": "2026-10-18",
+    "authorization": "User explicitly requested automatic initial alignment on physical robots after the follow runtime reported its tracking-error gate.",
+    "entrypoint": "run_dual_control.sh --mode hold|follow --initial_align --execute; explicit GUI Arm still required; default initial_align is false.",
+    "changes": [
+      "Native controller IK and explicit-TCP FK verify endpoints; controller joint/TCP safety checks sample the complete initial joint path before any velocity packet.",
+      "Watchdog is deferred only during stationary preflight, enabled before motion, and every command requires fresh calibrated pair and measured robot state.",
+      "Bounded speedJ uses actual joint feedback, shared velocity/acceleration scaling, geometric checks and frozen-base/leader drift checks. No real robot position is overwritten.",
+      "Per-arm speedJ acceleration is computed from measured-to-command velocity change over the actual control period and capped using joint and local-Jacobian TCP limits; transport validates and forwards the scalar without flooring nonzero ramps.",
+      "Initial joint/TCP speed commands are at most half the configured limits. Endpoint uses measured TCP <=2 mm/1 deg plus joint error <=0.01 rad and five consecutive rest/zero-command ticks.",
+      "Follow commands only the follower; hold aligns both arms. No speedL or relative path progress during alignment. Histories reset only after settling, and normal control starts on the next fresh tick.",
+      "Current calibration and encoder state are consumed throughout preflight and motion; targets are frozen during initial alignment and live target updates resume during normal control.",
+      "Tracking-error WAIT records include numerical TCP errors/limits and failed-tick states; stale calibration includes last rejection reason; repeated numeric diagnostics are limited to 1 Hz per fault category.",
+      "Reprojection upper-bound rejection remains OFF by default for preview and execution, and tracking/jump/freshness thresholds are unchanged."
+    ],
+    "limits": [
+      "A checked straight joint path, not an obstacle-avoiding planner. Capsule geometry and the captured local kinematic correction are approximations.",
+      "Keep leader and both bases stationary until alignment completes; cumulative base drift above min(10 mm, configured jump limit) or min(1 deg, configured jump limit) stops alignment.",
+      "The ordinary camera-fixed hold loop still has no continuous link collision model after alignment.",
+      "No physical robot/camera connection, actuator execution, controller latency validation, or live calibration accuracy validation was performed."
+    ],
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s tests -v",
+      "regression_suite": {
+        "total": 495,
+        "passed": 492,
+        "skipped_cuda": 3,
+        "wall_seconds": 66.491
+      },
+      "saved_capture": {
+        "sha256": "114ce0cf93c35e3ef6bf819ef1ebb4b558d3bb020250ae32b4afa436dd1beed8",
+        "provenance": "Offline validation only. Captured q/TCP/bases retained. Initial velocities zero. No camera or robot SDK access. Native IK surrogate=SeededKinematics.inverse; not actual native controller IK. Actuation surrogate=ideal TCP velocity command converted with SeededKinematics Jacobian.",
+        "modes": {
+          "follow": {
+            "goal_joints": {
+              "ur5e": [
+                3.6752957816393277,
+                -2.056793815173907,
+                1.3854845499011226,
+                0.7656357870072867,
+                0.3115595872534677,
+                3.0016589793487105
+              ]
+            },
+            "alignment_done": true,
+            "alignment_steps": 1299,
+            "alignment_duration": 51.95999999999907,
+            "alignment_errors": {
+              "ur5e": {
+                "position_m": 0.0007161996693337969,
+                "angle_deg": 0.8792843298710552
+              }
+            },
+            "control_steps_completed": 100,
+            "handoff_success": true,
+            "final_errors": {
+              "ur5e": {
+                "position_m": 0.0007161921216167425,
+                "angle_deg": 0.29628595772928773
+              }
+            },
+            "wall_seconds": 19.64879710879177
+          },
+          "hold": {
+            "goal_joints": {
+              "ur5e": [
+                3.4846159033450324,
+                -1.9088718241854183,
+                1.3349315635507524,
+                0.517883229676385,
+                -0.1830982010270951,
+                0.7366833724322833
+              ],
+              "ur10e": [
+                -1.6260815937342827,
+                -1.5225513386023406,
+                -2.0182877184195607,
+                0.4180080547390479,
+                0.3713314930797649,
+                5.544646505663551
+              ]
+            },
+            "alignment_done": true,
+            "alignment_steps": 1312,
+            "alignment_duration": 52.47999999999906,
+            "alignment_errors": {
+              "ur5e": {
+                "position_m": 0.00015606061975035576,
+                "angle_deg": 0.1124288096906959
+              },
+              "ur10e": {
+                "position_m": 0.0007350646246258903,
+                "angle_deg": 0.5892574113787372
+              }
+            },
+            "control_steps_completed": 100,
+            "handoff_success": true,
+            "final_errors": {
+              "ur5e": {
+                "position_m": 2.632486678680335e-06,
+                "angle_deg": 0.0018966936970465618
+              },
+              "ur10e": {
+                "position_m": 1.239854366608683e-05,
+                "angle_deg": 0.009940982924591037
+              }
+            },
+            "wall_seconds": 18.48496078327298
+          }
+        },
+        "driver_modules_loaded": []
+      },
+      "checks": [
+        "Explicit Arm and command ownership; native preflight/watchdog ordering; fresh next-tick send; failed send never commits; stop/stale/process death block motion.",
+        "Large orientation alignment, measured velocity lag, cumulative base/leader drift, actual TCP completion, joint/TCP velocity and discrete acceleration limits.",
+        "Python syntax, CLI help and whitespace.",
+        "Per-arm native speedJ acceleration derived from measured velocity, unchanged tiny positive ramps, pair-wide rejection of invalid acceleration scalars."
+      ],
+      "not_run": [
+        "Physical robot commands or real camera capture",
+        "Actual native controller IK/FK invocation",
+        "Physical dynamics, calibration accuracy or command latency validation",
+        "CUDA-only tests"
+      ]
+    }
+  },
+  "remote_arm_rejection": {
+    "date": "2026-10-18",
+    "trigger": "Arm fails before startup with ur_rtde: Please enable remote control on the robot!",
+    "source_log": "runs/20261018T100141Z-separated-225b802e.jsonl",
+    "changes": [
+      "Recognize only the known remote-control-required SDK RuntimeError during MotionSession interface construction; preserve original cause, robot and IP.",
+      "On that pre-upload rejection, disconnect earlier constructed interfaces without speedStop, stopScript or script upload.",
+      "Hold/follow keep receive-only preview, show a persistent ARM BLOCKED hint after valid preview checks and require a new explicit Arm to retry.",
+      "Unrecognized constructor errors and failures after a session exists retain existing handling; no remote-mode switch, automatic reconnect or automatic motion is introduced.",
+      "Document both enabling the feature in Settings > System and selecting the Remote profile; default follow requires Remote only on UR5e, hold on both arms."
+    ],
+    "verification": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tests:. python3 -B -m unittest tests.test_arm_connection tests.test_dual_control_runtime tests.test_cooperative_runtime tests.test_live_alignment_runtime tests.test_live_alignment_transport -q",
+      "related_tests": 110,
+      "passed": 110,
+      "new_test_methods": 8,
+      "checks": [
+        "Recognized and unrecognized factory errors, second-arm rejection disconnect-only, post-construction errors remain fatal.",
+        "Hold/follow with alignment enabled and disabled: preview preserved, no automatic retry, new Arm required, active failure stops.",
+        "Python syntax and git whitespace checks."
+      ],
+      "not_run": [
+        "Physical robot connection or motion",
+        "Teach-pendant settings changes"
+      ]
+    }
+  },
+  "initial_alignment_calibration_reacquisition": {
+    "date": "2026-10-18",
+    "source_log": "runs/20261018T100938Z-separated-269f551e.jsonl",
+    "trigger": "Blocking native connection left a 1.234180s capture gap. The next accepted pair was fresh (0.127680s), but the stable-frame counter restarted at 1/5 and preflight exited before any velocity command.",
+    "changes": [
+      "Idle initial-alignment preflight waits for new accepted calibration pairs, with a cumulative five-second wait budget across callbacks. Native query computation time is not part of that budget.",
+      "Fresh encoder states and both robot poses are compared to the original Arm snapshot during every wait; accepted base poses, targets and original seeds are not recaptured.",
+      "Rejected measurements, robot movement, stale robot states and stop/process failures remain faults. Stable-frame count, maximum calibration age and all motion limits are unchanged.",
+      "Waiting is disabled before the first watchdog setup call; post-watchdog and active-motion failures remain fatal.",
+      "Only preflight calibration timeout closes the session and returns to preview with a persistent ARM BLOCKED hint, requiring a new explicit Arm. Follow logs preflight stages."
+    ],
+    "verification": {
+      "full_regression": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tests:. python3 -B -m unittest discover -s tests -v",
+        "tests": 512,
+        "passed": 509,
+        "skipped_cuda": 3
+      },
+      "final_related_regression": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tests:. python3 -B -m unittest tests.test_live_alignment_reacquisition tests.test_live_alignment_runtime tests.test_live_alignment_startup tests.test_arm_connection -q",
+        "tests": 43,
+        "passed": 43,
+        "includes": "Final hold/follow preflight-reader tests added after full-suite discovery, plus all reacquisition and runtime retry tests."
+      },
+      "checks": [
+        "Actual CalibrationTracker capture-gap reset followed by five new independent accepted pairs; duplicate packets cannot restore readiness.",
+        "Cumulative timeout, original snapshot and target preservation, both-arm velocity and pose drift, base drift and operator stop.",
+        "Strict watchdog callback, preview recovery without automatic retry, explicit Arm retry, and active faults remaining fatal.",
+        "git diff --check and bundle SHA-256 integrity."
+      ],
+      "not_run": [
+        "Physical robot or camera connection",
+        "Actual controller startup, native IK/FK or physical motion"
+      ]
+    }
+  },
+  "zero_tcp_native_fk_compatibility": {
+    "date": "2026-10-18",
+    "source_log": "runs/20261018T102108Z-separated-33e04138.jsonl",
+    "observed_failure": "Native getForwardKinematics failed after 302.587 seconds in preflight; no armed, alignment or motion-proposal events.",
+    "sdk_source": {
+      "version": "1.6.3",
+      "url": "https://files.pythonhosted.org/packages/0e/97/b14f774cfd63a46ca80cfadd2c24704a7eae2b4d26fc18cc7c8783c4ca8e/ur_rtde-1.6.3.tar.gz",
+      "sdist_sha256": "30bbbb5b9c98c49a3b53be2819b80f00c1f76dc08b99e3ed064e6a190d29bf81",
+      "control_source_sha256": "fe461e117628e6527f64cef3e2ade578ad32fcb939aed7006400c9f7e9fe46e0",
+      "finding": "For explicit q6 and all-zero TCP6, getForwardKinematics selects RECIPE_6 (six declared doubles) but serializes twelve doubles. Nonzero TCP uses RECIPE_12. SDK response wait is 300 seconds."
+    },
+    "changes": [
+      "All-zero TCP FK requests use a query-only 1 mm local-Z TCP, then restore the requested TCP using T_base_query @ inverse(T_flange_query) @ T_flange_actual.",
+      "Nonzero TCP queries are unchanged. Actual setTcp, requested offsets, IK seeds, targets, residual limits and path safety checks are unchanged.",
+      "Report native IK availability/solve, joint limits, FK and TCP limits; geometric path construction; native path checked counts every ten samples plus completion; and watchdog setup.",
+      "Other SDK blocking-call timeouts are not changed and no background robot calls, automatic retries or concurrent transport access are introduced."
+    ],
+    "verification": {
+      "full_regression": {
+        "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tests:. python3 -B -m unittest discover -s tests -v",
+        "tests": 521,
+        "passed": 518,
+        "skipped_cuda": 3
+      },
+      "related_tests": 62,
+      "new_test_methods": 7,
+      "cpp_recipe_probe": {
+        "method": "Unmodified extracted getForwardKinematics and isAllZero bodies compiled with network-free sendCommand recorder; enum symbolic values represented as 4/6/12 for readable output.",
+        "harness_sha256": "d05b0a620b06940fd4f76bda2372d87db01c920d11c937ea2aadbd1dff3fb254",
+        "exit_code": 0,
+        "results": [
+          {
+            "case": "explicit_zero_tcp_6",
+            "recipe": "RECIPE_6",
+            "double_payload_size": 12,
+            "payload": [
+              0.2,
+              -1.1,
+              1.2,
+              -0.6,
+              0.7,
+              -0.4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "case": "virtual_tcp_z_1mm",
+            "recipe": "RECIPE_12",
+            "double_payload_size": 12,
+            "payload": [
+              0.2,
+              -1.1,
+              1.2,
+              -0.6,
+              0.7,
+              -0.4,
+              0,
+              0,
+              0.001,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "case": "nonzero_tcp_6",
+            "recipe": "RECIPE_12",
+            "double_payload_size": 12,
+            "payload": [
+              0.2,
+              -1.1,
+              1.2,
+              -0.6,
+              0.7,
+              -0.4,
+              0.02,
+              0,
+              0.04,
+              0.1,
+              -0.2,
+              0.3
+            ]
+          }
+        ],
+        "limitations": "This proves local recipe selection and payload length only. No RTDE/network/robot/camera access; it does not reproduce controller-side hang or verify deployment."
+      },
+      "checks": [
+        "SDK packet-bug fake rejects zero TCP arguments; corrected queries restore original TCP for differing joints and rotated flange frames.",
+        "Mixed zero/nonzero offsets remain unchanged; residual, malformed pose, SDK exception and native safety rejection still fail.",
+        "Progress reports precede native queries, completed path counts follow checks, and freshness failures stop subsequent queries.",
+        "Python tests, git whitespace and bundle SHA-256 integrity."
+      ],
+      "not_run": [
+        "Physical robot/camera connection",
+        "Actual controller FK query or motion",
+        "Network failure or real controller timeout reproduction"
+      ]
+    }
+  },
+  "active_calibration_recovery": {
+    "date": "2026-10-18",
+    "scope": "Already armed live initial alignment, hold and follow; pose sensor unchanged.",
+    "behavior": [
+      "Discard rejected calibration pairs without refreshing accepted poses or capture times.",
+      "Initial alignment and hold use last accepted bases; ordinary follow retains bounded state prediction.",
+      "One newly accepted pair recovers active control within max_invalid_duration (default 0.3 seconds).",
+      "Last accepted capture must remain within max_calibration_age (default 0.5 seconds). Repeated rejects do not extend either deadline.",
+      "First/new Arm and native preflight retain strict stability checks. Robot state, path, SDK and command failures remain fatal.",
+      "Timeout/stale faults never automatically rearm motion."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 540,
+        "passed": 537,
+        "skipped_cuda": 3
+      },
+      "related_tests": 117,
+      "new_test_methods": 19,
+      "checks": [
+        "Synthetic 119 mm jump never becomes a command base; next accepted frame recovers with stable_count=1.",
+        "Persistent rejection, late good frame and original capture age terminate control.",
+        "Transmission-time deadline prevents velocity send and progress commit.",
+        "Preview/new Arm still requires five accepted frames; both runtime alignment and tracking branches covered.",
+        "Python syntax, CLI help, whitespace and bundle checksums."
+      ],
+      "not_run": [
+        "Physical robot/camera connections",
+        "Actual motion or real-time stop latency"
+      ]
+    }
+  },
+  "preview_calibration_recovery": {
+    "date": "2026-10-18",
+    "cause": "Fresh measurements repeatedly rejected against a stale accepted pose baseline, preventing startup readiness.",
+    "scope": "Unarmed live preview only; initial alignment preflight and active motion retain their established reference.",
+    "behavior": [
+      "Collect a separate cluster after the accepted capture expires; preserve quality, sequence and capture-time validation.",
+      "Require the configured stable frame count (default five), bounding each pair against both the previous and first candidate in individual and relative base coordinates.",
+      "Replay only the new cluster through a fresh relative estimator to preserve internal speed checks without interpreting the baseline shift as motion.",
+      "Replace accepted state atomically, retain goals/task/progress, and cancel any Arm request queued on the same tick.",
+      "Show preview reacquisition progress and the last rejection alongside stale diagnostics."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 564,
+        "passed": 561,
+        "skipped_cuda": 3
+      },
+      "new_test_methods": 24,
+      "offline_measurement_replays": [
+        {
+          "log": "20261018T104637Z-separated-162550d4",
+          "old_accepted": 13,
+          "new_accepted": 469,
+          "measurements": 477,
+          "reacquired": [
+            {
+              "sequence": 77,
+              "after_start_s": 1.843,
+              "stable_count": 5
+            }
+          ],
+          "final_calibration_ready": true,
+          "age_s": {
+            "ur5e": 0.12912291241809726,
+            "ur10e": 0.12912291241809726
+          },
+          "base_speed_m_s": {
+            "ur5e": 8.06385770963522e-06,
+            "ur10e": 6.782466234534107e-05
+          }
+        },
+        {
+          "log": "20261018T104723Z-separated-3c2c0834",
+          "old_accepted": 7,
+          "new_accepted": 539,
+          "measurements": 556,
+          "reacquired": [
+            {
+              "sequence": 65,
+              "after_start_s": 1.447,
+              "stable_count": 5
+            },
+            {
+              "sequence": 668,
+              "after_start_s": 21.598,
+              "stable_count": 5
+            }
+          ],
+          "final_calibration_ready": true,
+          "age_s": {
+            "ur5e": 0.11832063691690564,
+            "ur10e": 0.11832063691690564
+          },
+          "base_speed_m_s": {
+            "ur5e": 6.3179573627592715e-06,
+            "ur10e": 3.609616097550915e-05
+          }
+        }
+      ],
+      "checks": [
+        "Synthetic cluster quality/jump/anchor/time/duplicate cases",
+        "Atomic estimator recovery and candidate speed rejection",
+        "Preview-only scope and queued Arm cancellation in both live runtimes",
+        "Python syntax, whitespace and bundle SHA-256 integrity"
+      ],
+      "not_run": [
+        "Physical robot/camera connections",
+        "Actual Arm readiness including hardware preflight or robot motion",
+        "Independent calibration accuracy measurement"
+      ]
+    }
+  },
+  "alignment_velocity_governor": {
+    "date": "2026-10-18",
+    "causes": [
+      "20261018T105809Z-separated-5a835ee8: current-Jacobian command was at the angular acceleration boundary; predicted Jacobian raised acceleration to 0.5000099537 rad/s^2 versus the unchanged 0.5 limit.",
+      "20261018T104522Z-separated-cdf440d3: measured velocity lag made the previous-command-to-desired segment infeasible; measured-velocity-to-desired admitted bounded deceleration."
+    ],
+    "behavior": [
+      "Intersect unchanged joint and current-Jacobian TCP constraints against both previous commands and measured velocities.",
+      "Check future-Jacobian constraints before accepting each command; search at most ten candidates per segment and two segments.",
+      "Retain prior-command acceleration bounds even when the fallback segment starts at measured joint velocity.",
+      "Keep geometry, path corridor, joint positions, travel, flange gap, calibration, timeout and measured settling checks unchanged.",
+      "No feasible tested candidate remains fatal without a pending command or committed progress; a narrow feasible region may still be missed conservatively.",
+      "Distinguish linear/angular speed and acceleration faults numerically; include start-position envelope distance and original control-tick diagnostics."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 569,
+        "passed": 566,
+        "skipped_cuda": 3,
+        "seconds": 68.149
+      },
+      "related_tests": 112,
+      "new_test_methods": 5,
+      "recorded_state_replays": [
+        {
+          "case": "future_jacobian_boundary",
+          "dt_s": 0.04006582498550415,
+          "future_angular_acceleration": 0.4999672978459392,
+          "angular_acceleration_limit": 0.5,
+          "proposal_ms_median": 8.657627739012241,
+          "proposal_ms_p95": 8.916478836908937
+        },
+        {
+          "case": "measured_velocity_lag",
+          "dt_s": 0.0400580121204257,
+          "future_angular_acceleration": 0.4999970811812347,
+          "angular_acceleration_limit": 0.5,
+          "proposal_ms_median": 8.387342095375061,
+          "proposal_ms_p95": 8.455200213938951
+        }
+      ],
+      "checks": [
+        "Independent numerical joint/current-TCP/predicted-TCP speed and previous/measured acceleration bounds, including the scalar speedJ ramp.",
+        "Normal fast path uses one prediction; forced future rejection is bounded and prevents commit; incompatible constraints remain fatal.",
+        "Follow leaves UR10e uncommanded; limits remain unchanged in both recorded cases.",
+        "Runtime logging tests use mocked robot interfaces; full offline suite passes."
+      ],
+      "limitations": [
+        "Recorded fixtures reconstruct the initial kinematic capture from the first logged alignment state because the exact Arm snapshot was absent.",
+        "Recorded control periods are inferred from measurement/control ticks; previous twists are reconstructed. Future logs record these values explicitly.",
+        "Local proposal timings are offline measurements, not real-time guarantees.",
+        "Discrete command checks do not certify continuous physical Cartesian acceleration or motor response."
+      ],
+      "not_run": [
+        "Physical robot/camera connections",
+        "Actual robot motion or measured control/stop latency"
+      ]
+    }
+  },
+  "pnp_input_diagnostics": {
+    "date": "2026-10-18",
+    "observed_run": "20261018T110919Z-separated-6d4157e6.jsonl",
+    "observation": "Alignment reached 83.1999%; ten transient failures recovered, then four consumed UR5e EMPnP failures left the last accepted capture 0.505 seconds old. Seven valid votes existed; original failed image coordinates were absent from the old log.",
+    "scope": "Diagnostic recording only. User reports UR5e remained visible within the left image region; actual cause of PnP failure is not yet established.",
+    "behavior": [
+      "Append optional copied same-frame PnP inputs before queue publication; preserve existing positional CalibrationFrame construction.",
+      "Record K/dist, camera ROI, captured joints, FK 3D points, original votes/mask, effective solver indices, pose success, OpenCV version and existing initializer threshold.",
+      "Record every consumed inference packet in follow JSONL including rejected packets; latest-only IPC may omit intermediate inference frames.",
+      "Keep all acceptance, timestamp, motion, network, voting and PnP computations/thresholds unchanged."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 575,
+        "passed": 572,
+        "skipped_cuda": 3,
+        "seconds": 68.355
+      },
+      "related_tests": 79,
+      "new_test_methods": 6,
+      "checks": [
+        "Exact input selection compared to intercepted EMPnP.fit call",
+        "Failure payload preservation, copy isolation and nonfinite JSON nulls",
+        "Legacy packets, unchanged rejection decisions and capture/receipt timestamps",
+        "Independent read-only integration review found no blockers",
+        "Network, voting and PnP file hashes unchanged from prior manifest"
+      ],
+      "offline_benchmark": {
+        "samples": 300,
+        "median_ms": 0.36753807216882706,
+        "p95_ms": 0.37780075799673796,
+        "payload_bytes": 2029,
+        "scope": "Offline diagnostic construction and finite JSON serialization; synthetic pixels, recorded joints; excludes IPC/disk/actual control timing."
+      },
+      "limitations": [
+        "Initialization inputs do not include RANSAC RNG state or full EM covariance/prior history",
+        "No raw image in automatic measurement logs; preview d snapshot remains available",
+        "Diagnostic addition does not itself fix the observed pose-estimation failure"
+      ],
+      "not_run": [
+        "Physical robot/camera connections",
+        "Actual hardware inference/control timing or motion"
+      ]
+    }
+  },
+  "live_alignment_speed_control": {
+    "date": "2026-10-19",
+    "request": "Initial alignment is too slow; user confirmed pendant speed slider60 percent.",
+    "cause": "Previous alignment command used 49 percent of global speed bounds; recorded angular command0.049rad/s and measured0.02946rad/s over119.09deg rotation. The measured-command acceleration guard additionally limits speed increases under persistent60percent scaling.",
+    "behavior": [
+      "align_speed_scale defaults to2; scale1 restores previous command speed behavior; finite range(0,2].",
+      "Desired speed caps change from0.49 to0.49*scale of configured speed; command feasibility caps from0.5 to0.5*scale; global hard bounds never increase.",
+      "Keep feedback gain, all accelerations, measured/future checks, geometric path, travel, gaps, camera freshness, explicit Arm and rest-based handoff unchanged.",
+      "Initial alignment only; ordinary hold/follow and simulation policy settings are unchanged.",
+      "Print applied speed caps during native preflight; main settings log already records the selected scale."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 580,
+        "passed": 577,
+        "skipped_cuda": 3,
+        "seconds": 103.157
+      },
+      "related_runtime_transport_tests": 150,
+      "alignment_tests": 20,
+      "new_test_methods": 5,
+      "checks": [
+        "Default/invalid scales and legacy namespace behavior",
+        "Faster measured virtual convergence with current/future speed, previous/measured acceleration and speedJ ramp limits",
+        "Two-commanded-arm hold atscale2, follower-only leader unchanged, final measured endpoint and rest",
+        "CLI help, preflight applied-speed reporting, whitespace and bundle hashes"
+      ],
+      "recorded_arm_state_replay": {
+        "source": "runs/20261018T110919Z-separated-6d4157e6.jsonl",
+        "snapshot": "exact initial_robots + initial_bases in armed event",
+        "hardware_run": false,
+        "limitations": "Offline ideal, low-pass response, and fixed scaling models do not certify physical servo response, camera reliability, continuous acceleration, or exact completion time.",
+        "results": [
+          {
+            "scale": 1.0,
+            "model": "ideal",
+            "response": 1.0,
+            "done": true,
+            "seconds": 44.43999999999923,
+            "estimated_seconds": 55.13645310362311,
+            "seconds_to_83_2percent": 35.43999999999942,
+            "median_command_angular_rad_s": 0.049,
+            "maxima_joint_linear_angular_speed_joint_linear_angular_accel": [
+              0.03219078792733316,
+              0.0013004870873470963,
+              0.04900000000000002,
+              0.1642392866482573,
+              0.005804469617810851,
+              0.25000061208542745
+            ],
+            "tcp_error_m": 0.0007671882176733105,
+            "tcp_error_deg": 0.9439298014889981,
+            "endpoint_rest": true,
+            "leader_joint_change": 0.0
+          },
+          {
+            "scale": 2.0,
+            "model": "ideal",
+            "response": 1.0,
+            "done": true,
+            "seconds": 24.71999999999965,
+            "estimated_seconds": 34.332208879393704,
+            "seconds_to_83_2percent": 17.879999999999797,
+            "median_command_angular_rad_s": 0.098,
+            "maxima_joint_linear_angular_speed_joint_linear_angular_accel": [
+              0.06438079127768033,
+              0.0025441211526186403,
+              0.09800000000000005,
+              0.1642392866482573,
+              0.005804469617810851,
+              0.25000150616281785
+            ],
+            "tcp_error_m": 0.0007625060081146117,
+            "tcp_error_deg": 0.9343244271311383,
+            "endpoint_rest": true,
+            "leader_joint_change": 0.0
+          },
+          {
+            "scale": 1.0,
+            "model": "low_pass",
+            "response": 0.6,
+            "done": true,
+            "seconds": 44.43999999999923,
+            "estimated_seconds": 55.13645310362311,
+            "seconds_to_83_2percent": 35.47999999999942,
+            "median_command_angular_rad_s": 0.049,
+            "maxima_joint_linear_angular_speed_joint_linear_angular_accel": [
+              0.03219081299408074,
+              0.0013006788051791432,
+              0.04900000000000002,
+              0.2667238152925321,
+              0.009419444876437703,
+              0.40600082569835405
+            ],
+            "tcp_error_m": 0.0007570346515092585,
+            "tcp_error_deg": 0.9231139136602206,
+            "endpoint_rest": true,
+            "leader_joint_change": 0.0
+          },
+          {
+            "scale": 2.0,
+            "model": "low_pass",
+            "response": 0.6,
+            "done": true,
+            "seconds": 24.67999999999965,
+            "estimated_seconds": 34.332208879393704,
+            "seconds_to_83_2percent": 17.919999999999796,
+            "median_command_angular_rad_s": 0.098,
+            "maxima_joint_linear_angular_speed_joint_linear_angular_accel": [
+              0.06438091568966318,
+              0.0025448488922895996,
+              0.09800000000000005,
+              0.2736529928573169,
+              0.009634872021647586,
+              0.4165578287288132
+            ],
+            "tcp_error_m": 0.0007564949849200545,
+            "tcp_error_deg": 0.9220089926339423,
+            "endpoint_rest": true,
+            "leader_joint_change": 0.0
+          },
+          {
+            "scale": 1.0,
+            "model": "fixed_scaling",
+            "response": 0.6,
+            "done": true,
+            "seconds": 73.84000000000034,
+            "estimated_seconds": 55.13645310362311,
+            "seconds_to_83_2percent": 58.95999999999892,
+            "median_command_angular_rad_s": 0.049,
+            "maxima_joint_linear_angular_speed_joint_linear_angular_accel": [
+              0.032190710069997526,
+              0.0013006109501485761,
+              0.04900000000000002,
+              0.3284752628601654,
+              0.013020479485545858,
+              0.49999945590424316
+            ],
+            "tcp_error_m": 0.0007684412018357735,
+            "tcp_error_deg": 0.9465020394182031,
+            "endpoint_rest": true,
+            "leader_joint_change": 0.0
+          },
+          {
+            "scale": 2.0,
+            "model": "fixed_scaling",
+            "response": 0.6,
+            "done": true,
+            "seconds": 72.52000000000014,
+            "estimated_seconds": 34.332208879393704,
+            "seconds_to_83_2percent": 57.799999999998946,
+            "median_command_angular_rad_s": 0.04999959123271071,
+            "maxima_joint_linear_angular_speed_joint_linear_angular_accel": [
+              0.0328468690020788,
+              0.0013265963049547721,
+              0.049999844326391686,
+              0.32847526286016543,
+              0.013281050742425344,
+              0.5000000248545692
+            ],
+            "tcp_error_m": 0.0007660373832146371,
+            "tcp_error_deg": 0.9415679248967683,
+            "endpoint_rest": true,
+            "leader_joint_change": 0.0
+          }
+        ],
+        "original_run_bottleneck": {
+          "elapsed_to_83_2percent_s": 59.2072993372567,
+          "target_translation_m": 0.04868533434194545,
+          "target_orientation_deg": 119.09395759090145,
+          "median_command_angular_rad_s": 0.049,
+          "median_measured_angular_rad_s": 0.0294571,
+          "median_measured_to_command_ratio": 0.6011652164619705,
+          "angular_cap_fraction_of_ticks": 0.735632183908046,
+          "user_confirmed_speed_slider": 0.6
+        },
+        "review": {
+          "speed_budget": "current command caps .5*align_speed_scale*global speed, desired cap .49*scale; 0<scale<=2",
+          "gain_unchanged": 0.5,
+          "previous_command_acceleration_caps_unchanged": true,
+          "measured_and_future_speed_acceleration_hard_limits_unchanged": true,
+          "future_float_tolerance": "Original tolerance is 1e-9 on velocity delta; at dt=.04s this permits 2.5e-8 rad/s2 numeric excess. Largest observed .5000000248545692 fits original tolerance.",
+          "geometry_corridor_travel_endpoint_rest_checks_unchanged": true,
+          "physical_hardware_tested": false
+        }
+      },
+      "limitations": [
+        "Fixed60percent model improves only73.84 to72.52seconds because measured-command acceleration bounds remain binding",
+        "Ideal100percent model improves44.44 to24.72seconds; this is not measured hardware timing",
+        "Discrete kinematics and approximate collision geometry do not certify actual motor response or continuous acceleration"
+      ],
+      "not_run": [
+        "Physical robot/camera connections",
+        "Actual motion or real-time stop latency"
+      ]
+    }
+  },
+  "native_ik_preview_recovery": {
+    "date": "2026-10-19",
+    "observed_run": "runs/20261019T042403Z-separated-734ba1c4.jsonl",
+    "comparison_run": "runs/20261018T110919Z-separated-6d4157e6.jsonl",
+    "user_confirmation": "Robot bases/tables were physically relocated since the previous alignment run.",
+    "cause": "Controller explicitly reported no IK solution before motion. Reconstructed target in the relocated base arrangement is also outside nominal UR5e shoulder reachability at the requested orientation; this check precedes alignment speed settings.",
+    "behavior": [
+      "Recover only explicit native has-solution false during stationary preflight to ARM BLOCKED preview after closing the control session.",
+      "Do not change the goal, gap, IK tolerances, motion checks or calibration thresholds; active errors remain fatal.",
+      "Require a new explicit Arm; timestamp GUI/vision clicks and discard requests made before recoverable preflight failure, including delayed IPC delivery.",
+      "Preserve queued target and Stop commands in order, including when earlier target processing raises.",
+      "Log original alignment_request before follow controller construction and native target/seed/TCP/tolerances in arm_ik wait diagnostics."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 588,
+        "passed": 585,
+        "skipped_cuda": 3,
+        "seconds": 102.949
+      },
+      "related_tests": 200,
+      "new_test_methods": 8,
+      "checks": [
+        "Mocked native false prevents subsequent IK/FK, watchdog enable and motion.",
+        "Both live modes clean up and retain preview, explicit retry works, active exceptions still stop.",
+        "Duplicate/delayed pre-failure Arm tokens do not trigger retry; subsequent target/Stop and new Arm survive.",
+        "Diagnostic arrays are copied and follow alignment_request precedes native preflight.",
+        "Installed ur_rtde 1.6.3 source confirms correct IK recipe/signature and explicit has-solution false, distinct from transport exceptions.",
+        "Independent review identified duplicate Arm retry and abandoned iterator command loss; regression tests cover both fixes."
+      ],
+      "recorded_target_reconstruction": {
+        "method": [
+          "Arm-time targets are reconstructed by replaying all measurement ingestion at or before fault.control_at with preview re-acquisition enabled, then engine.state(control_at).",
+          "fault.robots are original Arm states: nested preflight reads do not assign runtime states. No armed record because native preflight failed.",
+          "Predicted/filtered base matrices are used, not latest raw PnP values.",
+          "Offline nominal FK does not include factory calibration; nominal feasibility cannot overrule native controller refusal."
+        ],
+        "measurement_acceptance_disagreements": 0,
+        "target_pose_base_m_rotvec_rad": [
+          -0.014206751408567385,
+          0.220718124672851,
+          0.6541371432709676,
+          -1.5912982580954123,
+          -0.11008144558462434,
+          0.13092610429813048
+        ],
+        "from_current_position_m": 0.09300448323028739,
+        "from_current_orientation_deg": 10.172305003476971,
+        "target_change_since_comparison_m": 0.14086226465391982,
+        "relative_base_origin_change_m": 0.14954536381558448,
+        "leader_encoder_change_m": 2.9458028785589457e-05,
+        "nominal_wrist2_radial_m": 0.12231318017876534,
+        "nominal_min_shoulder_offset_m": 0.1333,
+        "nominal_shoulder_margin_m": -0.010986819821234659,
+        "nominal_multiseed_count": 64,
+        "nominal_multiseed_successes": 0,
+        "nominal_best_position_residual_m": 0.01098395056583973,
+        "scope": "Offline nominal geometry supports the native refusal but excludes factory calibration and cannot authorize physical motion or certify a collision-free path."
+      },
+      "not_run": [
+        "Physical robot/camera connections",
+        "Actual robot motion or validation of a revised hardware target"
+      ]
+    }
+  },
+  "preflight_rejected_vision_recovery": {
+    "date": "2026-10-19",
+    "observed_run": "runs/20261019T044346Z-separated-e04d629f.jsonl",
+    "cause": "Native IK/FK passed. A rejected UR5e pose during stationary path preflight was raised as a generic fault, bypassing the existing bounded warmup wait.",
+    "logged_evidence": {
+      "native_ik_fk_passed": true,
+      "last_path_progress": "30/81",
+      "watchdog_or_motion_started": false,
+      "final_rejected_sequence": 425,
+      "previous_accepted_sequence": 422,
+      "capture_interval_s": 0.10005,
+      "ur5e_pose_jump_m": 0.514875,
+      "ur5e_pose_jump_deg": 74.79998,
+      "ur5e_keypoint_change_mean_px": 0.305,
+      "ur5e_keypoint_change_max_px": 0.872,
+      "ur5e_joint_change_max_rad": 4.67e-05,
+      "ur5e_raw_mean_reprojection_px": [
+        2.223,
+        15.994
+      ],
+      "ur5e_raw_max_reprojection_px": [
+        5.931,
+        97.666
+      ],
+      "interpretation": "Nearly unchanged keypoints and encoder joints with a large single-robot pose jump strongly support a spurious PnP solution; physical motion cannot be ruled out absolutely from logs.",
+      "recovery_after_final_rejection": "Unknown: the original program stopped and logged no subsequent measurement."
+    },
+    "behavior": [
+      "Before watchdog setup, discard rejected vision and suspend further native checks until the configured count of fresh accepted pairs is restored (default five).",
+      "Pass only last accepted bases plus fresh encoders to original-Arm drift checks; preserve initial targets, baseline, path and all thresholds.",
+      "Share the existing five-second total wait across warmup, rejection recovery and all native IK/path callbacks; duplicates do not count.",
+      "Check encoder freshness, both-arm stationarity and pose drift, Stop/process state and accepted-base displacement during recovery.",
+      "Timeout closes the session and returns to preview requiring a new Arm; after watchdog setup begins, no further preflight waiting is allowed.",
+      "Existing active calibration grace, reprojection OFF setting and neural/voting/PnP computation are unchanged."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 596,
+        "passed": 593,
+        "skipped_cuda": 3,
+        "seconds": 102.556
+      },
+      "related_tests": 117,
+      "new_test_methods": 8,
+      "checks": [
+        "Real gate rejects a large path-preflight jump and recovers only after five unique accepted frames, preserving the requested target and Arm snapshot.",
+        "Repeated rejection consumes the shared wait budget and enables neither watchdog nor motion; repeated recovery packets cannot fabricate stability.",
+        "Robot velocity/pose/Stop failures and accepted base drift remain fatal during rejected vision; watchdog callback never waits.",
+        "Both actual runtime readers consume a queued jump, retain accepted pose/capture and require five accepted frames to return normally.",
+        "Existing active motion rejection/recovery, transport, IK, Arm queue and simulation regressions pass."
+      ],
+      "limitations": [
+        "Recovery tests use synthetic subsequent normal frames; the final logged outlier has no recorded continuation.",
+        "This changes preflight failure handling; it does not fix the underlying PnP branch instability."
+      ],
+      "not_run": [
+        "Physical camera/robot connections",
+        "Actual alignment or hardware timing/stop validation"
+      ]
+    },
+    "superseded_in_live_runtime_by": "frozen_initial_alignment; standalone pending-calibration preflight helper retained and tested."
+  },
+  "frozen_initial_alignment": {
+    "date": "2026-10-19",
+    "request": "Current-run calibration capture, fixed-calibration initial alignment, then live-calibrated following.",
+    "behavior": [
+      "Freeze copied Arm bases and alignment goals before native connection/preflight in both follow and hold.",
+      "During native preflight and speedJ alignment, use current RTDE joints/TCP plus captured bases; camera age and new outliers cannot change the alignment or gate it.",
+      "Preserve native IK/FK/path, encoder freshness, fixed-leader, Stop/process/deadline, speed/acceleration/geometry/envelope and measured endpoint/rest checks.",
+      "At measured endpoint, send validated zero speedJ every normal tick while collecting only frames captured strictly after completion; deadline five seconds.",
+      "Require configured stable frame count with existing quality/jump/age checks; reset cluster on rejected pairs; duplicates and in-flight old captures do not count.",
+      "Build a fresh follow estimator from post-endpoint frames only, preserving intra-cluster speed limits and preventing artificial old-to-new velocity.",
+      "Before live tracking, validate new base consistency, endpoint stationarity and original task feasibility; reset motion histories and arm live calibration guard.",
+      "Begin speedL on the next fresh tick only; timeout or transition validation failure stops and never automatically resumes.",
+      "GUI labels captured calibration with live joints, retaining real calibration age and encoder staleness.",
+      "Neural/voting/PnP sensor, configured gap, IK tolerance, reprojection OFF and ordinary live calibration grace remain unchanged."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 636,
+        "passed": 633,
+        "skipped_cuda": 3,
+        "seconds": 109.632
+      },
+      "focused_runtime_tests": 61,
+      "new_handoff_helper_tests": 11,
+      "new_stationary_hold_tests": 9,
+      "checks": [
+        "Frozen path survives camera age/jumps; current RTDE/Stop faults still block commands.",
+        "Five fresh postendpoint frames, zero joint velocity watchdog streaming, no premature speedL or progress commit.",
+        "Old/in-flight captures excluded; invalid/jump/speed-invalid clusters reset; total timeout not extended.",
+        "New base mismatch or original task failure stops; resumed tracking retains active rejection grace.",
+        "Real tracker and estimator unit/runtime fixtures; scene expiry and simulation regressions pass."
+      ],
+      "not_run": [
+        "Physical robot/camera connections",
+        "Actual robot motion or measured handoff/stop latency"
+      ]
+    },
+    "limitations": [
+      "Camera, robot bases and leader must remain stationary until live following begins; vision does not detect their physical movement during the frozen phase.",
+      "A fixed but incorrect calibration or unreachable initial target still fails original native IK/path validation; no target relaxation is introduced."
+    ]
+  },
+  "ik_pose_wording_and_current_run_audit": {
+    "date": "2026-10-19",
+    "observed_run": "runs/20261019T051317Z-separated-d86b0a30.jsonl",
+    "scope": "Native rejection concerns the computed full TCP pose, not position-only IK or proven physical target unreachability.",
+    "change": "Show both base XYZ and rotation vector in ArmIKUnavailable; explicitly distinguish position-and-orientation rejection from position-only unreachability, and request review of calibration/target.",
+    "offline_findings": {
+      "second_arm_sequence": 687,
+      "position_only_nominal_ik_position_error_mm": 4.345624991352193e-10,
+      "position_only_solution_normal_deviation_from_required_deg": 42.40765082812606,
+      "calibration_sensitivity": {
+        "scope": "Diagnostic constrained fit only; not ground truth and never selected for control.",
+        "inlier_rms_unconstrained_px": 1.69484,
+        "inlier_rms_nominal_reach_boundary_px": 1.78032,
+        "target_displacement_mm": 23.936,
+        "target_rotation_deg": 1.111,
+        "meaning": "Nearly equally image-consistent estimates can produce different reachability outcomes; physical calibration needs independent evidence."
+      },
+      "sensor_definition_audit": "UR5 link6 annotations match flange origin with99.6mm wrist offset; key ordering/crop/pixel mapping consistent. No concrete conversion bug found."
+    },
+    "validation": {
+      "targeted_transport_tests_passed": 24,
+      "seconds": 0.381,
+      "hardware_accessed": false,
+      "control_logic_or_sensor_changed": false
+    }
+  },
+  "approximate_calibration_task_tolerance": {
+    "date": "2026-10-19",
+    "authorized_bounds": {
+      "flange_position_m": 0.05,
+      "flange_orientation_deg": 10.0
+    },
+    "scope": "Task command allowance, not calibrated accuracy; preserve nominal 30cm facing pose/path and log actual nominal errors.",
+    "initial_alignment": [
+      "Try exact native IK first; explicit rejection permits bounded deterministic nearby flange target selection.",
+      "Selected target still requires precise native IK/FK, joint/TCP limits and all 81 sampled path checks before watchdog/motion.",
+      "Keep captured calibration and nominal target immutable; distinguish selected command in GUI/logs.",
+      "Native FK endpoint allowance includes TCP offset; check native branch conditioning before tracking."
+    ],
+    "tracking": [
+      "Continuous flange residual outside allowance; preserve separated leader/base compensation inside allowance.",
+      "Validate measured and near-term executable commands rather than require exact nominal target IK.",
+      "Retain motion/geometry/travel/gap/state/communication limits and full nominal tracking-error caps.",
+      "Fresh post-alignment cluster is checked by its nominal task target shift; measured encoders remain stationary."
+    ],
+    "simulation": "Same task allowance in disconnected hold/follow; typed virtual IK rejection permits bounded candidate then ordinary sampled path checks.",
+    "gui": "Magenta nominal target, cyan selected/next command, nominal errors and command deviations shown separately.",
+    "compatibility": "Both --target_tolerance_m 0 --target_tolerance_deg 0 restore exact task behavior; legacy objects without options remain exact.",
+    "offline_recorded_case": {
+      "candidate_position_adjustment_m_approx": 0.01952,
+      "candidate_orientation_adjustment_deg_approx": 1.05,
+      "sampled_geometric_path_checks": 81,
+      "native_hardware_validated": false
+    },
+    "limitations": [
+      "Calibration accuracy and physical robot motion were not measured or validated.",
+      "Bounded multistart search and geometric proxies do not certify every reachable or collision-free path.",
+      "Direct/predict methods lack feedforward and may not respond to motions wholly inside task allowance.",
+      "Preflight nominal workspace/travel checks remain conservative; only explicit exact IK rejection initiates nearby search."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 689,
+        "passed": 686,
+        "skipped_cuda": 3,
+        "seconds": 129.438
+      },
+      "recorded_case": "Bounded candidate, all 81 geometric path samples, nominal target preserved, tolerant follow entry verified offline; disconnected virtual alignment and follow also completed.",
+      "regressions": "Stop/encoder/native IK/FK/path/watchdog, frozen calibration and fresh handoff, nonzero TCP offsets, exact-mode compatibility, nominal-vs-command GUI/logs.",
+      "checksums": "112 manifest files and 113 SHA256SUMS entries checked.",
+      "not_run": [
+        "Physical robot/camera connection",
+        "Native hardware IK validation or robot movement"
+      ]
+    }
+  },
+  "native_ik_conditioning_retry": {
+    "date": "2026-10-19",
+    "observed_run": "runs/20261019T060842Z-separated-b2d99b09.jsonl",
+    "problem": "A model-selected target passed native IK/FK/path but returned IK failed the final tracking singularity check; no alternative was tried and a generic fault terminated preview.",
+    "evidence_limit": "The old log did not record returned native IK joints or singular values. Distinct offline models demonstrate sensitivity; a discrete native IK branch switch is not established.",
+    "changes": [
+      "Validate returned native IK joints with captured alignment and measured-TCP-anchored tracking Jacobians before 81-sample native path checks.",
+      "Keep exact nominal target and existing 50mm/10deg allowance; try at most three approximate candidates with conditioning preferences 2/4/6 times the unchanged .01 threshold.",
+      "Retry only explicit native IK unavailability or inadequate endpoint conditioning; Stop/encoder/FK/safety/path faults propagate.",
+      "Failed bounded conditioning search returns both live modes to ARM BLOCKED preview, discards queued Arm clicks and requires a new explicit Arm.",
+      "Record candidate seeds, actual returned IK joints, native FK TCP and both model singular values in alignment_candidate records.",
+      "Native FK cache is cleared per solve and published atomically after all commanded arms validate."
+    ],
+    "offline_sensitivity_example": {
+      "old_candidate_adjustment_mm": 17.1137,
+      "old_candidate_adjustment_deg": 1.28147,
+      "seed_captured_singular_value": 0.01994094,
+      "distinct_model_returned_captured_singular_value": 0.00921654,
+      "stronger_candidate_adjustment_mm": 23.33,
+      "stronger_candidate_adjustment_deg": 1.46,
+      "stronger_distinct_model_singular_value_approx": 0.0384,
+      "native_hardware_queried": false
+    },
+    "validation": {
+      "full_suite": {
+        "tests": 707,
+        "passed": 704,
+        "skipped_cuda": 3,
+        "seconds": 134.332
+      },
+      "checks": [
+        "Recorded snapshot with two distinct kinematic models reproduces conditioning rejection and validates stronger in-bounds alternatives.",
+        "Native returned-joint conditioning checked before any path sampling; only accepted candidate receives full 81-sample path validation.",
+        "Bounded retry exhaustion, exact-IK success but poor conditioning, native TCP cache isolation, immutable diagnostics, follow/hold preview recovery.",
+        "Stop, encoder movement, native FK, safety and path faults are not converted to retryable conditioning refusals."
+      ],
+      "checksums": {
+        "manifest_files": 115,
+        "sha256_entries": 116
+      },
+      "not_run": [
+        "Physical robot/camera connection",
+        "Actual hardware motion or native controller retry"
+      ]
+    }
+  },
+  "alignment_command_speed_reserve": {
+    "date": "2026-10-19",
+    "observed_run": "runs/20261019T062042Z-separated-625f6db4.jsonl",
+    "observed_fault": {
+      "metric": "angular_speed",
+      "measured_rad_s": 0.1003748741892228,
+      "hard_limit_rad_s": 0.1,
+      "previous_command_model_rad_s": 0.098,
+      "excess_over_hard_limit_percent": 0.3748741892227958,
+      "evidence": "15 commands over approximately .60 s; no control-period stall or leader motion in recorded samples."
+    },
+    "changes": [
+      "Command budget min(align_speed_scale / 2, .9) for joint/current-TCP/future-TCP speeds; desired velocity stays at 98% of that budget.",
+      "Measured hard speed limits, joint/TCP acceleration constraints, path/geometry/state/stop requirements unchanged.",
+      "Native preflight reports actual command budget and measured-limit distinction; CLI help and README updated.",
+      "Measured speed faults include arm, joint/linear/angular metric, measured value, limit and units."
+    ],
+    "default_command_caps": {
+      "linear_m_s": 0.018,
+      "angular_rad_s": 0.09,
+      "joint_rad_s": 0.18
+    },
+    "virtual_recorded_goal_regression": {
+      "model": "CapturedKinematics with one-period command delay, first-order response .8, velocity gain 1.04, small deterministic speed noise and .038-.042s control periods.",
+      "reserved_budget_completed_seconds": 17.52,
+      "reserved_budget_peak_angular_rad_s": 0.0918274722,
+      "old_budget_failed_after_ticks": 12,
+      "old_budget_peak_angular_rad_s": 0.1001939106,
+      "actual_recorded_overspeed_still_rejected": true
+    },
+    "limitations": [
+      "10% command reserve is a design margin, not a measured bound on UR servo overshoot or calibration accuracy.",
+      "Virtual response is not UR firmware or a continuous-time dynamics/safety model.",
+      "Original recorded overspeed is still rejected; virtual new-command response is counterfactual, not a successful hardware replay."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 711,
+        "passed": 708,
+        "skipped_cuda": 3,
+        "seconds": 140.434
+      },
+      "checks": [
+        "Actual three-axis speed violations still stop without pending command.",
+        "Delayed/noisy virtual recorded-goal alignment settles under unchanged hard limits.",
+        "Same virtual response with old full command budget reproduces overspeed.",
+        "Launcher --help succeeds from /tmp; git diff --check passes."
+      ],
+      "checksums": {
+        "manifest_files": 117,
+        "sha256_entries": 118
+      },
+      "not_run": [
+        "Physical robot/camera connection",
+        "Actual hardware movement or UR firmware response"
+      ]
+    }
+  },
+  "bounded_leader_following": {
+    "date": "2026-10-19",
+    "observed_run": "runs/20261019T070406Z-separated-554fdeab.jsonl",
+    "observed_fault": {
+      "category": "compensation_infeasible",
+      "reason": "compensation alone exceeds joint acceleration",
+      "demanded_tcp_mm_s": 2.441092865402532,
+      "demanded_component_joint_acceleration_rad_s2": 0.9244127720725716,
+      "joint_acceleration_limit_rad_s2": 0.5
+    },
+    "changes": [
+      "Default leader_response=bounded for separated control with nonzero task tolerance; strict research mode and legacy/direct/predict/exact-mode behavior retained.",
+      "Keep mandatory base compensation unchanged; generate leader-plus-feedback transitions obeying TCP/joint speed and acceleration from measured state and previous transmitted command.",
+      "Project and commit one allowed task offset after the first successful active send, preserving nominal targets and catching up subsequent small following lag.",
+      "Validate future geometry, workspace, travel, nominal tracking error, singularity and future inverse-Jacobian speedL joint demand.",
+      "Calculate per-tick speedL scalar acceleration from separate and combined Cartesian ramp phases; validate all arms before transport.",
+      "Keep all existing configured speed/acceleration limits, calibration age/invalid handling, native safety, watchdog and operator Stop requirements.",
+      "Hold-path console reports following status/error instead of unrelated zero path progress; logs retain nominal and applied command components."
+    ],
+    "recorded_fault_regression": {
+      "bounded_first_tcp_command_mm_s": 1.1527265816346557,
+      "bounded_measured_joint_acceleration_rad_s2": 0.5,
+      "speedl_scalar_acceleration": 0.02784414665674452,
+      "strict_mode_reproduces_original_fault": true
+    },
+    "virtual_following_regression": {
+      "plant": "Recorded UR configuration with CapturedKinematics, fixed recorded base poses, 60 percent previous-command response and one-period delay.",
+      "duration_s": 14,
+      "leader_sequence": "Start for 1 second, stop for 6 seconds, reverse for 1 second, stop for 6 seconds.",
+      "post_stop_tracking_position_bound_m": 0.002,
+      "post_stop_tracking_orientation_bound_deg": 0.5,
+      "checks": "Coupled changing UR Jacobian, unchanged command constraints, nominal workspace and capsule geometry; separate Cartesian plant and nonzero-tool path tests."
+    },
+    "limitations": [
+      "Local kinematic ramp and discrete pose checks do not model native servo dynamics, continuous-time acceleration or all collision paths.",
+      "Sustained unreachable/too-fast leader motion can still exceed tracking-error limits; bounded following does not guarantee tracking every motion.",
+      "Calibration and allowed target offset are estimates, not measured physical accuracy.",
+      "No camera connection, robot connection, native controller motion or firmware validation was performed."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 751,
+        "passed": 748,
+        "skipped_cuda": 3,
+        "seconds": 149.02
+      },
+      "checks": [
+        "Actual failed snapshot: strict refusal and bounded executable command under original limits.",
+        "Start/stop/reversal, direction changes at speed boundary, measured lag, transactional target offset and target reset.",
+        "Mandatory base, geometry, tracking-error, singularity and zero-tolerance compatibility.",
+        "Separate/combined Cartesian ramp phases, tiny angular noise, invalid per-arm acceleration and atomic transport validation.",
+        "Fresh alignment handoff resets histories and forwards per-proposal ramp acceleration before successful commit.",
+        "Launcher --help and git diff --check."
+      ],
+      "checksums": {
+        "manifest_files": 124,
+        "sha256_entries": 125
+      }
+    }
+  },
+  "stopped_preview_recovery": {
+    "date": "2026-10-19",
+    "observed_run": "runs/20261019T073231Z-separated-3ef481ac.jsonl",
+    "observed_fault": {
+      "reason": "Four consecutive UR5e calibration rejections, then accepted capture age .529 s exceeded .500 s.",
+      "rejected_sequences": [
+        1090,
+        1093,
+        1096,
+        1098
+      ],
+      "estimated_jump_m": 0.0550306,
+      "estimated_jump_deg": 7.1121,
+      "previous_live_commands": 208,
+      "previous_live_duration_s": 8.34
+    },
+    "default_response": "fault_response=preview; fault_response=exit retains prior terminal behavior",
+    "recovery_sequence": [
+      "Existing transient calibration grace and bounded following continue unchanged.",
+      "A recognized calibration/planning failure requests speedStop for all commanded arms, terminates their scripts and disconnects.",
+      "Require affirmative speedStop; accept documented void stopScript return, reject exceptions/explicit failure.",
+      "Read fresh measured robot states and require advancing timestamps, bounded joint/TCP changes and reported velocities for a stationary dwell.",
+      "Only then reset velocity/sensor histories and acquire a new stable cluster captured after confirmed stop.",
+      "Keep GUI and vision alive; require a new explicit Arm issued after first recovery READY; no automatic motion restart.",
+      "Retain applied targets, cooperative progress/pause and original travel origin; replan initial alignment at retained progress when requested."
+    ],
+    "stop_observation": {
+      "stationary_dwell_s": 0.2,
+      "initial_confirmation_timeout_s": 5.0,
+      "linear_tolerance_m_s": 0.001,
+      "angular_tolerance_rad_s": 0.005,
+      "joint_tolerance_rad_s": 0.01,
+      "after_first_confirmation": "Subsequent manual motion revokes readiness and requires another dwell plus new images; no motion is sent."
+    },
+    "unchanged_limits": "All configured velocity/acceleration, pose gap/travel, image age/grace, singularity and hardware checks remain enforced.",
+    "terminal_cases": [
+      "Operator Stop/close, process exit, missed control deadline, stale/invalid encoder state.",
+      "Unknown controller/transport error, failed stop confirmation, actual measured overspeed or alignment FK mismatch.",
+      "Initial alignment fixed leader movement and other unclassified failures."
+    ],
+    "log_changes": "motion_stopped/recovery_stationary events; analyzer reports recoverable stop count/reasons separately and excludes recovery wait from active duration/error integration while retaining total wall completion time.",
+    "limitations": [
+      "Stops and explicit re-Arm are still necessary; this does not keep moving on expired or rejected calibration.",
+      "This change does not correct EMPnP branch changes or prove calibration accuracy.",
+      "No physical camera, robot connection, motion or native stopping response was exercised."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 799,
+        "passed": 796,
+        "skipped_cuda": 3,
+        "seconds": 150.105
+      },
+      "final_follow_recovery_suite": {
+        "tests": 12,
+        "passed": 12,
+        "seconds": 0.42,
+        "note": "Includes an additional initial-alignment recovery test added after full-suite discovery; the earlier eleven overlap the full suite."
+      },
+      "checks": [
+        "Recorded last five accepted plus four rejected packets reproduce expiry without silently updating accepted age.",
+        "Hold/follow stop-before-reset, fresh RTDE standstill, five post-stop images and explicit late Arm lifecycle.",
+        "In-flight old images, queued/late/ready-edge Arm and renewed robot movement cannot restart motion.",
+        "Re-arm alignment uses retained progress .37 and original travel origin with a new plan.",
+        "Predicted alignment planning refusal recovers; actual overspeed/invalid state and failed stop remain terminal.",
+        "Analyzer preserves recovery stops across normal exit and excludes recovery wait from active intervals.",
+        "Installed SDK method docstrings verify speedStop bool and stopScript void without opening an interface.",
+        "Launcher --help and whitespace checks."
+      ],
+      "checksums": {
+        "manifest_files": 129,
+        "sha256_entries": 130
+      }
+    }
+  },
+  "rtde_fault_diagnostics": {
+    "date": "2026-10-19",
+    "observed_run": "runs/20261019T082849Z-separated-b5566bbe.jsonl",
+    "user_reported_pendant_error": "C207A0; no other Fieldbus, gripper or force sensor in use",
+    "evidence": {
+      "successful_tracking_commands": 664,
+      "tracking_duration_s": 26.815,
+      "accepted_tracking_measurements": 375,
+      "rejected_tracking_measurements": 0,
+      "maximum_successful_command_interval_s": 0.090004,
+      "watchdog_hz": 5.0,
+      "interpretation": "Fieldbus input supervision stopped the robot program; application watchdog is likely, but old log cannot prove a 200 ms robot-side input gap. Outer fault timestamp includes cleanup."
+    },
+    "changes": [
+      "Separate disconnected control connection from stopped robot program.",
+      "Timestamp existing offset/safety/freshness/velocity calls without adding controller commands.",
+      "Record latest successful speedL/speedJ return per commanded arm and age at failure.",
+      "Capture cached control and receive status plus detected_at before cleanup; preserve original fault.",
+      "Log proposal preparation time and transport timing for alignment and following.",
+      "Print retained transport status after shutdown without reading stopped interfaces again."
+    ],
+    "unchanged": "Motion command order/arguments, limits, watchdog, recovery classification and explicit restart policy.",
+    "limitations": [
+      "SDK successful return is a host timestamp, not evidence of robot-side packet receipt.",
+      "Separate control/receive caches may disagree during state changes.",
+      "Diagnosis does not yet establish or repair the underlying communication gap.",
+      "No physical robot motion or fault reproduction was performed."
+    ],
+    "source": "https://www.universal-robots.com/manuals/EN/HTML/SW10_7/Content/prod-err-codes/topics/CODE_207.html",
+    "validation": {
+      "tests": 820,
+      "passed": 817,
+      "skipped_cuda": 3,
+      "seconds": 150.739,
+      "help_and_diff_check": "passed"
+    }
+  },
+  "follower_tcp_speed": {
+    "date": "2026-10-20",
+    "request": "Latest user clarification asks for robot specification TCP speed; explicit 500 mm/s remains selectable.",
+    "default_follow_max_speed_m_s": 1.0,
+    "source": "https://www.universal-robots.com/media/1802778/ur5e-32528_ur_technical_details_.pdf",
+    "source_scope": "UR5e typical TCP speed approximately 1 m/s, not a guaranteed maximum at every pose.",
+    "configuration": {
+      "option": "--follow_max_speed",
+      "units": "m/s",
+      "explicit_500_mm_s": "--follow_max_speed 0.5",
+      "precedence": "Explicit follow_max_speed, then explicit max_speed, then follow default 1.0.",
+      "legacy_namespace": "Missing or None follow_max_speed inherits max_speed."
+    },
+    "unchanged": {
+      "hold_and_initial_alignment_linear_limit_m_s": 0.02,
+      "linear_acceleration_m_s2": 0.1,
+      "angular_speed_rad_s": 0.1,
+      "joint_speed_rad_s": 0.2,
+      "feedback_linear_speed_m_s": 0.01,
+      "motion_authorization": "Existing --execute plus explicit Arm; no motion automatically starts."
+    },
+    "limitations": [
+      "TCP limit is an upper bound; acceleration, joint/angular limits, feedback limits and pendant scaling still constrain actual speed.",
+      "No physical robot connection or motion was exercised."
+    ],
+    "validation": {
+      "full_suite": {
+        "tests": 832,
+        "passed": 829,
+        "skipped_cuda": 3,
+        "seconds": 151.875
+      },
+      "follow_speed_tests": {
+        "tests": 12,
+        "passed": 12,
+        "checks": "Includes explicit 0.5 and 1.0 m/s cap/overspeed/future-Jacobian cases; original acceleration and alignment limits."
+      },
+      "checksums": {
+        "manifest_files": 133,
+        "sha256_entries": 134
+      }
+    }
+  },
+  "recovery_position_window": {
+    "date": "2026-10-20",
+    "observed_run": "runs/20261020T120103Z-separated-ec6adf19.jsonl",
+    "evidence": {
+      "recovery_stationary_resets": 65,
+      "recovery_duration_s": 61.700913496,
+      "stored_wait_states": 58,
+      "reported_tcp_and_joint_velocities": "all zero in these stored WAIT states",
+      "maximum_pairwise_tcp_position_change_m": 8.1458789537e-05,
+      "accepted_recovery_measurements": 386,
+      "rejected_recovery_measurements": 0
+    },
+    "change": "Replace per-tick TCP translation difference check with a rolling stationary-duration window retaining a boundary sample to detect sustained drift and within-window excursions.",
+    "default_position_window_s": 0.2,
+    "linear_stationary_tolerance_m_s": 0.001,
+    "unchanged": [
+      "Immediate reported TCP/joint velocity and joint/angular difference checks.",
+      "Advancing/fresh robot timestamps and stop confirmation dwell.",
+      "New post-stop stable calibration and a new explicit Arm.",
+      "Active motion speed/acceleration limits, initial-alignment controller and recovery classification."
+    ],
+    "validation": {
+      "targeted_tests": 52,
+      "passed": 52,
+      "seconds": 2.737,
+      "checks": [
+        "Observed stationary pose noise at 40 ms does not revoke readiness.",
+        "Position step, net-zero excursions and sustained drift still revoke/block readiness.",
+        "Reported nonzero motion immediately revokes readiness.",
+        "Follow runtime retains its new calibration cluster without automatic restart.",
+        "Existing hold/follow recovery, stale state, failed stop and explicit new Arm tests."
+      ]
+    },
+    "limitations": [
+      "WAIT snapshots are sparse; cycling them at 40 ms is a noise stress test, not full-rate replay.",
+      "No physical robot connection or motion was performed.",
+      "The initial alignment acceleration failure preceding recovery is separate and unchanged."
+    ]
+  },
+  "control_empnp_options": {
+    "date": "2026-10-21",
+    "changes": [
+      "Add --empnp_use_prev and mutually exclusive --no_empnp_use_prev to shared control CLI.",
+      "Add --ur5e_empnp_lambda and --ur10e_empnp_lambda; finite range [0,1].",
+      "Forward settings into each vision worker RobotEstimator; print applied ON/OFF, lambda and iterations.",
+      "Shared CLI settings are included in existing follow JSONL metadata."
+    ],
+    "defaults": {
+      "empnp_use_prev": false,
+      "ur5e_empnp_lambda": 0.5,
+      "ur10e_empnp_lambda": 0.2,
+      "empnp_max_iter": 50
+    },
+    "weak_prior_example": "--empnp_use_prev --ur5e_empnp_lambda 0.005 --ur10e_empnp_lambda 0.005",
+    "preserved": "The control vision file was already configured with empnp_use_prev=False before this edit; that default and old namespace fallback remain OFF. The standalone inference defaults, EMPnP equations, motion limits and calibration acceptance are unchanged.",
+    "validation": {
+      "targeted_tests": 109,
+      "passed": 109,
+      "seconds": 0.299,
+      "new_option_tests": 7,
+      "launcher_help": [
+        "run_dual_control.sh",
+        "run_cooperative.sh"
+      ],
+      "suggested_execution_command": "Parsed offline and checked both estimator option namespaces.",
+      "hardware": "No robot/camera connection or motion."
+    }
+  },
+  "calibration_relaxation": {
+    "date": "2026-10-21",
+    "defaults": {
+      "max_calibration_jump_m": 0.05,
+      "max_calibration_jump_deg": 5.0,
+      "handoff_max_shift_m": 0.15,
+      "handoff_max_shift_deg": 15.0,
+      "handoff_timeout": 15.0,
+      "max_target_m": 0.2
+    },
+    "changes": [
+      "Separate post-alignment nominal flange target shift allowance from the unchanged 5 cm / 10 degree task tolerance.",
+      "While the aligned robot is held at checked zero joint velocity, temporary sensor/planning validation faults wait for a new accepted frame instead of immediately restarting recovery.",
+      "Retries share a fixed handoff timeout; rejected/duplicate frames cannot authorize a retry. Failed follow trial baselines are restored.",
+      "Keep 5-frame acquisition, freshness, observed base-speed checks, robot speed/acceleration/travel/clearance checks, and explicit re-Arm after timeout.",
+      "Report configured acceptance limits at startup and record the pending handoff reason in follow alignment logs."
+    ],
+    "validation": {
+      "targeted_tests": 352,
+      "passed": 352,
+      "seconds": 19.762,
+      "new_test_methods": 9,
+      "recorded_case": "121.400977 mm handoff shift passes the new shift bound; its initial compensation-acceleration infeasibility remains rejected and is handled as a stationary wait.",
+      "runtime_cases": "Mocked hold/follow can acquire fresh data after 5 seconds and resume validation on fresh frames without another Arm or alignment; timeout and actual encoder/hardware faults retain their stop behavior.",
+      "launcher_help": [
+        "run_dual_control.sh",
+        "run_cooperative.sh"
+      ],
+      "hardware": "No robot or camera connection; no physical motion verification."
+    }
+  },
+  "alignment_leader_rest_limits": {
+    "date": "2026-10-21",
+    "observed_run": "runs/20261021T074706Z-separated-fac76815.jsonl",
+    "observed_leader_linear_speed_m_s": 0.0021588281246994996,
+    "defaults": {
+      "align_leader_max_speed": 0.01,
+      "align_leader_max_angular_speed": 0.05,
+      "align_leader_max_joint_speed": 0.025
+    },
+    "scope": "Follow-mode uncommanded leader rest detection in readiness/preflight, initial alignment, and post-alignment stationary calibration handoff. Both leader choices supported.",
+    "preserved": "Follower and hold-arm rest thresholds 0.002 m/s, 0.01 rad/s, 0.005 rad/s; leader displacement checks 3 mm / 0.5 degrees / 0.01 rad; shared measured motion limits, commanded velocities/accelerations, calibration gates and explicit Arm. Saved namespaces without the options use previous thresholds.",
+    "diagnostics": "Startup logs print role-specific limits; fixed-leader speed failures report actual and configured linear/angular/joint speeds.",
+    "validation": {
+      "targeted_existing_tests": 110,
+      "new_tests": 7,
+      "passed_total": 117,
+      "recorded_sample": "Recorded 2.158828 mm/s sample passes actual zero-speedJ proposal and handoff snapshot validation; restoring the 2 mm/s leader threshold reproduces the original failure.",
+      "launcher_help": "run_dual_control.sh --help includes all three leader options.",
+      "hardware": "No robot/camera connection or physical motion test."
+    }
+  },
+  "stationary_calibration_acquisition": {
+    "date": "2026-10-21",
+    "observed_run": "runs/20261021T075444Z-separated-02a49058.jsonl",
+    "observed_failure": "Alignment reached its measured endpoint; no tracking command was sent before post-alignment acquisition expired at 15s. Noisy PnP differences repeatedly failed base-speed checks and reset consecutive stability.",
+    "defaults": {
+      "calibration_acquisition": "consensus",
+      "window_s": 1.0,
+      "minimum_frames": 5,
+      "minimum_fraction": 0.6,
+      "handoff_wait": "hold",
+      "handoff_timeout_s": 15.0
+    },
+    "scope": "Unarmed initial-alignment preview and stationary post-alignment handoff in hold/follow. Pairwise consistency checks include each camera base and the relative base. Once tracking begins, the existing live estimator, velocity gates and mandatory base compensation checks apply.",
+    "behavior": [
+      "Recent agreeing images survive isolated rejects; selected capture time belongs to an actual inlier, never the newest rejected sample.",
+      "Predict/separated estimator starts from the consensus mean with zero base velocity. Raw history remains the newest actual inlier to avoid a false centroid-to-image velocity on the first live update. Direct mode retains raw-pose semantics.",
+      "Default post-alignment wait retains completed alignment and checked zero commands beyond the 15s notice. Fresh acquisition, target shift and first-command validation must all pass before following. Explicit --handoff_wait stop preserves the former timeout behavior.",
+      "No automatic restart after an actual motion stop. Encoder freshness, robot drift, watchdog, speed/acceleration, clearance and operator-stop checks remain active."
+    ],
+    "validation": {
+      "targeted_regression_tests": 313,
+      "additional_boundary_tests": 2,
+      "package_layout_tests": 6,
+      "unique_tests_passed": 321,
+      "recorded_preview": "Preflight readiness at the recorded initial robot pose: 398/857 sampled ticks versus 92/857 with consecutive acquisition; first eligible time 0.601s after the first logged image.",
+      "recorded_handoff": "New consensus plus real first-command preparation passes at 1.296s after the recorded alignment endpoint; original run expired at 15s without following.",
+      "runtime_tests": "Mock hold/follow transports retain checked zero commands beyond acquisition timeout then transition once on fresh valid calibration without another alignment.",
+      "launcher_help": "run_dual_control.sh --help lists calibration_acquisition and handoff_wait.",
+      "hardware": "No robot or camera connection; no physical motion validation."
+    }
+  },
+  "current_implementation_document": {
+    "date": "2026-10-22",
+    "path": "docs/CURRENT_IMPLEMENTATION.md",
+    "language": "ko",
+    "scope": "Current working-tree behavior only; no implementation chronology. Covers perception, coordinate frames, stationary acquisition, initial alignment and handoff, live hold/follow, constraints, runnable commands, GUI, simulation, logs and module locations.",
+    "verification": {
+      "control_defaults": "Read from production parse_args for hold and follow.",
+      "shell_examples": "14 bash blocks checked with bash -n; 7 dual inference/control/simulation invocations parsed without hardware connection.",
+      "links": "Local file/directory links and document heading anchors checked.",
+      "code_changes": false
     }
   }
 }

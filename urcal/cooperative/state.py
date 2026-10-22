@@ -19,7 +19,7 @@ never clipped into apparently valid measurements.
 """
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from numbers import Integral
 
 import numpy as np
@@ -224,6 +224,23 @@ class RelativeStateEstimator:
             if candidate is not None:
                 self._history[name].append(candidate)
         return any(value is not None for value in candidates.values())
+
+    def initialize_stationary_pair(self, raw_poses, filtered_poses, captured_at, received_at, sequence):
+        """Initialize a fresh filter from a checked stationary consensus.
+
+        Retain the newest actual image as raw history so the first live update
+        does not differentiate a centroid-to-image discrepancy as base motion.
+        Direct mode still uses the raw observation; predict mode starts at the
+        consensus estimate. Neither path gives old images a new capture time.
+        """
+        if any(self._history[name] for name in self.robots):
+            raise RelativeStateError("stationary initialization requires an empty estimator")
+        if not isinstance(filtered_poses, dict) or set(filtered_poses) != set(self.robots):
+            raise RelativeStateError("stationary estimate must contain exactly both robots")
+        filtered = {name: _pose(filtered_poses[name]) for name in self.robots}
+        self.update_pair(raw_poses, captured_at, received_at, sequence)
+        for name in self.robots:
+            self._history[name][-1] = replace(self._history[name][-1], filtered=filtered[name])
 
     def _historical(self, robot, at):
         history = self._history[robot]

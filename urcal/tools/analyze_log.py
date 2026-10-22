@@ -19,10 +19,15 @@ clock offset, or assume the pose estimator itself is an independent reference.
 
 Error statistics cover ALL active control records, including maintenance after
 completion. Interval times assume the left sample's values hold until the next
-control sample. Time after the final sample is unknown and excluded. Slowdown
+control sample. A motion_stopped event explicitly ends the active interval;
+recovery waiting is excluded until the next active control sample. Otherwise
+time after the final sample is unknown and excluded. Slowdown
 and mean task scale cover only unfinished non-hold path intervals; active holds
 and post-phase maintenance have separate durations. Path-phase and estimated
-endpoint completion times are both wall time from the first active sample.
+endpoint completion times are both wall time from the first active sample,
+including any recovery waits; active_time_until_completion_s excludes them.
+Recoverable motion stops are reported separately from terminal faults, even
+when the program later ends normally by operator request.
 For older records without path_finished, progress>=1 implies phase completion;
 an absent path name is treated as non-hold. An explicit finished flag is still
 required for endpoint completion, but older logs may not specify its criterion.
@@ -120,6 +125,21 @@ def summarize_log(path, reference_path=None, reference_tolerance=.03):
         for key in ("finished", "task_finished", "path_finished"):
             if key in record and not isinstance(record[key], bool):
                 raise ValueError(f"{key} must be boolean")
+    recoverable_stops = []
+    intervals = []
+    for record in records:
+        kind = record.get("kind")
+        if kind == "control":
+            intervals.append(record)
+        elif kind == "motion_stopped":
+            at = _number(record.get("at"), "motion_stopped at")
+            recoverable_stops.append({"at": at,
+                                      "category": record.get("category", "unspecified"),
+                                      "message": record.get("reason", record.get("message", ""))})
+            # This is a timing boundary, not a fabricated control/error sample.
+            intervals.append({"at": at, "active": False})
+    if any(right["at"] < left["at"] for left, right in zip(intervals, intervals[1:])):
+        raise ValueError("control/stop timestamps must not move backwards")
     active = [record for record in controls if record["active"]]
     progress = [record["progress"] for record in active if "progress" in record]
     completed = next((record for record in active
@@ -133,7 +153,7 @@ def summarize_log(path, reference_path=None, reference_tolerance=.03):
     scale_time = 0.
     slowdown_time = 0.
     integrated_scale = 0.
-    for left, right in zip(controls, controls[1:]):
+    for left, right in zip(intervals, intervals[1:]):
         if not left["active"]:
             continue
         duration = right["at"] - left["at"]
@@ -243,6 +263,8 @@ def summarize_log(path, reference_path=None, reference_tolerance=.03):
         "estimated_relative_error": _error_summary(positions, angles),
         "independent_real_error": independent,
         "faults": faults,
+        "recoverable_motion_stop_count": len(recoverable_stops),
+        "recoverable_motion_stops": recoverable_stops,
     }
 
 

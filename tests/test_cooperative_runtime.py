@@ -18,6 +18,8 @@ sys.path.insert(0, str(BUNDLE))
 import urcal.cooperative.runtime as runtime
 import urcal.control.runtime as control_dual
 from urcal.cooperative.controller import ResearchFault
+from urcal.cooperative.task import RelativePath
+from urcal.control.geometry import facing_follower
 from urcal.control.policy import CalibrationFrame, ControlFault
 
 
@@ -58,13 +60,15 @@ class Event:
 
 
 class Reader:
-    def __init__(self):
+    def __init__(self, frozen=False):
         self.last_advance = 10.
+        self.frozen = frozen
 
     def read(self, now):
-        self.last_advance = now
+        if not self.frozen:
+            self.last_advance = now
         return SimpleNamespace(tcp=np.eye(4), joints=np.zeros(6), speed=np.zeros(6),
-                               joint_velocity=np.zeros(6), robot_timestamp=50. + now)
+                               joint_velocity=np.zeros(6), robot_timestamp=60. if self.frozen else 50. + now)
 
 
 def config(execute=False):
@@ -72,13 +76,22 @@ def config(execute=False):
                  "--ur5e_tcp_offset", *(["0"] * 6), "--ur10e_tcp_offset", *(["0"] * 6)]
     if execute:
         arguments.append("--execute")
-    return control_dual.parse_args(arguments)
+    # These lifecycle fixtures intentionally exercise the original exact task
+    # contract; approximate task behavior has separate integration coverage.
+    return control_dual.parse_args(arguments + ["--target_tolerance_m", "0", "--target_tolerance_deg", "0",
+                                               "--handoff_max_shift_m", "0", "--handoff_max_shift_deg", "0",
+                                               "--handoff_timeout", "5", "--max_target_m", ".1",
+                                               "--calibration_acquisition", "consecutive", "--handoff_wait", "stop",
+                                               "--max_calibration_jump_m", ".015", "--max_calibration_jump_deg", "2",
+                                               "--fault_response", "exit"])
 
 
 class ResearchRuntimeTests(unittest.TestCase):
     def mocked_run(self, *, execute=False, initial_commands=("arm",), later_commands=None,
                    send_hook=None, state_error=None, prepare_error=None, expected=None,
-                   stop_after=2, step=.04, packet=None, logger_error_kind=None):
+                   stop_after=2, step=.04, packet=None, logger_error_kind=None, frozen_joints=False,
+                   later_packets=None, reacquire_on_packet=False, ingest_accepted=True,
+                   cleanup_delay=0.):
         args, clock, order, records = config(execute), Clock(), [], []
         queues = [LocalQueue(maxsize=n) for n in (1, 8, 1, 1)]
         frames, commands, statuses, gui_statuses = queues
@@ -88,6 +101,8 @@ class ResearchRuntimeTests(unittest.TestCase):
             frames.put_nowait(packet)
 
         def later(wait_count):
+            if wait_count in (later_packets or {}):
+                frames.put_nowait(later_packets[wait_count])
             for command in (later_commands or {}).get(wait_count, ()):
                 commands.put_nowait(command)
 
@@ -102,8 +117,11 @@ class ResearchRuntimeTests(unittest.TestCase):
 
         engine = Mock(leader="ur10e", follower="ur5e", commanded=("ur5e",),
                       offsets={name: np.eye(4) for name in runtime.ROBOTS},
-                      path=SimpleNamespace(kind="line"), progress=0., task_paused=False,
-                      last_rejection="")
+                      path=RelativePath(facing_follower(np.eye(4), .3), kind="line"),
+                      gap=.3, progress=0., task_paused=False, invalid_since=None, last_rejection="",
+                      preview_recovery=Mock(count=0), reacquisition_count=0)
+        engine.gate.last_rejection = ""
+        engine.gate.last_capture = 9.9
         preparations = []
 
         def prepare(now, states, dt, active=False):
@@ -118,6 +136,7 @@ class ResearchRuntimeTests(unittest.TestCase):
                 twists={"ur5e": np.full(6, .001)}, next_progress=next_progress,
                 decision=SimpleNamespace(task_scale=0. if engine.task_paused else 1.),
                 record={"kind": "control", "at": now,
+                        "bases": {name: np.eye(4) for name in runtime.ROBOTS},
                         "measurement_age": {name: now - 9.9 for name in runtime.ROBOTS}},
             )
 
@@ -126,8 +145,19 @@ class ResearchRuntimeTests(unittest.TestCase):
             engine.progress = proposal.next_progress
 
         engine.prepare.side_effect, engine.commit.side_effect = prepare, commit
-        engine.ingest.return_value = True
+        engine.ingest.return_value = ingest_accepted
+        if not ingest_accepted and packet is not None:
+            engine.last_rejection = packet.reason
+        if reacquire_on_packet:
+            def ingest(frame, at, *, allow_reacquire=False):
+                self.assertTrue(allow_reacquire)
+                engine.reacquisition_count += 1
+                return True
+            engine.ingest.side_effect = ingest
         engine.state.side_effect = state_error
+        engine.state.return_value = SimpleNamespace(
+            base_poses={name: np.eye(4) for name in runtime.ROBOTS},
+            measurement_age={name: .1 for name in runtime.ROBOTS})
 
         session = Mock()
         sent = []
@@ -142,13 +172,31 @@ class ResearchRuntimeTests(unittest.TestCase):
             sent.append(deepcopy(twists))
 
         session.send.side_effect = send
-        session.close.side_effect = lambda: order.append("motion_close")
+        def close_motion():
+            order.append("motion_close")
+            clock.now += cleanup_delay
+
+        session.close.side_effect = close_motion
         motion_factory = Mock(return_value=session)
         receivers = [Mock(), Mock()]
         for index, receiver in enumerate(receivers):
-            receiver.disconnect.side_effect = lambda i=index: order.append("receiver_close_" + str(i))
+            receiver.isConnected.return_value = True
+            receiver.getRobotMode.return_value = 7
+            receiver.getSafetyMode.return_value = 1
+            receiver.getRuntimeState.return_value = 2
+            receiver.getTimestamp.return_value = 60.
+
+            def disconnect(i=index, received=receiver):
+                order.append("receiver_close_" + str(i))
+                received.isConnected.return_value = False
+                received.getRuntimeState.return_value = 0
+
+            receiver.disconnect.side_effect = disconnect
         receive_factory = Mock(side_effect=receivers)
-        reader_factory = Mock(side_effect=[Reader(), Reader()])
+        fake_readers = [Reader(frozen_joints), Reader(frozen_joints)]
+        for reader, receiver in zip(fake_readers, receivers):
+            reader.receiver = receiver
+        reader_factory = Mock(side_effect=fake_readers)
         logger = Mock()
 
         def log(record):
@@ -242,6 +290,21 @@ class ResearchRuntimeTests(unittest.TestCase):
         result.engine.commit.assert_not_called()
         self.assertEqual(result.sent, [])
 
+    def test_fault_retains_pre_cleanup_time_and_receive_status(self):
+        def fail(clock, event):
+            raise ControlFault("ur5e: control program stopped")
+
+        result = self.mocked_run(execute=True, send_hook=fail, expected=ControlFault,
+                                 cleanup_delay=1.7)
+        fault = next(record for record in result.records if record["kind"] == "fault")
+        self.assertAlmostEqual(fault["at"] - fault["details"]["detected_at"], 1.7)
+        for status in fault["details"]["receive_status"].values():
+            self.assertTrue(status["connected"])
+            self.assertEqual(status["runtime_state"], 2)
+            self.assertEqual(status["safety_mode"], 1)
+            self.assertEqual(status["at"], fault["details"]["detected_at"])
+        result.engine.commit.assert_not_called()
+
     def test_calibration_expiring_during_preflight_keeps_its_fault_category(self):
         fault = ResearchFault("measurement_expired", "prediction expired during preflight")
         result = self.mocked_run(execute=True, state_error=fault, expected=ResearchFault)
@@ -286,13 +349,68 @@ class ResearchRuntimeTests(unittest.TestCase):
                                   {name: .4 for name in runtime.ROBOTS},
                                   {name: 7 for name in runtime.ROBOTS})
         result = self.mocked_run(packet=packet, initial_commands=(), stop_after=1)
-        result.engine.ingest.assert_called_once_with(packet, 10.)
+        result.engine.ingest.assert_called_once_with(packet, 10., allow_reacquire=True)
         record = [r for r in result.records if r["kind"] == "measurement"][0]
         self.assertEqual(record["captured_at"], 9.8)
         self.assertEqual(record["received_at"], 10.)
         self.assertEqual(record["sequence"], 9)
         self.assertEqual(record["poses_camera_model"]["ur5e"], np.eye(4).tolist())
+        self.assertIsNone(record["pose_diagnostics"])
 
+    def test_measurement_logs_pose_inputs_for_success_and_failure_without_aliases(self):
+        for accepted in (True, False):
+            with self.subTest(accepted=accepted):
+                points = np.arange(14., dtype=float).reshape(7, 2)
+                points[2] = np.nan
+                diagnostics = {"schema": "urcal.pnp-initialization.v1", "K": np.eye(3),
+                               "robots": {"ur5e": {"detected_px": points,
+                                                    "empnp_ok": np.bool_(accepted)}}}
+                reason = "" if accepted else "ur5e: EMPnP failed"
+                packet = CalibrationFrame(9, 9.8, {}, {}, {}, {"ur5e": 7, "ur10e": 7},
+                                          reason, diagnostics)
+                result = self.mocked_run(packet=packet, initial_commands=(), stop_after=1,
+                                         ingest_accepted=accepted)
+                record = next(r for r in result.records if r["kind"] == "measurement")
+                self.assertEqual(record["accepted"], accepted)
+                self.assertEqual(record["rejection"], reason)
+                self.assertEqual(record["captured_at"], 9.8)
+                self.assertEqual(record["received_at"], 10.)
+                saved = record["pose_diagnostics"]["robots"]["ur5e"]
+                self.assertEqual(saved["empnp_ok"], accepted)
+                self.assertEqual(saved["detected_px"][2], [None, None])
+                points[:] = -1
+                diagnostics["K"][:] = 0
+                self.assertEqual(saved["detected_px"][0], [0., 1.])
+                self.assertEqual(record["pose_diagnostics"]["K"], np.eye(3).tolist())
+
+    def test_reacquisition_is_enabled_in_preview_but_disabled_after_explicit_arm(self):
+        def frame(sequence, at):
+            return CalibrationFrame(sequence, at, {name: np.eye(4) for name in runtime.ROBOTS},
+                                    {name: 1. for name in runtime.ROBOTS},
+                                    {name: 2. for name in runtime.ROBOTS},
+                                    {name: 7 for name in runtime.ROBOTS})
+
+        first, active = frame(1, 9.99), frame(2, 10.04)
+        result = self.mocked_run(execute=True, packet=first, later_packets={1: active}, stop_after=2)
+        calls = result.engine.ingest.call_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0].args, (first, 10.))
+        self.assertTrue(calls[0].kwargs["allow_reacquire"])
+        self.assertFalse(calls[1].kwargs["allow_reacquire"])
+        result.motion_factory.assert_called_once()
+
+    def test_new_preview_baseline_cancels_queued_arm_until_another_explicit_arm(self):
+        frame = CalibrationFrame(1, 10., {name: np.eye(4) for name in runtime.ROBOTS},
+                                 {name: 1. for name in runtime.ROBOTS},
+                                 {name: 2. for name in runtime.ROBOTS},
+                                 {name: 7 for name in runtime.ROBOTS})
+        for arm_again in (False, True):
+            with self.subTest(arm_again=arm_again):
+                result = self.mocked_run(execute=True, packet=frame, reacquire_on_packet=True,
+                                         later_commands={1: ["arm"]} if arm_again else {}, stop_after=3)
+                self.assertEqual(result.engine.reacquisition_count, 1)
+                self.assertEqual(result.motion_factory.call_count, int(arm_again))
+                self.assertEqual(len(result.sent), int(arm_again))
     def test_log_failure_before_send_blocks_unlogged_command(self):
         result = self.mocked_run(execute=True, logger_error_kind="command_proposal", expected=OSError)
         result.session.send.assert_not_called()
@@ -314,6 +432,68 @@ class ResearchRuntimeTests(unittest.TestCase):
         self.assertFalse(status["active"])
         self.assertEqual(status["fault_category"], "measurement_unavailable")
         result.motion_factory.assert_not_called()
+
+    def test_gui_scene_survives_rejected_ik_without_relaxing_readiness(self):
+        result = self.mocked_run(prepare_error=ResearchFault("reachability_infeasible", "no local IK"),
+                                 stop_after=1)
+        vision = runtime.take_latest(result.statuses)
+        gui = runtime.take_latest(result.gui_statuses)
+        self.assertNotIn("scene", vision)
+        self.assertFalse(gui["ready"])
+        self.assertEqual(gui["fault_category"], "reachability_infeasible")
+        scene = gui["scene"]
+        self.assertEqual(scene["at"], 10.)
+        self.assertEqual(set(scene["robots"]), set(runtime.ROBOTS))
+        np.testing.assert_allclose(scene["goals"]["ur5e"], facing_follower(np.eye(4), .3))
+        self.assertEqual(scene["measurement_age"], {name: .1 for name in runtime.ROBOTS})
+        self.assertEqual(scene["task"]["leader"], "ur10e")
+        self.assertEqual(scene["task"]["kind"], "line")
+        self.assertEqual(scene["task"]["progress"], 0.)
+        result.motion_factory.assert_not_called()
+        result.engine.commit.assert_not_called()
+
+    def test_gui_scene_is_omitted_if_calibration_state_is_unavailable(self):
+        result = self.mocked_run(prepare_error=ResearchFault("measurement_expired", "stale"),
+                                 state_error=ResearchFault("measurement_expired", "stale"), stop_after=1)
+        self.assertIsNone(runtime.take_latest(result.gui_statuses)["scene"])
+        result.motion_factory.assert_not_called()
+
+    def test_initial_accepted_pair_can_be_shown_without_bypassing_stability_or_age(self):
+        from test_cooperative_controller import accept, packet, scene
+
+        engine, bases, states = scene(stable_frames=5)
+        accept(engine, bases, at=10.)
+        readers = {name: Reader() for name in runtime.ROBOTS}
+        displayed = runtime.cooperative_gui_scene(10., engine, states, readers, {}, .15)
+        self.assertIsNotNone(displayed)
+        self.assertFalse(displayed["calibration_valid"])
+        self.assertIn("not stable", displayed["reason"])
+        self.assertEqual(displayed["measurement_age"], {name: 0. for name in runtime.ROBOTS})
+        self.assertFalse(engine.gate.ready)
+        self.assertEqual(engine.gate.stable_count, 1)
+        self.assertEqual(engine.progress, 0.)
+        for reader in readers.values():
+            reader.last_advance = 10.51
+        self.assertIsNone(runtime.cooperative_gui_scene(10.51, engine, states, readers, {}, .15))
+
+        engine, bases, states = scene(stable_frames=5)
+        accept(engine, bases, at=10.)
+        self.assertFalse(engine.ingest(packet(engine, bases, at=10.01, sequence=2, reason="invalid image"), 10.02))
+        for reader in readers.values():
+            reader.last_advance = 10.03
+        self.assertIsNone(runtime.cooperative_gui_scene(10.03, engine, states, readers, {}, .15))
+
+    def test_gui_scene_does_not_refresh_frozen_encoder_timestamps(self):
+        result = self.mocked_run(initial_commands=(), frozen_joints=True, stop_after=2)
+        self.assertIsNone(runtime.take_latest(result.gui_statuses)["scene"])
+        self.assertNotIn("scene", runtime.take_latest(result.statuses))
+
+    def test_successful_scene_preserves_measurement_age_and_copies_task_delta(self):
+        result = self.mocked_run(initial_commands=(), stop_after=1)
+        scene = runtime.take_latest(result.gui_statuses)["scene"]
+        self.assertAlmostEqual(scene["measurement_age"]["ur5e"], .1)
+        scene["task"]["delta"][:] = 999.
+        np.testing.assert_array_equal(result.engine.path.delta, np.zeros(6))
 
     def test_finite_record_preserves_rejected_measurements_without_json_nan(self):
         result = runtime.finite_record({"raw": np.array([np.nan, np.inf, -np.inf, .2]),

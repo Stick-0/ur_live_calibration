@@ -14,18 +14,26 @@ from scipy.spatial.transform import Rotation
 BUNDLE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BUNDLE))
 import urcal.control.gui as gui
-from urcal.control.geometry import pose_matrix
+from urcal.control.geometry import facing_follower, pose_matrix
 
 
 class Variable:
     def __init__(self, value=""):
         self.value = str(value)
+        self.traces = []
 
     def get(self):
         return self.value
 
     def set(self, value):
         self.value = str(value)
+        for callback in self.traces:
+            callback("variable", "", "write")
+
+    def trace_add(self, mode, callback):
+        assert mode == "write"
+        self.traces.append(callback)
+        return str(len(self.traces))
 
 
 def fake_panel(mode="hold", execute=True):
@@ -47,8 +55,14 @@ def fake_panel(mode="hold", execute=True):
     panel._seeded = False
     panel._edited = False
     panel._programmatic = False
+    panel._draft_dirty = False
+    panel._view = None
     panel.root = Mock()
     panel._tk = SimpleNamespace(TclError=type("FakeTkError", (Exception,), {}))
+    for variable in panel._position_vars + panel._angle_vars:
+        variable.trace_add("write", panel._on_center_edit)
+        variable.trace_add("write", panel._on_target_edit)
+    panel._gap.trace_add("write", panel._on_target_edit)
     return panel
 
 
@@ -66,7 +80,29 @@ def research_panel():
     panel._pause_button = Mock()
     panel._progress_message = Variable()
     panel._editable.extend([Mock() for _ in range(8)])
+    for variable in [panel._path, *panel._delta_vars, *panel._delta_rotation_vars, panel._radius, panel._duration]:
+        variable.trace_add("write", panel._on_target_edit)
     return panel
+
+
+def preview_scene():
+    return {"robots": {
+        "ur5e": {"flange_C": pose_matrix([-.3, .1, 1.4, .1, .2, .3])},
+        "ur10e": {"flange_C": pose_matrix([.3, -.1, 1.5, -.2, .3, -.4])},
+    }}
+
+
+def attach_view(panel):
+    view = SimpleNamespace(scene=preview_scene(), _draft={}, _draft_path={},
+                           set_snapshot=Mock(), refresh=Mock())
+
+    def set_draft(goals=None, path=None):
+        view._draft = {} if goals is None else goals
+        view._draft_path = {} if path is None else path
+
+    view.set_draft = Mock(side_effect=set_draft)
+    panel._view = view
+    return view
 
 
 class TargetConversionTests(unittest.TestCase):
@@ -271,15 +307,170 @@ class PanelCallbackTests(unittest.TestCase):
         panel._pause_button.configure.assert_called_with(state="normal", text="Resume task")
 
 
+class DraftPreviewTests(unittest.TestCase):
+    def test_hold_draft_matches_edited_camera_center_gap_and_orientation(self):
+        request = gui.build_target_command("hold", 40, .15, [.2, -.1, 1.3], [10, 20, 30])
+        goals, path = gui.draft_geometry(preview_scene(), request, "hold")
+        center = pose_matrix(request["center_pose"])
+        self.assertEqual(set(goals), {"ur5e", "ur10e"})
+        self.assertEqual(path, {})
+        np.testing.assert_allclose(goals["ur5e"][:3, 3], center[:3, 3] - .2 * center[:3, 2])
+        np.testing.assert_allclose(goals["ur10e"][:3, 3], center[:3, 3] + .2 * center[:3, 2])
+        np.testing.assert_allclose(goals["ur5e"][:3, :3], center[:3, :3])
+        np.testing.assert_allclose(goals["ur10e"][:3, :3], center[:3, :3] @ np.diag([1, -1, -1]))
+
+    def test_follow_hold_draft_uses_live_leader_and_explicit_role(self):
+        scene = preview_scene()
+        for leader, follower in (("ur10e", "ur5e"), ("ur5e", "ur10e")):
+            goals, path = gui.draft_geometry(scene, {"gap": .4, "path": "hold"}, "follow", leader)
+            self.assertEqual(set(goals), {follower})
+            np.testing.assert_allclose(goals[follower], facing_follower(scene["robots"][leader]["flange_C"], .4))
+            self.assertEqual(path, {})
+
+    def test_research_circle_draft_has_correct_leader_frame_radius(self):
+        scene = preview_scene()
+        request = gui.build_target_command("follow", 30, .15, path="circle", path_radius_cm=4)
+        goals, paths = gui.draft_geometry(scene, request, "follow")
+        leader = scene["robots"]["ur10e"]["flange_C"]
+        start = facing_follower(leader, .3)
+        np.testing.assert_allclose(paths["ur5e"][0], start[:3, 3])
+        np.testing.assert_allclose(paths["ur5e"][-1], start[:3, 3], atol=1e-15)
+        np.testing.assert_allclose(paths["ur5e"][24], start[:3, 3] - .08 * leader[:3, 0], atol=1e-15)
+        np.testing.assert_allclose(goals["ur5e"], start)
+
+    def test_line_endpoint_draft_shows_translation_and_rotation_vector_edit(self):
+        scene = preview_scene()
+        request = gui.build_target_command("follow", 35, .15, path="line",
+                                           path_delta_cm=[3, -4, -5], path_rotation_degrees=[20, -30, 40])
+        goals, paths = gui.draft_geometry(scene, request, "follow")
+        leader = scene["robots"]["ur10e"]["flange_C"]
+        expected_position = leader[:3, 3] + leader[:3, :3] @ [.03, -.04, .30]
+        expected_rotation = (leader[:3, :3]
+                             @ Rotation.from_rotvec(np.deg2rad([20, -30, 40])).as_matrix()
+                             @ np.diag([1., -1., -1.]))
+        np.testing.assert_allclose(goals["ur5e"][:3, 3], expected_position)
+        np.testing.assert_allclose(goals["ur5e"][:3, :3], expected_rotation, atol=1e-15)
+        np.testing.assert_allclose(paths["ur5e"][-1], expected_position)
+
+    def test_unapplied_edits_disable_arm_until_apply(self):
+        panel = fake_panel()
+        attach_view(panel)
+        panel._status["ready"] = True
+        panel._refresh_enabled()
+        panel._arm_button.configure.assert_called_with(state="normal")
+        panel._gap.set("34")
+        panel._arm_button.configure.assert_called_with(state="disabled")
+        panel._arm()
+        panel.send_command.assert_not_called()
+        panel.poll({"ready": True})
+        panel._arm_button.configure.assert_called_with(state="disabled")
+        panel._apply()
+        panel.send_command.assert_called_once()
+        self.assertEqual(panel.send_command.call_args.args[0]["type"], "target")
+        self.assertFalse(panel._draft_dirty)
+
+    def test_numeric_edits_only_update_local_draft_and_apply_submits_once(self):
+        panel = fake_panel()
+        view = attach_view(panel)
+        panel._position_vars[0].set(".4")
+        panel._angle_vars[2].set("55")
+        panel.poll()
+        self.assertTrue(panel._draft_dirty)
+        self.assertEqual(set(view._draft), {"ur5e", "ur10e"})
+        center = (view._draft["ur5e"][:3, 3] + view._draft["ur10e"][:3, 3]) / 2
+        np.testing.assert_allclose(center, [.4, -.1, 1.3])
+        expected = Rotation.from_euler("xyz", [10, 20, 55], degrees=True).as_matrix()
+        np.testing.assert_allclose(view._draft["ur5e"][:3, :3], expected)
+        panel.send_command.assert_not_called()
+        panel._apply()
+        panel.send_command.assert_called_once()
+        self.assertEqual(panel.send_command.call_args.args[0]["type"], "target")
+        self.assertFalse(panel._draft_dirty)
+        self.assertEqual(view._draft, {})
+        panel.poll()
+        panel.send_command.assert_called_once()
+
+    def test_incomplete_numeric_edit_clears_previous_draft_without_sending(self):
+        panel = fake_panel()
+        view = attach_view(panel)
+        panel._gap.set("35")
+        panel.poll()
+        self.assertTrue(view._draft)
+        panel._position_vars[2].set("")
+        panel.poll()
+        self.assertEqual(view._draft, {})
+        self.assertEqual(view._draft_path, {})
+        panel.send_command.assert_not_called()
+        panel._apply()
+        panel.send_command.assert_not_called()
+
+    def test_active_status_removes_draft_and_never_transmits_edits(self):
+        panel = fake_panel()
+        view = attach_view(panel)
+        panel._gap.set("35")
+        panel.poll()
+        self.assertTrue(view._draft)
+        panel.poll({"active": True, "scene": {"new": "snapshot"}})
+        self.assertEqual(view._draft, {})
+        view.set_snapshot.assert_called_once_with({"new": "snapshot"})
+        panel._apply()
+        panel.send_command.assert_not_called()
+
+    def test_status_does_not_overwrite_manual_fields_and_none_scene_is_forwarded(self):
+        panel = fake_panel()
+        view = attach_view(panel)
+        panel._position_vars[0].set(".9")
+        panel._angle_vars[1].set("-27")
+        panel.poll({"center_pose": [8, 9, 10, 0, 0, 0], "scene": None})
+        self.assertEqual(panel._position_vars[0].get(), ".9")
+        self.assertEqual(panel._angle_vars[1].get(), "-27")
+        self.assertFalse(panel._seeded)
+        view.set_snapshot.assert_called_once_with(None)
+        panel.send_command.assert_not_called()
+
+    def test_programmatic_initial_seed_does_not_create_unapplied_draft(self):
+        panel = fake_panel()
+        view = attach_view(panel)
+        panel.poll({"center_pose": [.2, .3, 1.4, .1, -.2, .3], "scene": {}})
+        self.assertTrue(panel._seeded)
+        self.assertFalse(panel._edited)
+        self.assertFalse(panel._draft_dirty)
+        self.assertEqual(view._draft, {})
+        panel.send_command.assert_not_called()
+
+    def test_research_path_edit_draws_locally_and_queue_failure_keeps_draft(self):
+        panel = research_panel()
+        view = attach_view(panel)
+        panel._path.set("line")
+        panel._delta_vars[0].set("7")
+        panel._delta_rotation_vars[2].set("90")
+        panel.poll()
+        self.assertEqual(view._draft_path["ur5e"].shape, (49, 3))
+        leader = view.scene["robots"]["ur10e"]["flange_C"]
+        expected_delta = leader[:3, :3] @ [.07, 0, -.05]
+        np.testing.assert_allclose(view._draft_path["ur5e"][-1] - view._draft_path["ur5e"][0], expected_delta)
+        np.testing.assert_allclose(view._draft["ur5e"][:3, :3],
+                                   leader[:3, :3] @ Rotation.from_rotvec([0, 0, np.pi/2]).as_matrix()
+                                   @ np.diag([1., -1., -1.]), atol=1e-15)
+        panel.send_command.assert_not_called()
+        panel.send_command.side_effect = RuntimeError("queue full")
+        panel._apply()
+        self.assertTrue(panel._draft_dirty)
+        self.assertTrue(view._draft)
+        self.assertIn("queue full", panel._error.get())
+
+
 class WorkerTests(unittest.TestCase):
     def test_research_panel_constructs_default_controls_without_a_display(self):
         error_type = type("FakeTkError", (Exception,), {})
         ttk = Mock()
-        fake_tk = SimpleNamespace(Tk=Mock(return_value=Mock()), TclError=error_type, ttk=ttk,
+        fake_tk = SimpleNamespace(Tk=Mock(return_value=Mock()), Canvas=Mock(), TclError=error_type, ttk=ttk,
                                   StringVar=lambda _master, value="": Variable(value))
+        fake_tk.Tk.return_value.winfo_screenwidth.return_value = 1280
+        fake_tk.Tk.return_value.winfo_screenheight.return_value = 800
         args = SimpleNamespace(mode="follow", execute=False, min_gap=.15, gap=.3, method="separated")
         send = Mock()
-        with patch.dict(sys.modules, {"tkinter": fake_tk, "tkinter.ttk": ttk}):
+        with patch.dict(sys.modules, {"tkinter": fake_tk, "tkinter.ttk": ttk}), patch.object(gui, "RobotSceneView"):
             panel = gui.TargetPanel(args, send, threading.Event())
         panel._apply()
         request = send.call_args.args[0]
@@ -288,22 +479,26 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(request["path_radius"], .02)
         self.assertEqual(request["path_duration"], 10.)
         panel._path_selector.configure.assert_called_with(state="readonly")
+        panel.root.geometry.assert_called_once_with("1240x720")
         panel.close()
 
     def test_worker_uses_latest_status_and_closes_on_stop(self):
-        commands, statuses = Queue(maxsize=4), Queue()
-        statuses.put({"message": "old"})
-        statuses.put({"message": "latest"})
-        stop = threading.Event()
-        panel = Mock()
-        panel.poll.side_effect = lambda status: stop.set()
-        with patch.object(gui, "TargetPanel", return_value=panel) as factory:
-            gui.gui_worker(SimpleNamespace(), commands, statuses, stop)
-        panel.poll.assert_called_once_with({"message": "latest"})
-        panel.close.assert_called_once_with()
-        callback = factory.call_args.args[1]
-        callback("arm")
-        self.assertEqual(commands.get_nowait(), "arm")
+        for simulation in (False, True):
+            with self.subTest(simulation=simulation):
+                commands, statuses = Queue(maxsize=4), Queue()
+                statuses.put({"message": "old"})
+                statuses.put({"message": "latest"})
+                stop = threading.Event()
+                panel = Mock()
+                panel.poll.side_effect = lambda status: stop.set()
+                with patch.object(gui, "TargetPanel", return_value=panel) as factory:
+                    gui.gui_worker(SimpleNamespace(simulate=simulation), commands, statuses, stop)
+                panel.poll.assert_called_once_with({"message": "latest"})
+                panel.close.assert_called_once_with()
+                callback = factory.call_args.args[1]
+                with patch.object(gui.time, "monotonic", return_value=12.3):
+                    callback("arm")
+                self.assertEqual(commands.get_nowait(), "arm" if simulation else ("arm", 12.3))
 
     def test_worker_full_queue_does_not_drop_existing_request(self):
         commands, statuses = Queue(maxsize=1), Queue()
