@@ -48,8 +48,10 @@ class SimulationPanelTests(unittest.TestCase):
                                set_draft=Mock(), refresh=Mock())
         send = Mock()
         with patch.dict(sys.modules, {"tkinter": tk, "tkinter.ttk": ttk}), \
-                patch.object(gui, "RobotSceneView", return_value=view):
+                patch.object(gui, "RobotSceneView", return_value=view), \
+                patch.object(gui, "PositionErrorWindow") as plot_factory:
             panel = gui.TargetPanel(args, send, threading.Event())
+        plot_factory.assert_called_once_with(root, follower="ur5e", simulation=simulate)
         self.addCleanup(panel.close)
         return panel, ttk
 
@@ -64,14 +66,17 @@ class SimulationPanelTests(unittest.TestCase):
         self.assertFalse(any("--execute is required" in text for text in labels))
         self.assertIn("SIMULATION", panel.root.title.call_args.args[0])
         self.assertFalse(panel.args.execute)
+        self.assertFalse(hasattr(panel, "_position_vars"))
+        self.assertFalse(hasattr(panel, "_angle_vars"))
+        self.assertFalse(any("fixed pair center" in text for text in labels))
 
-    def test_start_requires_ready_but_does_not_require_execute_in_both_modes(self):
-        for mode in ("hold", "follow"):
+    def test_start_requires_ready_but_does_not_require_execute(self):
+        for mode in ("follow",):
             with self.subTest(mode=mode):
                 panel, _ = self.panel(mode)
                 panel._arm()
                 panel.send_command.assert_not_called()
-                panel.poll({"ready": True, "center_pose": [0, 0, 1, 0, 0, 0]})
+                panel.poll({"ready": True, "message": "Ready"})
                 panel._arm_button.configure.assert_called_with(state="normal")
                 panel._arm()
                 panel.send_command.assert_called_once_with("arm")
@@ -176,7 +181,7 @@ class SimulationEntryPointTests(unittest.TestCase):
         self.assertIn(reason, stderr.getvalue())
 
     def test_saved_snapshot_allows_missing_robot_ips_and_never_sets_execute(self):
-        for mode in ("hold", "follow"):
+        for mode in ("follow",):
             args = runtime.parse_args(self.saved(mode))
             self.assertEqual(args.initial_state, Path("saved.json"))
             self.assertIsNone(args.ur5e_ip)
@@ -184,14 +189,17 @@ class SimulationEntryPointTests(unittest.TestCase):
             self.assertTrue(args.simulate)
             self.assertFalse(args.execute)
 
+    def test_removed_fixed_target_mode_is_rejected_before_simulation(self):
+        self.reject(self.saved("hold"), "invalid choice")
+
     def test_simulation_execute_and_non_simulation_saved_state_are_rejected(self):
-        self.reject(self.saved("hold", "--execute"), "mutually exclusive")
-        self.reject(["--mode", "hold", "--initial_state", "saved.json"], "requires --simulate")
+        self.reject(self.saved("follow", "--execute"), "mutually exclusive")
+        self.reject(["--mode", "follow", "--initial_state", "saved.json"], "requires --simulate")
 
     def test_live_capture_requires_both_robot_ips(self):
         for options in ([], ["--ur5e_ip", "192.0.2.1"], ["--ur10e_ip", "192.0.2.2"]):
-            self.reject(["--mode", "hold", "--simulate", *options], "required for live capture")
-        args = runtime.parse_args(["--mode", "hold", "--simulate", "--ur5e_ip", "192.0.2.1",
+            self.reject(["--mode", "follow", "--simulate", *options], "required for live capture")
+        args = runtime.parse_args(["--mode", "follow", "--simulate", "--ur5e_ip", "192.0.2.1",
                                    "--ur10e_ip", "192.0.2.2"])
         self.assertIsNone(args.initial_state)
         self.assertFalse(args.execute)
@@ -200,26 +208,21 @@ class SimulationEntryPointTests(unittest.TestCase):
         for motion in ("none", "leader", "bases", "both"):
             args = runtime.parse_args(self.saved("follow", "--sim_motion", motion))
             self.assertEqual(args.sim_motion, motion)
-        for motion in ("none", "bases"):
-            runtime.parse_args(self.saved("hold", "--sim_motion", motion))
-        for motion in ("leader", "both"):
-            self.reject(self.saved("hold", "--sim_motion", motion), "hold simulation commands both arms")
         self.reject(["--mode", "follow", "--sim_motion", "leader"], "requires --simulate")
 
     def test_initial_capture_timeout_rejects_nonpositive_and_nonfinite_values(self):
         for timeout in ("0", "-1", "nan", "inf"):
-            self.reject(self.saved("hold", "--sim_initial_timeout", timeout), "finite and positive")
+            self.reject(self.saved("follow", "--sim_initial_timeout", timeout), "finite and positive")
 
     def test_both_entry_points_dispatch_to_simulation_without_calling_live_runtimes(self):
         for entrypoint, argv, mode in (
-            (runtime.main, self.saved("hold"), "hold"),
             (runtime.main, self.saved("follow"), "follow"),
             (cooperative_runtime.main, ["--simulate", "--initial_state", "saved.json"], "follow"),
         ):
             with self.subTest(entrypoint=entrypoint.__module__, mode=mode):
                 simulation = SimpleNamespace(run=Mock())
                 with patch.dict(sys.modules, {"urcal.simulation.runtime": simulation}), \
-                        patch.object(runtime, "run") as live_hold, \
+                        patch.object(runtime, "run") as live_entry, \
                         patch.object(cooperative_runtime, "run") as live_follow, \
                         patch.object(runtime, "MotionSession") as motion:
                     entrypoint(argv)
@@ -227,7 +230,7 @@ class SimulationEntryPointTests(unittest.TestCase):
                 args = simulation.run.call_args.args[0]
                 self.assertEqual(args.mode, mode)
                 self.assertFalse(args.execute)
-                live_hold.assert_not_called()
+                live_entry.assert_not_called()
                 live_follow.assert_not_called()
                 motion.assert_not_called()
 

@@ -66,55 +66,20 @@ class ArmConditioningRecoveryTests(unittest.TestCase):
                     self.assertEqual(status["fault_category"], "arm_conditioning")
                     self.assertIn("ARM BLOCKED", status["message"])
 
-    def test_hold_refusal_cancels_queued_arm_and_requires_fresh_explicit_retry(self):
-        for retry in (False, True):
-            with self.subTest(retry=retry):
-                later = {1: ["arm"], 2: [("arm", 10.04)]}
-                if retry:
-                    later[3] = [("arm", 10.12)]
-                result = fixtures.HoldAlignmentRuntimeTests().run_fake(
-                    plan_error=rejected_conditioning(), plan_error_once=True,
-                    preflight_commands=("arm", "arm"), later_commands=later, stop_after=5)
-                self.assertIsNone(result.caught)
-                self.assertEqual(result.plan.call_count, 2 if retry else 1)
-                self.assertEqual(result.motion_factory.call_count, 2 if retry else 1)
-                np.testing.assert_allclose(result.factory_attempts, [10.04, 10.12] if retry else [10.04])
-                result.session.enable_watchdog.assert_not_called()
-                result.session.send.assert_not_called()
-                self.assertEqual(result.session.send_joints.call_count, int(retry))
-                self.assertEqual(result.alignment.commit.call_count, int(retry))
-                self.assertGreaterEqual(result.session.close.call_count, 1)
-                status = take_latest(result.gui_statuses)
-                if retry:
-                    self.assertNotIn("ARM BLOCKED", status["message"])
-                    self.assertLess(result.order.index("motion_close"), result.order.index("speedJ"))
-                else:
-                    self.assertTrue(status["ready"])
-                    self.assertFalse(status["active"])
-                    self.assertIn("ARM BLOCKED", status["message"])
-
-    def test_rejected_preflight_preserves_target_edits_and_stop_in_both_runtimes(self):
-        for mode in ("follow", "hold"):
-            with self.subTest(mode=mode):
-                case = (fixtures.LiveAlignmentRuntimeTests() if mode == "follow"
-                        else fixtures.HoldAlignmentRuntimeTests())
-                target = ({"type": "target", "gap": .35} if mode == "follow"
-                          else {**case.target, "gap": .35})
-                result = case.run_fake(plan_error=rejected_conditioning(), plan_error_once=True,
-                                       preflight_commands=("arm", target, "arm", "stop"), stop_after=8)
-                self.assertIsNone(result.caught)
-                result.plan.assert_called_once()
-                result.motion_factory.assert_called_once()
-                result.session.enable_watchdog.assert_not_called()
-                result.session.send.assert_not_called()
-                result.session.send_joints.assert_not_called()
-                result.alignment.commit.assert_not_called()
-                self.assertLess(result.stop.waits, 8)
-                if mode == "follow":
-                    result.engine.apply_target.assert_called_once_with(target)
-                else:
-                    self.assertEqual([call.args[0] for call in result.planner.apply_target.call_args_list],
-                                     [case.target, target])
+    def test_rejected_preflight_preserves_follow_target_edits_and_stop(self):
+        case = fixtures.LiveAlignmentRuntimeTests()
+        target = {"type": "target", "gap": .35}
+        result = case.run_fake(plan_error=rejected_conditioning(), plan_error_once=True,
+                               preflight_commands=("arm", target, "arm", "stop"), stop_after=8)
+        self.assertIsNone(result.caught)
+        result.plan.assert_called_once()
+        result.motion_factory.assert_called_once()
+        result.session.enable_watchdog.assert_not_called()
+        result.session.send.assert_not_called()
+        result.session.send_joints.assert_not_called()
+        result.alignment.commit.assert_not_called()
+        self.assertLess(result.stop.waits, 8)
+        result.engine.apply_target.assert_called_once_with(target)
 
     def test_recoverable_exception_type_during_active_follow_still_stops(self):
         result = fixtures.LiveAlignmentRuntimeTests().run_fake(send_error=rejected_conditioning())
@@ -124,18 +89,6 @@ class ArmConditioningRecoveryTests(unittest.TestCase):
         result.session.send.assert_not_called()
         self.assertNotIn("speedJ", result.order)
         self.assertIn("motion_close", result.order)
-
-    def test_recoverable_exception_type_during_active_hold_still_stops(self):
-        def fail_before_send(*_):
-            raise rejected_conditioning()
-
-        result = fixtures.HoldAlignmentRuntimeTests().run_fake(fresh_hook=fail_before_send)
-        self.assertIsInstance(result.caught, ControlFault)
-        result.alignment.commit.assert_not_called()
-        result.session.send.assert_not_called()
-        self.assertNotIn("speedJ", result.order)
-        self.assertIn("motion_close", result.order)
-
 
 if __name__ == "__main__":
     unittest.main()

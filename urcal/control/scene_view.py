@@ -28,7 +28,10 @@ def task_path(scene, task=None):
 
     leader = task["leader"]
     follower = "ur5e" if leader == "ur10e" else "ur10e"
-    path = RelativePath(facing_follower(np.eye(4), task["gap"]), kind=task["kind"],
+    start = task.get("start_pose")
+    if start is None:
+        start = facing_follower(np.eye(4), task["gap"])
+    path = RelativePath(start, kind=task["kind"],
                         delta=task["delta"], radius=task["radius"], duration=task["duration"])
     origin = scene["robots"][leader]["flange_C"]
     return {follower: np.stack([(origin @ path.pose(u))[:3, 3] for u in np.linspace(0., 1., 49)])}

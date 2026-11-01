@@ -93,7 +93,9 @@ class StationaryAcquisitionTests(unittest.TestCase):
         self.assertAlmostEqual(result.poses['ur5e'][0, 3], packet(99, 12.32, .2).poses['ur5e'][0, 3])
 
     def test_consensus_is_only_used_in_unarmed_initial_alignment(self):
-        engine = CooperativeController(options())
+        args = options()
+        args.base_motion_mode = "velocity"
+        engine = CooperativeController(args)
         for i, value in enumerate((0., .03, 0., .03, 0., .03)):
             at = 10. + .08*i
             engine.ingest(packet(i, at, value), at, allow_reacquire=True)
@@ -105,7 +107,9 @@ class StationaryAcquisitionTests(unittest.TestCase):
         self.assertIn('base linear speed', engine.last_rejection)
 
     def test_first_live_update_uses_actual_raw_observation_for_velocity(self):
-        engine = CooperativeController(options())
+        args = options()
+        args.base_motion_mode = "velocity"
+        engine = CooperativeController(args)
         for i, value in enumerate((0., .03, 0., .03, .03)):
             at = 10. + .08*i
             engine.ingest(packet(i, at, value), at, allow_reacquire=True)
@@ -148,7 +152,7 @@ class StationaryAcquisitionTests(unittest.TestCase):
                 handoff.try_validate(at, Mock(side_effect=ControlFault('robot moved during handoff')))
             self.assertFalse(handoff.ready(at+1.))
 
-    def test_hold_and_follow_keep_zero_commands_past_deadline_then_switch_once(self):
+    def test_follow_keeps_zero_commands_past_handoff_deadline_then_switches_once(self):
         original = lifecycle.config
         def new_config(execute=False):
             args = original(execute)
@@ -156,16 +160,14 @@ class StationaryAcquisitionTests(unittest.TestCase):
             args.handoff_wait = 'hold'
             args.handoff_timeout = 1.
             return args
-        for fixture in (lifecycle.LiveAlignmentRuntimeTests(), lifecycle.HoldAlignmentRuntimeTests()):
-            kwargs = dict(done_after=1, stop_after=49, calibration_events={i: 0. for i in range(40, 48)})
-            if isinstance(fixture, lifecycle.HoldAlignmentRuntimeTests):
-                kwargs['handoff_frames'] = False
-            with self.subTest(mode=type(fixture).__name__), patch.object(lifecycle, 'config', new_config):
-                result = fixture.run_fake(**kwargs)
-            self.assertIsNone(result.caught)
-            self.assertEqual(result.alignment.commit.call_count, 1)
-            self.assertGreater(result.alignment.propose_hold.call_count, 30)
-            self.assertGreater(result.session.send.call_count, 0)
+        fixture = lifecycle.LiveAlignmentRuntimeTests()
+        with patch.object(lifecycle, 'config', new_config):
+            result = fixture.run_fake(done_after=1, stop_after=49,
+                                      calibration_events={i: 0. for i in range(40, 48)})
+        self.assertIsNone(result.caught)
+        self.assertEqual(result.alignment.commit.call_count, 1)
+        self.assertGreater(result.alignment.propose_hold.call_count, 30)
+        self.assertGreater(result.session.send.call_count, 0)
 
     def test_new_cli_options_are_validated(self):
         args = options()
@@ -177,6 +179,7 @@ class StationaryAcquisitionTests(unittest.TestCase):
         data = json.loads((Path(__file__).parent/'fixtures/stationary_acquisition.json').read_text())
         args = options()
         vars(args).update(data['settings'])
+        args.ur10e_output_correction = True  # Preserve this historical recording's target/base coordinates.
         engine = CooperativeController(args)
         def frame(row):
             return CalibrationFrame(row['sequence'], row['captured_at'],

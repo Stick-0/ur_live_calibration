@@ -1,18 +1,16 @@
-"""Camera-frame target controls; Tk is loaded only when a panel is created.
+"""Follower task controls; Tk is loaded only when a panel is created.
 
 The GUI owns no hardware interface. Its process sends target/arm requests and
 uses a shared event for Stop, so stopping does not depend on a command queue.
-Euler fields use extrinsic XYZ: Rz(yaw) @ Ry(pitch) @ Rx(roll).
 """
 
 from queue import Empty, Full
 import time
-import warnings
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 
-from urcal.control.geometry import facing_follower, fixed_facing_targets, matrix_pose, pose_matrix
+from urcal.control.geometry import facing_follower
+from urcal.control.error_plot import PositionErrorWindow
 from urcal.control.scene_view import RobotSceneView, task_path
 
 
@@ -36,22 +34,12 @@ def _triple(values, label):
     return array
 
 
-def pose_to_fields(pose6):
-    """Return (XYZ metres, XYZ Euler degrees) for a UR rotation-vector pose."""
-    pose = matrix_pose(pose_matrix(pose6))
-    with warnings.catch_warnings():
-        # At gimbal lock scipy selects a valid equivalent Euler representation.
-        warnings.filterwarnings("ignore", message="Gimbal lock detected.*", category=UserWarning)
-        rpy = Rotation.from_rotvec(pose[3:]).as_euler("xyz", degrees=True)
-    return pose[:3].tolist(), rpy.tolist()
-
-
-def build_target_command(mode, gap_cm, min_gap, position=None, rpy_degrees=None, *,
+def build_target_command(mode, gap_cm, min_gap, *,
                          path=None, path_delta_cm=None, path_rotation_degrees=None,
                          path_radius_cm=2., path_duration=10.):
     """Validate UI units and return a plain, serializable target request."""
-    if mode not in ("hold", "follow"):
-        raise ValueError("mode must be hold or follow")
+    if mode != "follow":
+        raise ValueError("only follower mode is supported")
     minimum = _number(min_gap, "Minimum gap")
     if minimum <= 0:
         raise ValueError("Minimum gap must be positive")
@@ -59,15 +47,8 @@ def build_target_command(mode, gap_cm, min_gap, position=None, rpy_degrees=None,
     if gap < minimum:
         raise ValueError(f"Gap must be at least {minimum * 100:g} cm")
     command = {"type": "target", "gap": gap}
-    if mode == "hold":
-        xyz = _triple(position, "Camera X, Y, Z")
-        if xyz[2] <= 0:
-            raise ValueError("Camera Z must be greater than zero")
-        angles = _triple(rpy_degrees, "Roll, pitch, yaw (degrees)")
-        rotation = Rotation.from_euler("xyz", angles, degrees=True).as_rotvec()
-        command["center_pose"] = np.concatenate((xyz, rotation)).tolist()
     if path is not None:
-        if mode != "follow" or path not in ("hold", "line", "circle"):
+        if path not in ("hold", "line", "circle"):
             raise ValueError("Relative path must be hold, line or circle in follow mode")
         delta = _triple([0., 0., -5.] if path_delta_cm is None else path_delta_cm, "Path delta X, Y, Z (cm)") / 100.
         rotation = np.deg2rad(_triple([0., 0., 0.] if path_rotation_degrees is None else path_rotation_degrees,
@@ -102,12 +83,34 @@ def research_status_text(status):
     return text + (f"\nFault: {fault}" if fault else "")
 
 
+def gap_approach_status_text(status):
+    """Keep the commanded flange gap separate from the visual estimate."""
+    approach = status.get("gap_approach")
+    if not isinstance(approach, dict):
+        approach = {}
+
+    def number(key, scale, unit):
+        try:
+            return f"{_number(approach.get(key), key) * scale:.1f}{unit}"
+        except ValueError:
+            return "--"
+
+    state = ("waiting for coordinates (automatic continuation)" if approach.get("temporary_hold")
+             else {"idle": "not started", "running": "running", "paused": "paused (press Resume)",
+                   "complete": "target set"}.get(approach.get("state"), "not started"))
+    text = (f"Approach: {state}\n"
+            f"Commanded gap: {number('commanded_gap_m', 100., ' cm')}   "
+            f"Estimated gap: {number('estimated_gap_m', 100., ' cm')}\n"
+            f"Approach progress: {number('progress', 100., '%')}")
+    reason = approach.get("error") or approach.get("reason")
+    return text + (f"\n{reason}" if reason else "")
+
+
 def draft_geometry(scene, request, mode, leader="ur10e"):
     """Preview form values in camera coordinates without sending any command."""
     robots = scene["robots"]
-    if mode == "hold":
-        return fixed_facing_targets(robots["ur5e"]["flange_C"], robots["ur10e"]["flange_C"],
-                                    request["gap"], request["center_pose"]), {}
+    if mode != "follow":
+        raise ValueError("only follower mode is supported")
     follower = "ur5e" if leader == "ur10e" else "ur10e"
     from urcal.cooperative.task import RelativePath
     relative = RelativePath(facing_follower(np.eye(4), request["gap"]),
@@ -126,6 +129,8 @@ class TargetPanel:
     """Pump with poll(status); requests remain subject to controller validation."""
 
     def __init__(self, args, send_command, stop_event):
+        if getattr(args, "mode", "follow") != "follow":
+            raise ValueError("only follower mode is supported")
         try:
             import tkinter as tk
             from tkinter import ttk
@@ -139,12 +144,9 @@ class TargetPanel:
         self.args, self.send_command, self.stop_event = args, send_command, stop_event
         self.mode = args.mode
         self._simulation = bool(getattr(args, "simulate", False))
-        self._research = self.mode == "follow" and getattr(args, "method", None) is not None
+        self._research = getattr(args, "method", None) is not None
         self._task_paused = False
         self._closed = False
-        self._seeded = False
-        self._edited = False
-        self._programmatic = False
         self._draft_dirty = False
         self._status = {"active": False, "ready": False, "message": "Waiting for calibration"}
         self.root.title("SIMULATION — captured initial robot state" if self._simulation
@@ -165,7 +167,7 @@ class TargetPanel:
         controls = ttk.Frame(panes, width=550)
         panes.add(controls, weight=0)
         def keep_controls_visible(_event=None):
-            # Keep all XYZ fields and STOP reachable at the minimum window size.
+            # Keep all task fields and STOP reachable at the minimum window size.
             def clamp_sash():
                 if self._closed:
                     return
@@ -195,42 +197,24 @@ class TargetPanel:
         scroll.bind("<Configure>", lambda event: scroll.itemconfigure(body_window, width=event.width))
         ttk.Label(body, text="Camera frame: X right, Y down, Z forward", font=("TkDefaultFont", 11, "bold")).grid(
             row=0, column=0, columnspan=4, sticky="w", pady=(0, 5))
-        self._position_vars = [tk.StringVar(self.root, value="") for _ in range(3)]
-        self._angle_vars = [tk.StringVar(self.root, value="0") for _ in range(3)]
         self._gap = tk.StringVar(self.root, value=f"{(args.gap if args.gap is not None else .30) * 100:g}")
         self._message = tk.StringVar(self.root, value="Waiting for calibration")
         self._error = tk.StringVar(self.root, value="")
         self._progress_message = tk.StringVar(self.root, value="")
+        self._approach_message = tk.StringVar(self.root, value=gap_approach_status_text({}))
         self._editable = []
         row = 1
-        if self.mode == "hold":
-            ttk.Label(body, text="Hold: fixed pair center in the camera frame").grid(row=row, column=0, columnspan=4, sticky="w")
-            row += 1
-            ttk.Label(body, text="Center orientation defines UR5e axes; +Z points from UR5e to UR10e.", wraplength=480).grid(
-                row=row, column=0, columnspan=4, sticky="w", pady=(0, 9))
-            row += 1
-            for names, variables, units in (("XYZ", self._position_vars, "m"),
-                                            (("Roll", "Pitch", "Yaw"), self._angle_vars, "deg")):
-                for index, (name, variable) in enumerate(zip(names, variables)):
-                    ttk.Label(body, text=f"{name} ({units})").grid(row=row, column=index, sticky="w")
-                    entry = ttk.Entry(body, textvariable=variable, width=15)
-                    entry.grid(row=row + 1, column=index, padx=(0, 10), pady=(2, 8))
-                    self._editable.append(entry)
-                    variable.trace_add("write", self._on_center_edit)
-                row += 2
-            ttk.Label(body, text="Rotation order: Rz(yaw) Ry(pitch) Rx(roll)").grid(row=row, column=0, columnspan=4, sticky="w")
-            row += 1
-            if args.center_pose is not None:
-                self._write_center(args.center_pose)
-        else:
-            leader = getattr(args, "leader", "ur10e")
-            follower = "ur5e" if leader == "ur10e" else "ur10e"
-            ttk.Label(body, text=f"Follow: leader {leader.upper()}  ->  follower {follower.upper()}",
-                      font=("TkDefaultFont", 11, "bold")).grid(row=row, column=0, columnspan=4, sticky="w", pady=(0, 8))
-            row += 1
-            ttk.Label(body, text="Follower stays along the leader flange +Z; flange +Z axes face each other.",
-                      wraplength=480).grid(row=row, column=0, columnspan=4, sticky="w", pady=(0, 9))
-            row += 1
+        leader = getattr(args, "leader", "ur10e")
+        follower = "ur5e" if leader == "ur10e" else "ur10e"
+        ttk.Label(body, text=f"Follow: leader {leader.upper()}  ->  follower {follower.upper()}",
+                  font=("TkDefaultFont", 11, "bold")).grid(row=row, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        row += 1
+        ttk.Label(body, text="Follower stays along the leader flange +Z; flange +Z axes face each other.",
+                  wraplength=480).grid(row=row, column=0, columnspan=4, sticky="w", pady=(0, 9))
+        row += 1
+        ttk.Button(body, text="Position error graph", command=self._show_error_plot).grid(
+            row=row, column=0, columnspan=2, sticky="ew", pady=(0, 6), padx=(0, 10))
+        row += 1
         ttk.Label(body, text="Flange gap (cm)").grid(row=row, column=0, sticky="w", pady=(8, 0))
         gap_entry = ttk.Entry(body, textvariable=self._gap, width=15)
         gap_entry.grid(row=row + 1, column=0, sticky="w", pady=(2, 8))
@@ -238,7 +222,8 @@ class TargetPanel:
         ttk.Label(body, text=f"Minimum: {args.min_gap * 100:g} cm").grid(row=row + 1, column=1, columnspan=2, sticky="w")
         row += 2
         if self._research:
-            ttk.Label(body, text=f"Method: {args.method} (selected at startup)").grid(
+            ttk.Label(body, text=f"Method: {args.method}; follow law: {getattr(args, 'follow_law', 'feedforward')} "
+                      "(selected at startup)").grid(
                 row=row, column=0, columnspan=4, sticky="w", pady=(4, 3))
             row += 1
             self._path = tk.StringVar(self.root, value=getattr(args, "path", "hold"))
@@ -278,6 +263,16 @@ class TargetPanel:
         self._arm_button = ttk.Button(body, text="Start simulation" if self._simulation else "Arm motion", command=self._arm)
         self._arm_button.grid(row=row, column=1, sticky="ew", padx=(0, 10))
         ttk.Button(body, text="STOP / Exit", command=self._request_stop).grid(row=row, column=2, sticky="ew")
+        row += 1
+        self._approach_button = ttk.Button(body, text="Approach to 15 cm", command=self._request_gap_approach)
+        self._approach_button.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(8, 0), padx=(0, 10))
+        row += 1
+        ttk.Label(body, textvariable=self._approach_message, wraplength=480).grid(
+            row=row, column=0, columnspan=4, sticky="w", pady=(5, 0))
+        row += 1
+        ttk.Label(body, text="Pause freezes the gap target; leader following continues.\n"
+                  "15 cm is the target flange gap, not a contact or insertion depth.",
+                  wraplength=480).grid(row=row, column=0, columnspan=4, sticky="w", pady=(4, 0))
         row += 1
         if self._simulation:
             self._sim_pause_button = ttk.Button(body, text="Pause simulation", command=self._toggle_simulation_pause)
@@ -331,17 +326,33 @@ class TargetPanel:
         ttk.Label(body, textvariable=self._message, wraplength=480).grid(row=row + 1, column=0, columnspan=4, sticky="w", pady=(8, 0))
         ttk.Label(body, textvariable=self._error, foreground="#b00020", wraplength=480).grid(
             row=row + 2, column=0, columnspan=4, sticky="w", pady=(4, 0))
-        variables = [*self._position_vars, *self._angle_vars, self._gap]
+        variables = [self._gap]
         if self._research:
             variables.extend([self._path, *self._delta_vars, *self._delta_rotation_vars, self._radius, self._duration])
         for variable in variables:
             variable.trace_add("write", self._on_target_edit)
         self._refresh_enabled()
+        self._error_plot = None
+        self._show_error_plot()
+
+    def _show_error_plot(self):
+        if self._closed:
+            return
+        try:
+            if getattr(self, "_error_plot", None) is None:
+                leader = getattr(self.args, "leader", "ur10e")
+                self._error_plot = PositionErrorWindow(
+                    self.root, follower="ur5e" if leader == "ur10e" else "ur10e",
+                    simulation=getattr(self, "_simulation", False))
+            else:
+                self._error_plot.show()
+        except self._tk.TclError as exc:
+            # This optional display never sends motion or stop requests.
+            self._error.set(f"Position error graph unavailable: {exc}")
 
     def _on_target_edit(self, *_):
-        if not self._programmatic:
-            self._draft_dirty = True
-            self._refresh_enabled()
+        self._draft_dirty = True
+        self._refresh_enabled()
 
     def _target_request(self):
         path_options = {}
@@ -353,9 +364,7 @@ class TargetPanel:
                 "path_radius_cm": self._radius.get(), "path_duration": self._duration.get(),
             }
         return build_target_command(
-            self.mode, self._gap.get(), self.args.min_gap,
-            [variable.get() for variable in self._position_vars],
-            [variable.get() for variable in self._angle_vars], **path_options)
+            self.mode, self._gap.get(), self.args.min_gap, **path_options)
 
     def _preview_edits(self):
         view = getattr(self, "_view", None)
@@ -373,29 +382,6 @@ class TargetPanel:
             # Incomplete numeric edits are common; never retain a misleading draft.
             view.set_draft()
 
-    def _on_center_edit(self, *_):
-        if not self._programmatic:
-            self._edited = True
-
-    def _write_center(self, pose):
-        xyz, angles = pose_to_fields(pose)
-        self._programmatic = True
-        try:
-            for variable, value in zip(self._position_vars + self._angle_vars, xyz + angles):
-                variable.set(f"{value:.9g}")
-        finally:
-            self._programmatic = False
-        self._seeded = True
-
-    def _seed_from_status(self):
-        if self.mode == "hold" and not self._seeded and not self._edited:
-            pose = self._status.get("center_pose")
-            if pose is not None:
-                try:
-                    self._write_center(pose)
-                except ValueError as exc:
-                    self._error.set("Cannot initialize target: " + str(exc))
-
     def _refresh_enabled(self):
         active = bool(self._status.get("active", False))
         for widget in self._editable + [self._apply_button]:
@@ -411,6 +397,41 @@ class TargetPanel:
         if getattr(self, "_simulation", False):
             self._sim_pause_button.configure(state="normal" if active else "disabled",
                                              text="Resume simulation" if self._status.get("sim_paused") else "Pause simulation")
+        if hasattr(self, "_approach_button"):
+            action, label = self._gap_approach_action()
+            self._approach_button.configure(state="normal" if action is not None else "disabled", text=label)
+            self._approach_message.set(gap_approach_status_text(self._status))
+
+    def _gap_approach_action(self):
+        approach = self._status.get("gap_approach")
+        if not isinstance(approach, dict):
+            approach = {}
+        state = approach.get("state", "idle")
+        action, label = {
+            "idle": ("start", "Approach to 15 cm"),
+            "running": ("pause", "Pause approach"),
+            "paused": ("resume", "Resume approach"),
+            "complete": (None, "15 cm target set"),
+        }.get(state, (None, "Approach to 15 cm"))
+        # The controller owns phase/path/calibration eligibility. Require an
+        # active execution session here too; preview cannot issue this action.
+        enabled = (approach.get("enabled") is True and self._status.get("active", False)
+                   and (self.args.execute or getattr(self, "_simulation", False))
+                   and not self._status.get("sim_paused", False))
+        return action if enabled else None, label
+
+    def _request_gap_approach(self):
+        action, _ = self._gap_approach_action()
+        if action is None:
+            return
+        try:
+            self.send_command({"type": "gap_approach", "action": action, "requested_at": time.monotonic()})
+        except Exception as exc:
+            self._error.set(str(exc))
+        else:
+            # Only authoritative status changes the action. Repeated clicks
+            # before acknowledgement repeat the same idempotent request.
+            self._error.set("Approach request sent; leader following continues")
 
     def _apply(self):
         if self._status.get("active", False):
@@ -488,11 +509,19 @@ class TargetPanel:
                 if "task_paused" in status:
                     self._task_paused = bool(status["task_paused"])
                 self._progress_message.set(research_status_text(self._status))
-            self._seed_from_status()
             self._refresh_enabled()
         self._preview_edits()
         if getattr(self, "_view", None) is not None:
             self._view.refresh()
+        plot = getattr(self, "_error_plot", None)
+        if plot is not None:
+            try:
+                if status is not None:
+                    # Do not revive an old sample from the merged UI status.
+                    plot.update(status.get("position_error"))
+                plot.refresh()
+            except self._tk.TclError as exc:
+                self._error.set(f"Position error graph unavailable: {exc}")
         try:
             self.root.update_idletasks()
             self.root.update()

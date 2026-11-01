@@ -101,7 +101,7 @@ def rotation_distance(A, B):
 
 
 def model_from_controller_base(robot):
-    """Return nominal T_model_controller_base for the repository's dataset FK."""
+    """Return the fixed dataset-FK mapping, independent of PnP output settings."""
     if robot not in ("ur5e", "ur10e"):
         raise ValueError("robot must be 'ur5e' or 'ur10e'")
     result = np.eye(4, dtype=np.float64)
@@ -109,6 +109,20 @@ def model_from_controller_base(robot):
         result[:3, :3] = np.diag([-1.0, -1.0, 1.0])
         result[2, 3] = 0.005
     return result
+
+
+def calibration_output_mapping(robot, *, ur10e_output_correction=True):
+    """Optional right-multiplied transform on the camera's PnP output.
+
+    Disabled means use the raw PnP pose as the control base estimate. This is
+    a changed interpretation of the output frame, not a change to training
+    keypoints or the controller-base kinematics. The fixed nominal mapping
+    above must still be used to compute encoder FK/Jacobians.
+    """
+    if not isinstance(ur10e_output_correction, bool):
+        raise ValueError("ur10e_output_correction must be a boolean")
+    nominal = model_from_controller_base(robot)
+    return nominal if ur10e_output_correction else np.eye(4, dtype=np.float64)
 
 
 def model_flange_pose(robot, q):
@@ -148,53 +162,6 @@ def facing_follower(T_C_leader, gap):
     return T_C_leader @ relative
 
 
-def fixed_facing_targets(T_C_F5, T_C_F10, gap=None, center_pose=None):
-    """Return camera-frame ur5e/ur10e flange targets with opposing normals.
-
-    Without center_pose, use the current midpoint and the UR5e-to-UR10e line
-    as +Z. Project the initial UR5e +X onto its perpendicular plane to preserve
-    roll; if parallel, project UR5e +Y to choose a stable right-handed frame.
-    With center_pose (UR pose6 or 4x4), its orientation defines the UR5e axes.
-    gap defaults to the current separation. Targets are at -gap/2 and +gap/2
-    along the center's +Z. Coincident initial positions require both explicit
-    center_pose and gap, since otherwise a direction or distance is undefined.
-    """
-    T_C_F5 = _validate_transform(T_C_F5, "UR5e flange pose")
-    T_C_F10 = _validate_transform(T_C_F10, "UR10e flange pose")
-    difference = T_C_F10[:3, 3] - T_C_F5[:3, 3]
-    separation = float(np.linalg.norm(difference))
-    distance = _positive_gap(separation if gap is None else gap)
-
-    if center_pose is not None:
-        try:
-            center = np.asarray(center_pose, dtype=np.float64)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("center_pose must be a finite pose6 or 4x4 transform") from exc
-        center = pose_matrix(center) if center.shape == (6,) else _validate_transform(center, "center pose")
-        center = center.copy()
-    else:
-        if separation <= 1e-12 or not np.isfinite(separation):
-            raise ValueError("coincident flange positions require an explicit center_pose and gap")
-        z_axis = difference / separation
-        x_axis = T_C_F5[:3, 0] - z_axis * np.dot(z_axis, T_C_F5[:3, 0])
-        if np.linalg.norm(x_axis) > 1e-8:
-            x_axis /= np.linalg.norm(x_axis)
-            y_axis = np.cross(z_axis, x_axis)
-        else:
-            y_axis = T_C_F5[:3, 1] - z_axis * np.dot(z_axis, T_C_F5[:3, 1])
-            y_axis /= np.linalg.norm(y_axis)
-            x_axis = np.cross(y_axis, z_axis)
-        center = np.eye(4, dtype=np.float64)
-        center[:3, :3] = np.column_stack((x_axis, y_axis, z_axis))
-        center[:3, 3] = 0.5 * T_C_F5[:3, 3] + 0.5 * T_C_F10[:3, 3]
-
-    target5 = center.copy()
-    target5[:3, 3] -= 0.5 * distance * center[:3, 2]
-    target10 = facing_follower(target5, distance)
-    return {
-        "ur5e": _validate_transform(target5, "UR5e target"),
-        "ur10e": _validate_transform(target10, "UR10e target"),
-    }
 
 
 def pose_delta(current, target):

@@ -18,6 +18,7 @@ from urcal.control.recovery import (
 )
 from urcal.control.runtime import MotionSession
 from urcal.cooperative.controller import ResearchFault
+from urcal.cooperative.task import MotionInfeasible
 
 
 def frame(sequence=1, captured_at=10.):
@@ -54,6 +55,21 @@ class RecoveryClassificationTests(unittest.TestCase):
             self.assertFalse(is_recoverable_fault(ResearchFault(category, "reason")), category)
         for exc in (ControlFault("calibration is stale"), RuntimeError("workspace"),
                     ValueError("target invalid"), KeyboardInterrupt()):
+            self.assertFalse(is_recoverable_fault(exc))
+
+    def test_governor_planning_failures_can_recover_but_hardware_categories_cannot(self):
+        for category in ("compensation_infeasible", "transition_infeasible",
+                         "tracking_infeasible", "singularity"):
+            with self.subTest(category=category):
+                self.assertTrue(is_recoverable_fault(MotionInfeasible("reason", category)))
+        for category in ("joint_speed", "tcp_speed", "robot_state", "control_deadline",
+                         "operator_stop", "timing", "unknown"):
+            with self.subTest(category=category):
+                self.assertFalse(is_recoverable_fault(MotionInfeasible("reason", category)))
+
+    def test_a_planning_category_on_an_unrecognized_exception_does_not_enable_recovery(self):
+        for exc in (ControlFault("planner failed"), RuntimeError("planner failed")):
+            exc.category = "compensation_infeasible"
             self.assertFalse(is_recoverable_fault(exc))
 
     def test_quality_faults_typed_and_malformed_inputs_remain_fatal(self):

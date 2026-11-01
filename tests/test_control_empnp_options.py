@@ -25,7 +25,7 @@ def config(*options, mode="follow"):
 
 class ControlEMPnPOptionsTests(unittest.TestCase):
     def test_defaults_preserve_existing_control_previous_pose_off(self):
-        for mode in ("hold", "follow"):
+        for mode in ("follow",):
             args = config(mode=mode)
             for robot, weight in (("ur5e", .5), ("ur10e", .2)):
                 settings = make_pose_args(args, robot)
@@ -33,8 +33,8 @@ class ControlEMPnPOptionsTests(unittest.TestCase):
                 self.assertEqual(settings.empnp_lambda, weight)
                 self.assertEqual(settings.empnp_max_iter, 50)
 
-    def test_weak_prior_weights_remain_independent_for_both_modes(self):
-        for mode in ("hold", "follow"):
+    def test_weak_prior_weights_remain_independent_for_both_robots(self):
+        for mode in ("follow",):
             args = config("--empnp_use_prev", "--ur5e_empnp_lambda", ".005",
                           "--ur10e_empnp_lambda", ".001", mode=mode)
             self.assertTrue(make_pose_args(args, "ur5e").empnp_use_prev)

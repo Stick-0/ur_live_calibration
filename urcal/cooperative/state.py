@@ -5,6 +5,9 @@ times share a monotonic clock but serve different purposes: only capture time
 advances the physical state. Direct mode interpolates raw histories to their
 latest common historical time. Predict mode filters on SE(3), then applies a
 bounded-duration constant spatial-twist extrapolation to the requested time.
+Pose mode filters coordinate transforms without differentiating or extrapolating
+camera estimates. Its zero twists mean no visual velocity feedforward is used,
+not that a physical base has been measured stationary.
 
 Spatial Lie-algebra translation is not an origin velocity. Internally a twist
 is [u, w], with p_dot = u + w cross p. Public base_twists instead contain
@@ -14,8 +17,10 @@ follower origin and rotation in the MOVING leader frame, including transport.
 Spatial increments and left-multiplied corrections preserve a constant right-hand
 relative transform under matched common rigid camera motion. This is a short
 motion model, not a classifier of genuine sudden motion versus pose errors.
-Samples exceeding configured physical speed limits raise an error; they are
-never clipped into apparently valid measurements.
+In direct/predict velocity modes, samples exceeding configured inferred speed
+limits raise an error; they are never clipped into valid measurements. Pose mode
+leaves measurement jump checks to the upstream calibration gate and retains
+capture-age checks here.
 """
 
 from collections import deque
@@ -123,6 +128,8 @@ class RelativeStateEstimator:
     In direct mode snapshot.at is min(latest capture times), and prediction_dt
     is zero even when the newer stream was interpolated backwards to that time.
     In predict mode snapshot.at is now and prediction_dt is now-capture_time.
+    In pose mode the latest filtered transform is held, without motion prediction;
+    prediction_dt and output twists are zero. Live pairs share one capture time.
     A newly measured state after a gap longer than max_prediction_age starts a
     fresh zero-velocity filter; the old velocity is not projected across the gap.
     """
@@ -137,8 +144,8 @@ class RelativeStateEstimator:
         if (len(self.robots) != 2 or not all(isinstance(r, str) and r for r in self.robots)
                 or len(set(self.robots)) != 2):
             raise RelativeStateError("robots must contain two distinct nonempty names")
-        if mode not in ("direct", "predict"):
-            raise RelativeStateError("mode must be direct or predict")
+        if mode not in ("direct", "predict", "pose"):
+            raise RelativeStateError("mode must be direct, predict or pose")
         self.mode = mode
         for name, value in (("alpha", alpha), ("velocity_alpha", velocity_alpha),
                             ("max_prediction_age", max_prediction_age),
@@ -182,18 +189,26 @@ class RelativeStateEstimator:
             if sequence < previous.sequence or captured <= previous.captured:
                 raise RelativeStateError("out-of-order measurement sequence/capture time")
             dt = captured - previous.captured
-            raw_velocity = _log(pose @ inverse(previous.raw)) / dt
-            self._check_speed(raw_velocity, (previous.raw, pose), robot + " observed")
-            if self.mode == "direct":
-                filtered, velocity = pose.copy(), raw_velocity.copy()
-            elif dt > self.max_prediction_age:
-                filtered, velocity = pose.copy(), np.zeros(6)
+            if self.mode == "pose":
+                # PnP changes update geometry, not a measured physical speed.
+                # No finite difference, velocity rejection or extrapolation is
+                # appropriate in this mode; the controller bounds actual motion.
+                innovation = _log(pose @ inverse(previous.filtered))
+                filtered = _exp(self.alpha * innovation) @ previous.filtered
+                raw_velocity, velocity = np.zeros(6), np.zeros(6)
             else:
-                predicted = _exp(previous.velocity * dt) @ previous.filtered
-                innovation = _log(pose @ inverse(predicted))
-                filtered = _exp(self.alpha * innovation) @ predicted
-                velocity = (1. - self.velocity_alpha) * previous.velocity + self.velocity_alpha * raw_velocity
-                self._check_speed(velocity, (filtered,), robot + " filtered")
+                raw_velocity = _log(pose @ inverse(previous.raw)) / dt
+                self._check_speed(raw_velocity, (previous.raw, pose), robot + " observed")
+                if self.mode == "direct":
+                    filtered, velocity = pose.copy(), raw_velocity.copy()
+                elif dt > self.max_prediction_age:
+                    filtered, velocity = pose.copy(), np.zeros(6)
+                else:
+                    predicted = _exp(previous.velocity * dt) @ previous.filtered
+                    innovation = _log(pose @ inverse(predicted))
+                    filtered = _exp(self.alpha * innovation) @ predicted
+                    velocity = (1. - self.velocity_alpha) * previous.velocity + self.velocity_alpha * raw_velocity
+                    self._check_speed(velocity, (filtered,), robot + " filtered")
         else:
             raw_velocity = np.zeros(6)
             velocity = np.zeros(6)
@@ -272,6 +287,9 @@ class RelativeStateEstimator:
         for name, sample in latest.items():
             if self.mode == "direct":
                 poses[name], spatial = self._historical(name, at)
+                prediction_dt[name] = 0.
+            elif self.mode == "pose":
+                poses[name], spatial = sample.filtered.copy(), np.zeros(6)
                 prediction_dt[name] = 0.
             else:
                 duration = ages[name]

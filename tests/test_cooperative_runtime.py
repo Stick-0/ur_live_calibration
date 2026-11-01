@@ -78,7 +78,8 @@ def config(execute=False):
         arguments.append("--execute")
     # These lifecycle fixtures intentionally exercise the original exact task
     # contract; approximate task behavior has separate integration coverage.
-    return control_dual.parse_args(arguments + ["--target_tolerance_m", "0", "--target_tolerance_deg", "0",
+    return control_dual.parse_args(arguments + ["--max_robot_age", ".15",
+                                               "--target_tolerance_m", "0", "--target_tolerance_deg", "0",
                                                "--handoff_max_shift_m", "0", "--handoff_max_shift_deg", "0",
                                                "--handoff_timeout", "5", "--max_target_m", ".1",
                                                "--calibration_acquisition", "consecutive", "--handoff_wait", "stop",
@@ -119,7 +120,10 @@ class ResearchRuntimeTests(unittest.TestCase):
                       offsets={name: np.eye(4) for name in runtime.ROBOTS},
                       path=RelativePath(facing_follower(np.eye(4), .3), kind="line"),
                       gap=.3, progress=0., task_paused=False, invalid_since=None, last_rejection="",
-                      preview_recovery=Mock(count=0), reacquisition_count=0)
+                      preview_recovery=Mock(count=0), reacquisition_count=0,
+                      live_calibration=None)
+        engine.gap_approach.state = "idle"
+        engine.gap_approach_status.side_effect = lambda **_kwargs: {"state": "idle", "enabled": False}
         engine.gate.last_rejection = ""
         engine.gate.last_capture = 9.9
         preparations = []
@@ -149,8 +153,9 @@ class ResearchRuntimeTests(unittest.TestCase):
         if not ingest_accepted and packet is not None:
             engine.last_rejection = packet.reason
         if reacquire_on_packet:
-            def ingest(frame, at, *, allow_reacquire=False):
+            def ingest(frame, at, *, allow_reacquire=False, active_recovery=False):
                 self.assertTrue(allow_reacquire)
+                self.assertFalse(active_recovery)
                 engine.reacquisition_count += 1
                 return True
             engine.ingest.side_effect = ingest
@@ -349,7 +354,7 @@ class ResearchRuntimeTests(unittest.TestCase):
                                   {name: .4 for name in runtime.ROBOTS},
                                   {name: 7 for name in runtime.ROBOTS})
         result = self.mocked_run(packet=packet, initial_commands=(), stop_after=1)
-        result.engine.ingest.assert_called_once_with(packet, 10., allow_reacquire=True)
+        result.engine.ingest.assert_called_once_with(packet, 10., allow_reacquire=True, active_recovery=False)
         record = [r for r in result.records if r["kind"] == "measurement"][0]
         self.assertEqual(record["captured_at"], 9.8)
         self.assertEqual(record["received_at"], 10.)
@@ -502,14 +507,12 @@ class ResearchRuntimeTests(unittest.TestCase):
 
 
 class DispatchTests(unittest.TestCase):
-    def test_existing_main_dispatches_follow_to_research_and_hold_to_fixed_pose(self):
-        for mode in ("hold", "follow"):
-            with self.subTest(mode=mode), patch.object(control_dual, "run") as hold, patch.object(runtime, "run") as follow:
-                control_dual.main(["--mode", mode, "--ur5e_ip", "192.0.2.5", "--ur10e_ip", "192.0.2.10"])
-                selected, other = (follow, hold) if mode == "follow" else (hold, follow)
-                selected.assert_called_once()
-                self.assertEqual(selected.call_args.args[0].mode, mode)
-                other.assert_not_called()
+    def test_existing_main_dispatches_default_and_explicit_follow_to_research(self):
+        for mode_arguments in ([], ["--mode", "follow"]):
+            with self.subTest(mode_arguments=mode_arguments), patch.object(runtime, "run") as follow:
+                control_dual.main([*mode_arguments, "--ur5e_ip", "192.0.2.5", "--ur10e_ip", "192.0.2.10"])
+                follow.assert_called_once()
+                self.assertEqual(follow.call_args.args[0].mode, "follow")
 
     def test_research_entrypoint_defaults_to_follow(self):
         with patch.object(runtime, "run") as run:

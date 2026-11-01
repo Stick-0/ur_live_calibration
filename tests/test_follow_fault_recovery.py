@@ -20,6 +20,7 @@ import urcal.cooperative.runtime as runtime
 from urcal.control.geometry import inverse
 from urcal.control.policy import CalibrationFrame, ControlFault, PlanningUnavailable
 from urcal.cooperative.controller import ResearchFault
+from urcal.cooperative.task import MotionInfeasible
 from tests.test_cooperative_controller import accept, packet, scene
 from tests.test_cooperative_runtime import Clock, Event, LocalQueue
 
@@ -53,7 +54,7 @@ class FollowFaultRecoveryTests(unittest.TestCase):
                     stop_error=None, frozen_after_stop=False, moving_after_stop=False,
                     recorded=False, fault_response="preview", automatic_frames=True,
                     pre_stop_capture=False, unknown_error=False, process_exit=False,
-                    initial_align=False):
+                    initial_align=False, planner_error=None):
         engine, bases, robot_states = scene(
             stable_frames=5, max_invalid_duration=.3, max_robot_age=.15,
             filter_alpha=.25, velocity_alpha=.2, prediction_horizon=.5,
@@ -107,8 +108,10 @@ class FollowFaultRecoveryTests(unittest.TestCase):
 
         def prepare(now, states, dt, active=False):
             nonlocal fault_injected
-            if active and fault == "planner" and not fault_injected:
+            if active and (fault == "planner" or planner_error is not None) and not fault_injected:
                 fault_injected = True
+                if planner_error is not None:
+                    raise planner_error
                 raise ResearchFault("tracking_error", "relative target exceeds allowed tracking error")
             return original_prepare(now, states, dt, active=active)
 
@@ -314,6 +317,44 @@ class FollowFaultRecoveryTests(unittest.TestCase):
         self.assertEqual(result.sent, [])
         self.assertEqual(result.engine.progress, .37)
         self.assertIs(result.engine.path, result.initial_path)
+
+    def test_compensation_infeasibility_stops_then_keeps_preview_open_without_autoresume(self):
+        failure = MotionInfeasible("compensation alone exceeds linear acceleration",
+                                   "compensation_infeasible")
+        result = self.run_runtime(planner_error=failure)
+        self.assertIsNone(result.caught)
+        self.assertEqual(len(result.stop_times), 1)
+        self.assertEqual(result.factory.call_count, 1)
+        self.assertEqual(result.sent, [])
+        self.assertEqual(result.commits, [])
+        self.assertEqual(result.engine.progress, .37)
+        self.assertIs(result.engine.path, result.initial_path)
+        recovering = [status for _, status in result.statuses if status.get("recovery_required")]
+        self.assertTrue(any(str(failure) in status["recovery_reason"] for status in recovering))
+        self.assertTrue(any(status.get("ready") for status in recovering))
+
+    def test_compensation_failure_requires_a_new_arm_after_stop_and_fresh_calibration(self):
+        failure = MotionInfeasible("compensation alone exceeds linear acceleration",
+                                   "compensation_infeasible")
+        result = self.run_runtime(planner_error=failure, arm_steps=(2, 5, 18), stop_after=23)
+        self.assertIsNone(result.caught)
+        self.assertEqual(len(result.stop_times), 1)
+        self.assertEqual(result.factory.call_count, 2)
+        self.assertTrue(result.sent)
+        self.assertTrue(all(index == 2 for _, index, _ in result.sent))
+        ready_at = next(at for at, status in result.statuses
+                        if at > result.stop_times[0] and status.get("ready"))
+        reconnect_at = next(at for action, at, index in result.order
+                            if action == "connect" and index == 2)
+        self.assertGreater(reconnect_at, ready_at)
+
+    def test_motion_infeasibility_respects_explicit_exit_response(self):
+        failure = MotionInfeasible("compensation alone exceeds linear acceleration",
+                                   "compensation_infeasible")
+        result = self.run_runtime(planner_error=failure, fault_response="exit")
+        self.assertIs(result.caught, failure)
+        self.assertEqual(result.stop_times, [])
+        self.assertEqual(result.sent, [])
 
     def test_failed_controlled_stop_is_terminal_and_never_resets_into_ready(self):
         failure = ControlFault("ur5e: speedStop failed; stop not confirmed")

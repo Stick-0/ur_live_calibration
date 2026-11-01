@@ -42,33 +42,56 @@ def _norm_interval(a, b, bound):
 
 def govern_follow(base, tracking, task, J, measured_twist, measured_qdot,
                   previous_twist, previous_qdot, dt, limits, *, previous_base,
-                  previous_base_qdot, rho_cap=1., extra_feasible=None):
+                  previous_base_qdot, rho_cap=1., extra_feasible=None,
+                  extra_feasible_depends_on_rho=True, moving_reference=False):
     """Shape tracking first, then allocate optional relative-path progress.
 
     ``base`` is never scaled and must be feasible independently. The total
     tracking baseline lies on a segment from the previous non-base command to
     a statically feasible tracking velocity. That endpoint is selected along
     the requested tracking direction, with the full base contribution retained.
-    A measured-motion anchor is a
-    fallback when a changed Jacobian makes that segment infeasible. Both anchors
+    Measured-motion and midpoint anchors are
+    fallbacks when a changed Jacobian makes that segment infeasible. The anchors
     preserve the new minus previous base contribution; measured motion cannot
     silently cancel a new base request.
 
     Every accepted total obeys TCP/joint speed limits and acceleration from BOTH
     measured motion and the previous transmitted command. Stops and reversals
     therefore ramp through the previous velocity instead of scaling a fresh
-    request towards zero. A bounded interior search lets ``extra_feasible``
+    request towards zero. If tracking fails, a separately checked braking
+    transition pauses task progress and decelerates tracking towards zero.
+    It still retains mandatory base compensation and every motion/geometry
+    check. A bounded interior search lets ``extra_feasible``
     reject candidates for future geometry. No candidate bypasses that callback.
+
+    A nonzero optional path first tries the tracking endpoint plus its task
+    velocity as one total command. If that is infeasible, bounded tracking
+    freezes path progress while catching up. Checking tracking alone against
+    the old total and then adding a fresh task would count residual path
+    velocity twice and can accelerate in the wrong direction.
 
     ``task_scale`` describes optional task progress only. ``tracking_scale`` is
     the interpolation fraction along the selected transition segment, not a
     multiplier of raw leader speed. The previous non-base command can contain
     residual task velocity while transitioning; callers must keep their original
     relative path and check actual/next tracking error throughout that transition.
+
+    A caller with a constant relative path can explicitly declare that its
+    geometry callback does not depend on task rate. Identical rejected motion
+    candidates then reuse one geometry result across rate samples. The default
+    retains rate-dependent callback semantics for arbitrary paths. Accepted
+    callbacks still run at their selected rate so caller-owned target/diagnostic
+    data belongs to the command being returned.
+
+    ``moving_reference`` marks a moving pose target without additive task
+    velocity. Such a path can advance at a feasible tracking endpoint, but
+    must pause during transition fallbacks/braking just like a velocity-fed path.
     """
     base = _vector(base, "base compensation")
     tracking = _vector(tracking, "tracking demand")
     task = _vector(task, "task twist")
+    if not isinstance(moving_reference, bool):
+        raise ValueError("moving_reference must be boolean")
     measured_twist = _vector(measured_twist, "measured twist")
     measured_qdot = _vector(measured_qdot, "measured joint velocity")
     previous_twist = _vector(previous_twist, "previous twist")
@@ -120,14 +143,18 @@ def govern_follow(base, tracking, task, J, measured_twist, measured_qdot,
             return False
         if extra_feasible is None:
             return True
-        key = (float(rho), twist.tobytes(), qdot.tobytes())
-        if key not in feasibility_cache:
-            feasibility_cache[key] = bool(extra_feasible(rho, twist.copy(), qdot.copy()))
-        return feasibility_cache[key]
+        key = (float(rho) if extra_feasible_depends_on_rho else None,
+               twist.tobytes(), qdot.tobytes())
+        if key in feasibility_cache:
+            return feasibility_cache[key]
+        feasible = bool(extra_feasible(rho, twist.copy(), qdot.copy()))
+        if extra_feasible_depends_on_rho or not feasible:
+            feasibility_cache[key] = feasible
+        return feasible
 
-    def transition_interval(origin):
+    def transition_interval(origin, endpoint):
         initial = base + origin
-        direction = tracking_endpoint - origin
+        direction = endpoint - origin
         initial_qdot = np.linalg.solve(J, initial)
         direction_qdot = np.linalg.solve(J, direction)
         constraints = [
@@ -159,23 +186,35 @@ def govern_follow(base, tracking, task, J, measured_twist, measured_qdot,
 
     failure = None
     anchors = (("previous_command", previous_twist - previous_base),
-               ("measured_motion", measured_twist - previous_base))
+               ("measured_motion", measured_twist - previous_base),
+               ("midpoint", .5 * (previous_twist + measured_twist) - previous_base))
     visited = set()
-    for origin_name, origin in anchors:
-        interval = transition_interval(origin)
+    moving_task = bool(np.any(task)) or moving_reference
+    transitions = ([("task_endpoint", tracking_endpoint, tracking_endpoint, False, True)]
+                   if moving_task else [])
+    transitions.extend((name, origin, tracking_endpoint, False, False) for name, origin in anchors)
+    transitions.extend((name, origin, np.zeros(6), True, False) for name, origin in anchors)
+    for origin_name, origin, endpoint, braking, task_probe in transitions:
+        # govern_task and allowed check the complete proposed sum against both
+        # measured and transmitted histories. Never impose a tracking-only
+        # slew constraint on this combined candidate.
+        interval = (1., 1.) if task_probe else transition_interval(origin, endpoint)
         if interval is None:
             continue
         lower, upper = interval
         for fraction in np.linspace(upper, lower, 9):
-            applied = origin + float(fraction) * (tracking_endpoint - origin)
-            key = applied.tobytes()
+            applied = origin + float(fraction) * (endpoint - origin)
+            # Braking freezes the relative task; a prior rejected candidate
+            # with a moving task must not suppress its independent check.
+            advance_path = task_probe or (not moving_task and not braking)
+            key = (advance_path and moving_task, applied.tobytes())
             if key in visited:
                 continue
             visited.add(key)
             try:
                 decision = govern_task(
-                    base, applied, task, J, measured_twist, measured_qdot, dt, limits,
-                    rho_cap=rho_cap, extra_feasible=allowed, grid_samples=9,
+                    base, applied, task if advance_path else np.zeros(6), J, measured_twist, measured_qdot, dt, limits,
+                    rho_cap=rho_cap if advance_path else 0., extra_feasible=allowed, grid_samples=9,
                     previous_compensation=previous_base,
                     previous_compensation_qdot=previous_base_qdot)
             except MotionInfeasible as exc:
@@ -192,13 +231,15 @@ def govern_follow(base, tracking, task, J, measured_twist, measured_qdot,
                 "tracking_applied": applied.copy(),
                 "tracking_scale": float(fraction),
                 "tracking_speed_scale": float(static_upper),
-                "tracking_endpoint": tracking_endpoint.copy(),
+                "tracking_endpoint": endpoint.copy(),
                 "tracking_limited": limited,
                 "tracking_origin": origin_name,
+                "tracking_braking": braking,
                 "feasible_tracking_interval": np.asarray(interval),
             })
             return MotionDecision(decision.twist, decision.qdot, decision.task_scale,
-                                  "tracking_limited" if limited else decision.reason, components)
+                                  "tracking_braking" if braking else "tracking_limited" if limited else decision.reason,
+                                  components)
     if failure is not None:
         raise failure
     raise MotionInfeasible("no bounded tracking transition meets measured and command acceleration limits",

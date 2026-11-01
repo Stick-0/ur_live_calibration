@@ -77,44 +77,6 @@ class DualControlGeometryTests(unittest.TestCase):
             self.change @ geometry.facing_follower(self.first, 0.23), atol=1e-12,
         )
 
-    def test_fixed_defaults_keep_positions_and_choose_opposite_normals(self):
-        targets = geometry.fixed_facing_targets(self.first, self.second)
-        gap = np.linalg.norm(self.second[:3, 3] - self.first[:3, 3])
-        self.assert_facing(targets["ur5e"], targets["ur10e"], gap)
-        np.testing.assert_allclose(targets["ur5e"][:3, 3], self.first[:3, 3], atol=1e-12)
-        np.testing.assert_allclose(targets["ur10e"][:3, 3], self.second[:3, 3], atol=1e-12)
-        normal = targets["ur5e"][:3, 2]
-        expected_x = self.first[:3, 0] - normal * np.dot(normal, self.first[:3, 0])
-        np.testing.assert_allclose(targets["ur5e"][:3, 0], expected_x / np.linalg.norm(expected_x), atol=1e-12)
-
-    def test_fixed_custom_gap_preserves_midpoint(self):
-        targets = geometry.fixed_facing_targets(self.first, self.second, gap=0.31)
-        self.assert_facing(targets["ur5e"], targets["ur10e"], 0.31)
-        np.testing.assert_allclose(targets["ur5e"][:3, 3] + targets["ur10e"][:3, 3], self.first[:3, 3] + self.second[:3, 3], atol=1e-12)
-
-    def test_fixed_goals_are_rigidly_equivariant_including_roll_fallback(self):
-        for second in (self.second, self.first.copy()):
-            if np.array_equal(second, self.first):
-                second[:3, 3] += 0.3 * self.first[:3, 0]
-            original = geometry.fixed_facing_targets(self.first, second, gap=0.2)
-            changed = geometry.fixed_facing_targets(self.change @ self.first, self.change @ second, gap=0.2)
-            for robot in original:
-                np.testing.assert_allclose(changed[robot], self.change @ original[robot], atol=1e-12)
-            self.assert_facing(original["ur5e"], original["ur10e"], 0.2)
-
-    def test_explicit_center_pose_orientation_and_gap(self):
-        for center in (self.change, geometry.matrix_pose(self.change)):
-            targets = geometry.fixed_facing_targets(self.first, self.second, gap=0.4, center_pose=center)
-            self.assert_facing(targets["ur5e"], targets["ur10e"], 0.4)
-            np.testing.assert_allclose(targets["ur5e"][:3, :3], self.change[:3, :3], atol=1e-12)
-            np.testing.assert_allclose(0.5 * (targets["ur5e"][:3, 3] + targets["ur10e"][:3, 3]), self.change[:3, 3], atol=1e-12)
-
-    def test_coincident_positions_require_both_gap_and_center(self):
-        for kwargs in ({}, {"gap": 0.2}, {"center_pose": self.change}):
-            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
-                geometry.fixed_facing_targets(self.first, self.first, **kwargs)
-        targets = geometry.fixed_facing_targets(self.first, self.first, gap=0.2, center_pose=self.change)
-        self.assert_facing(targets["ur5e"], targets["ur10e"], 0.2)
 
     def test_pose_delta_is_expressed_in_shared_parent_frame(self):
         linear, angular = geometry.pose_delta(self.first, self.second)
@@ -162,7 +124,6 @@ class DualControlGeometryTests(unittest.TestCase):
                 lambda value: geometry.flange_from_tcp(value, self.first),
                 lambda value: geometry.flange_from_tcp(self.first, value),
                 lambda value: geometry.pose_delta(self.first, value),
-                lambda value: geometry.fixed_facing_targets(value, self.second),
             )
             for operation in operations:
                 with self.subTest(value=invalid, operation=operation), self.assertRaises(ValueError):
@@ -171,15 +132,10 @@ class DualControlGeometryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 geometry.rotation_distance(self.first, invalid)
 
-    def test_bad_gaps_and_center_poses_are_rejected(self):
+    def test_bad_gaps_are_rejected(self):
         for gap in (0, -0.01, np.nan, np.inf, "invalid"):
             with self.subTest(gap=gap), self.assertRaises(ValueError):
                 geometry.facing_follower(self.first, gap)
-            with self.subTest(fixed_gap=gap), self.assertRaises(ValueError):
-                geometry.fixed_facing_targets(self.first, self.second, gap=gap)
-        for center in ([1, 2], np.zeros((4, 4)), [0, 0, 0, np.inf, 0, 0]):
-            with self.subTest(center=center), self.assertRaises(ValueError):
-                geometry.fixed_facing_targets(self.first, self.second, gap=0.2, center_pose=center)
 
 
 if __name__ == "__main__":

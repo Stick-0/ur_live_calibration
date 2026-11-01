@@ -207,6 +207,23 @@ class CalibrationDiagnosticsTests(unittest.TestCase):
             marker.assert_not_called()
             self.assertTrue(any("ur5e RAW" in call.args[1] for call in put_text.call_args_list))
 
+    def test_live_overlay_contains_geometry_without_text_and_hidden_points_leave_image_clean(self):
+        record = self.record()
+        self.results[0].points[0] += [3., 4.]
+        record = self.record()
+        image = np.zeros((480, 640, 3), np.uint8)
+        with patch("urcal.control.diagnostics.cv2.putText") as text, \
+                patch("urcal.control.diagnostics.cv2.drawMarker", wraps=cv2.drawMarker) as marker, \
+                patch("urcal.control.diagnostics.cv2.line", wraps=cv2.line) as line:
+            draw_calibration_debug(image, record, show_text=False)
+            text.assert_not_called()
+            self.assertTrue(marker.called)
+            self.assertTrue(line.called)
+            self.assertTrue(np.any(image))
+        blank = np.zeros_like(image)
+        draw_calibration_debug(blank, record, show_keypoints=False, show_text=False)
+        np.testing.assert_array_equal(blank, np.zeros_like(image))
+
     def test_extreme_rejected_projection_does_not_overflow_opencv(self):
         record = self.record()
         record["robots"]["ur5e"]["projected_px"][0] = [1e100, -1e100]

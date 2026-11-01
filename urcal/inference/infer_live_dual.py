@@ -2,12 +2,13 @@
 
 import argparse
 from contextlib import ExitStack, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 import time
 from typing import Callable, Optional
 
 from urcal.inference.display import import_opencv
+from urcal.inference.reporting import InferenceReporter
 
 cv2 = import_opencv()
 
@@ -119,6 +120,10 @@ class RobotResult:
     rvec: Optional[np.ndarray]
     tvec: Optional[np.ndarray]
     reproj_mean: float
+    empnp_rvec: Optional[np.ndarray] = None
+    empnp_tvec: Optional[np.ndarray] = None
+    base_plane: Optional[dict] = None
+    constraint_error: str = ""
 
 
 @dataclass
@@ -146,18 +151,68 @@ class RobotEstimator:
         return RobotResult(points, valid, probs, ok, rvec, tvec, reproj_mean)
 
 
-def process_frame(bgr, joint_values, estimators, K, dist, split_ratio, transform, vote_cfg, device, show_seg=False):
+def constrain_base_plane(results, estimators, joint_values, K, dist):
+    """Fit a shared physical mounting plane to this image's original detections.
+
+    Raw model origins differ from the physical bases (UR10e has a 5 mm offset).
+    Never invent a missing robot pose, reuse an earlier image or alter votes.
+    """
+    from urcal.control.geometry import matrix_pose, model_from_controller_base, pose_matrix
+    from urcal.inference.coplanar import refine_coplanar_pair
+
+    if not all(result.ok for result in results):
+        return [replace(result, base_plane={"applied": False, "reason": "both robot poses required"})
+                for result in results]
+    names = ("ur5e", "ur10e")
+    poses, points3d, points2d = {}, {}, {}
+    try:
+        for name, result, estimator, joints in zip(names, results, estimators, joint_values):
+            model_points = np.asarray(estimator.fk(joints), dtype=float)
+            valid = (result.valid & np.isfinite(result.points).all(axis=1)
+                     & np.isfinite(model_points).all(axis=1))
+            points3d[name], points2d[name] = model_points[valid], result.points[valid]
+            poses[name] = pose_matrix(np.r_[np.asarray(result.tvec).reshape(3),
+                                           np.asarray(result.rvec).reshape(3)])
+        refined, diagnostic = refine_coplanar_pair(
+            poses, points3d, points2d, K, dist, {name: model_from_controller_base(name) for name in names})
+    except (ValueError, np.linalg.LinAlgError) as exc:
+        reason = "common base plane: " + str(exc)
+        return [replace(result, ok=False, empnp_rvec=result.rvec.copy(), empnp_tvec=result.tvec.copy(),
+                        base_plane={"applied": False, "reason": reason}, constraint_error=reason)
+                for result in results]
+    constrained = []
+    for name, result in zip(names, results):
+        pose = matrix_pose(refined[name])
+        constrained.append(replace(
+            result, rvec=pose[3:], tvec=pose[:3],
+            reproj_mean=diagnostic["reprojection"][name]["after_mean_px"],
+            empnp_rvec=result.rvec.copy(), empnp_tvec=result.tvec.copy(), base_plane=diagnostic))
+    return constrained
+
+
+def process_frame(bgr, joint_values, estimators, K, dist, split_ratio, transform, vote_cfg, device, show_seg=False,
+                  *, common_base_plane=False):
     """Run both models sequentially on the SAME captured frame and joint samples."""
     regions = split_regions(bgr.shape[1], bgr.shape[0], split_ratio)
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    previous = ([(estimator.prev_rvec, estimator.prev_tvec) for estimator in estimators]
+                if common_base_plane else None)
     results = [
         estimator.infer(rgb, region, joints, K, dist, transform, vote_cfg, device, show_seg)
         for estimator, region, joints in zip(estimators, regions, joint_values)
     ]
+    if common_base_plane:
+        results = constrain_base_plane(results, estimators, joint_values, K, dist)
+        for estimator, result, prior in zip(estimators, results, previous):
+            if result.ok and result.base_plane.get("applied"):
+                estimator.prev_rvec, estimator.prev_tvec = result.rvec.copy(), result.tvec.copy()
+            elif result.constraint_error:
+                estimator.prev_rvec, estimator.prev_tvec = prior
     return regions, results
 
 
 def draw_results(bgr, regions, estimators, results, K, dist, axis_len, fps, show_seg, show_keypoints=True):
+    """Render points, axes and masks; status/FPS belong in terminal summaries."""
     vis = bgr.copy()
     seg_vis = bgr.copy() if show_seg else None
     for region, estimator, result in zip(regions, estimators, results):
@@ -165,23 +220,14 @@ def draw_results(bgr, regions, estimators, results, K, dist, axis_len, fps, show
         if show_keypoints:
             visible = result.points.copy()
             visible[~result.valid] = np.nan
-            vis = draw_keypoints(vis, visible, estimator.key_names)
+            vis = draw_keypoints(vis, visible, estimator.key_names, show_labels=False)
         if result.ok:
             vis = draw_pose_axes(vis, K, dist, result.rvec, result.tvec, axis_len, thickness=2)
-        color = (40, 220, 40) if result.ok else (40, 40, 220)
-        state = "OK" if result.ok else "FAIL"
-        cv2.putText(vis, f"{estimator.name} EMPnP {state} ({result.valid.sum()}/7)",
-                    (x0 + 8, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2, cv2.LINE_AA)
         if seg_vis is not None:
             seg_vis[y0:y1, x0:x1] = make_segmentation_debug_bgr(
                 bgr[y0:y1, x0:x1], result.seg_probs, estimator.key_names, estimator.pose_args.seg_thr,
+                show_legend=False,
             )
-    cv2.putText(vis, f"Dual FPS {fps:.1f}", (8, bgr.shape[0] - 12),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
-    split_x = regions[0][2]
-    for display in (vis, seg_vis):
-        if display is not None:
-            cv2.line(display, (split_x, 0), (split_x, bgr.shape[0] - 1), (255, 255, 255), 1)
     return vis, seg_vis
 
 
@@ -212,7 +258,7 @@ def close_joint_reader(reader):
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="One D435 frame: left UR5e, right UR10e; two independent camera-from-base poses.")
+    parser = argparse.ArgumentParser(description="One D435 frame: left UR5e, right UR10e; shared mounting-plane pose estimation.")
     for robot, folder, default_lambda in (("ur5e", "v3m2a3", 0.5), ("ur10e", "ur10e_2", 0.2)):
         parser.add_argument(f"--{robot}_checkpoint", type=Path, default=BUNDLE / "trained_models" / folder / "best.pt")
         parser.add_argument(f"--{robot}_ip", help=f"{robot} RTDE controller IP")
@@ -235,6 +281,12 @@ def parse_args(argv=None):
     parser.add_argument("--empnp_max_iter", type=int, default=50)
     parser.add_argument("--empnp_tol", type=float, default=1e-6)
     parser.add_argument("--no_empnp_use_prev", action="store_false", dest="empnp_use_prev", default=True)
+    plane = parser.add_mutually_exclusive_group()
+    plane.add_argument("--common_base_plane", action="store_true",
+                       help="Jointly estimate bases on one physical mounting plane with matching +Z normals (default)")
+    plane.add_argument("--no_common_base_plane", dest="common_base_plane", action="store_false",
+                       help="Disable the shared base-plane constraint and estimate poses independently")
+    parser.set_defaults(common_base_plane=True)
     parser.add_argument("--axis_len", type=float, default=0.1)
     parser.add_argument("--show_seg", action="store_true")
     parser.add_argument("--hide_keypoints", action="store_true", help="Start with keypoint dots and labels hidden; press k to toggle")
@@ -256,6 +308,8 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    print("[info] Common base plane: " + ("ON (shared normal and mounting height)."
+          if args.common_base_plane else "OFF (independent base estimates)."), flush=True)
     # Validate assets before allocating models or opening hardware connections.
     for path in (args.ur5e_checkpoint, args.ur10e_checkpoint,
                  BUNDLE / "torch_cache/hub/checkpoints/resnet18-f37072fd.pth"):
@@ -294,6 +348,7 @@ def main(argv=None):
         show_seg = args.show_seg
         show_keypoints = not args.hide_keypoints
         fps_ema = None
+        reporter = InferenceReporter()
         print("[info] left=UR5e, right=UR10e; q/ESC quit, s toggles segmentation, k toggles keypoints")
         while True:
             start = time.perf_counter()
@@ -304,7 +359,10 @@ def main(argv=None):
             regions, results = process_frame(
                 bgr, joint_values, estimators, stream.K, stream.dist, args.split_ratio,
                 transform, vote_cfg, device, show_seg,
+                common_base_plane=args.common_base_plane,
             )
+            fps_now = 1.0 / max(time.perf_counter() - start, 1e-9)
+            reporter.emit(time.monotonic(), fps_ema if fps_ema is not None else fps_now, estimators, results)
             vis, seg_vis = draw_results(
                 bgr, regions, estimators, results, stream.K, stream.dist,
                 args.axis_len, fps_ema or 0.0, show_seg, show_keypoints,

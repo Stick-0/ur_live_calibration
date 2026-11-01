@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from tests.test_cooperative_controller import ROBOTS, packet, scene
-from urcal.control.policy import ControlFault
+from urcal.control.policy import ControlFault, stationary_velocity_limits
 from urcal.control.startup import (
     AlignmentCalibrationPending, AlignmentCalibrationTimeout, prepare_alignment,
     preflight_calibration_bases,
@@ -276,10 +276,12 @@ class AlignmentCalibrationReacquisitionTests(unittest.TestCase):
 
                     def change_after_one_wait():
                         state = rig.current_states[name]
+                        joint_limit, linear_limit, _ = stationary_velocity_limits(
+                            rig.engine.args, leader=name == rig.engine.leader)
                         if change == "joint_velocity":
-                            state.joint_velocity[0] = .006
+                            state.joint_velocity[0] = 1.2 * joint_limit
                         elif change == "tcp_velocity":
-                            state.speed[0] = .003
+                            state.speed[0] = 1.2 * linear_limit
                         elif change == "joint_position":
                             state.joints[0] += .011
                         elif change == "tcp_position":
@@ -320,10 +322,12 @@ class AlignmentCalibrationReacquisitionTests(unittest.TestCase):
 
                     def change_after_one_wait():
                         state = rig.current_states[name]
+                        joint_limit, linear_limit, _ = stationary_velocity_limits(
+                            rig.engine.args, leader=name == rig.engine.leader)
                         if change == "joint_velocity":
-                            state.joint_velocity[0] = .006
+                            state.joint_velocity[0] = 1.2 * joint_limit
                         elif change == "tcp_velocity":
-                            state.speed[0] = .003
+                            state.speed[0] = 1.2 * linear_limit
                         elif change == "joint_position":
                             state.joints[0] += .011
                         elif change == "tcp_position":

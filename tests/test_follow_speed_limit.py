@@ -17,8 +17,7 @@ from urcal.cooperative.controller import CooperativeController, ResearchFault
 CLI = ["--mode", "follow", "--ur5e_ip", "192.0.2.1", "--ur10e_ip", "192.0.2.2"]
 UNCHANGED_LIMITS = {
     "max_speed": .02, "max_angular_speed": .1, "max_joint_speed": .2,
-    "max_accel": .1, "max_angular_accel": .5, "max_joint_accel": .5,
-    "feedback_speed": .01, "feedback_angular_speed": .05,
+    "max_accel": .1, "max_angular_accel": .5,
 }
 
 
@@ -68,12 +67,40 @@ class FollowSpeedLimitTests(unittest.TestCase):
             self.assertLessEqual(np.max(np.abs(qdot - old_qdot)),
                                  args.max_joint_accel * dt + 1e-10)
 
-    def test_default_follow_limit_is_one_metre_per_second_without_other_increases(self):
-        for mode in ("follow", "hold"):
+    def test_default_follow_tcp_limit_preserves_other_physical_motion_limits(self):
+        for mode in ("follow",):
             args = parse_args(["--mode", mode] + CLI[2:])
             self.assertEqual(args.follow_max_speed, 1.)
             for name, value in UNCHANGED_LIMITS.items():
                 self.assertEqual(getattr(args, name), value, (mode, name))
+
+    def test_faster_follow_response_defaults(self):
+        for mode, expected in (("follow", (.10, .15, 3., 3.)),):
+            with self.subTest(mode=mode):
+                args = parse_args(["--mode", mode] + CLI[2:])
+                self.assertEqual((args.feedback_speed, args.feedback_angular_speed,
+                                  args.kp_linear, args.kp_angular), expected)
+
+    def test_explicit_response_tuning_wins(self):
+        for mode in ("follow",):
+            with self.subTest(mode=mode):
+                args = parse_args(["--mode", mode] + CLI[2:] + [
+                    "--feedback_speed", ".025", "--feedback_angular_speed", ".07",
+                    "--kp_linear", "1.2", "--kp_angular", "1.5"])
+                self.assertEqual((args.feedback_speed, args.feedback_angular_speed,
+                                  args.kp_linear, args.kp_angular), (.025, .07, 1.2, 1.5))
+
+    def test_partial_response_override_retains_other_defaults(self):
+        args = parse_args(CLI + ["--feedback_speed", ".025"])
+        self.assertEqual(args.feedback_speed, .025)
+        self.assertEqual((args.feedback_angular_speed, args.kp_linear, args.kp_angular), (.15, 3., 3.))
+
+    def test_response_tuning_still_requires_finite_positive_values(self):
+        for name in ("feedback_speed", "feedback_angular_speed", "kp_linear", "kp_angular"):
+            for value in ("0", "-0.1", "nan", "inf"):
+                with self.subTest(name=name, value=value), redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit):
+                        parse_args(CLI + ["--" + name + "=" + value])
 
     def test_cli_override_precedence_preserves_explicit_legacy_speed(self):
         cases = (

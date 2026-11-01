@@ -174,6 +174,32 @@ class FollowGovernorTests(unittest.TestCase):
             self.decide(velocity(.01), J=np.diag([.001, 1, 1, 1, 1, 1]))
         self.assertEqual(caught.exception.category, "singularity")
 
+    def test_blocked_tracking_direction_uses_checked_braking_and_pauses_task(self):
+        previous = np.array([.01, .01, 0., 0., 0., 0.])
+        decision = self.decide(velocity(.02), previous=previous, task=velocity(.005),
+                               extra_feasible=lambda rho, twist, qdot: twist[0] <= .009)
+        self.assertEqual(decision.reason, "tracking_braking")
+        self.assertTrue(decision.components["tracking_braking"])
+        self.assertEqual(decision.task_scale, 0.)
+        self.assertLess(np.linalg.norm(decision.twist[:3]), np.linalg.norm(previous[:3]))
+        self.assertLessEqual(np.linalg.norm(decision.twist[:3] - previous[:3]), .004 + 1e-12)
+        # The next good frame can follow again without throwing away history.
+        resumed = self.decide(velocity(.02), previous=decision.twist)
+        self.assertFalse(resumed.components["tracking_braking"])
+
+    def test_midpoint_anchor_keeps_a_feasible_transition_between_motion_histories(self):
+        previous = velocity(.01)
+        measured = previous.copy()
+        measured[1] = .006
+        requested = velocity(.02)
+        requested[1] = -.01
+        decision = self.decide(requested, previous=previous, measured=measured,
+                               extra_feasible=lambda rho, twist, qdot:
+                               abs(twist[0] - .01) < 1e-10 and .0029 < twist[1] < .0031)
+        self.assertEqual(decision.components["tracking_origin"], "midpoint")
+        for anchor in (previous, measured):
+            self.assertLessEqual(np.linalg.norm(decision.twist[:3] - anchor[:3]), .004 + 1e-12)
+
 
 if __name__ == "__main__":
     unittest.main()

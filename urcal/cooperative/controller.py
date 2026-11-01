@@ -13,11 +13,17 @@ from scipy.spatial.transform import Rotation
 from urcal.cooperative.kinematics import NominalKinematics, WorkspaceGuard
 from urcal.cooperative.task import MotionInfeasible, MotionLimits, RelativePath, govern_task, target_components
 from urcal.cooperative.follow import govern_follow
+from urcal.cooperative.feedback import damped_feedback_velocity
+from urcal.cooperative.approach import GapApproach
+from urcal.cooperative.calibration import LiveCalibrationWindow
+from urcal.cooperative.calibration_braking import prepare_calibration_braking
 from urcal.control.cartesian_ramp import bounded_speedl_acceleration
-from urcal.control.geometry import facing_follower, flange_from_tcp, inverse, matrix_pose, model_from_controller_base, pose_delta, pose_matrix, rotation_distance
+from urcal.control.geometry import calibration_output_mapping, facing_follower, flange_from_tcp, inverse, pose_delta, pose_matrix
 from urcal.control.policy import CalibrationTracker, ControlFault, PreviewCalibrationRecovery
 from urcal.control.acquisition import StationaryCalibrationAcquisition, stationary_estimator
 from urcal.cooperative.state import RelativeStateEstimator, RelativeStateError
+from urcal.cooperative.pose_smoothing import RelativePoseSmoother
+from urcal.cooperative.base_plane import constrain_base_snapshot
 
 
 ROBOTS = ("ur5e", "ur10e")
@@ -30,6 +36,10 @@ class ResearchFault(ControlFault):
         # independent diagnostics on the exception for the runtime WAIT log.
         self.details = copy.deepcopy(details) if details is not None else {}
         super().__init__(message)
+
+
+class CalibrationBrakingRequired(ControlFault):
+    """Discard an unsent tracking proposal; the next tick must brake instead."""
 
 
 def advance_origin_pose(pose, twist, dt):
@@ -70,6 +80,11 @@ class CooperativeController:
         self.leader = args.leader
         self.follower = next(name for name in ROBOTS if name != self.leader)
         self.commanded = (self.follower,)
+        # Saved research configurations without this option keep their original
+        # velocity model. The live CLI defaults to pose-only visual updates.
+        self.base_motion_mode = getattr(args, "base_motion_mode", "velocity")
+        if self.base_motion_mode not in ("pose", "velocity"):
+            raise ValueError("base_motion_mode must be pose or velocity")
         self.target_tolerance_m = float(getattr(args, "target_tolerance_m", 0.))
         self.target_tolerance_rad = np.deg2rad(float(getattr(args, "target_tolerance_deg", 0.)))
         if (not np.isfinite([self.target_tolerance_m, self.target_tolerance_rad]).all()
@@ -79,12 +94,49 @@ class CooperativeController:
         response = getattr(args, "leader_response", "strict")
         if response not in ("bounded", "strict"):
             raise ValueError("leader_response must be bounded or strict")
-        self.bounded_leader = response == "bounded" and args.method == "separated" and self.approximate_targets
+        self.follow_law = getattr(args, "follow_law", "feedforward")
+        if self.follow_law not in ("feedforward", "pose"):
+            raise ValueError("follow_law must be feedforward or pose")
+        if self.follow_law == "pose" and (args.method != "separated"
+                or self.base_motion_mode != "pose" or response != "bounded"):
+            raise ValueError("pose follow_law requires method separated, pose base updates and bounded response")
+        self.bounded_leader = (response == "bounded" and args.method == "separated"
+                               and (self.approximate_targets or self.base_motion_mode == "pose"))
+        self.live_calibration = None
+        if (getattr(args, "live_calibration_recovery", False)
+                and self.base_motion_mode == "pose" and self.bounded_leader):
+            self.live_calibration = LiveCalibrationWindow(
+                timeout=getattr(args, "calibration_recovery_timeout", 2.),
+                blend_time=getattr(args, "calibration_blend_time", .5),
+                max_shift_m=getattr(args, "calibration_recovery_max_shift_m", .15),
+                max_shift_deg=getattr(args, "calibration_recovery_max_shift_deg", 15.))
+        self._last_live_snapshot = None
+        self.pose_smoother = None
+        if self.base_motion_mode == "pose" and getattr(args, "base_pose_window", 0):
+            self.pose_smoother = RelativePoseSmoother(
+                window=args.base_pose_window,
+                time_constant=getattr(args, "base_pose_smoothing_time", .35),
+                deadband_m=getattr(args, "base_pose_deadband_m", .005),
+                deadband_rad=np.deg2rad(getattr(args, "base_pose_deadband_deg", .5)),
+                linear_rate=getattr(args, "base_pose_update_speed", .02),
+                angular_rate=getattr(args, "base_pose_update_angular_speed", .05))
+        # Historical research snapshots without this option retain their law.
+        self.follow_damping_time = float(getattr(args, "follow_damping_time", 0.))
+        if not np.isfinite(self.follow_damping_time) or self.follow_damping_time < 0.:
+            raise ValueError("follow_damping_time must be finite and nonnegative")
         self.tracking_offset = None
         self.previous_base_compensation = np.zeros(6)
         self.previous_base_compensation_qdot = np.zeros(6)
         self.offsets = {name: pose_matrix(getattr(args, name + "_tcp_offset") or [0.]*6) for name in ROBOTS}
-        self.mappings = {name: model_from_controller_base(name) for name in ROBOTS}
+        # Fixed dataset-frame conversion is enabled by default, including
+        # old saved research argument sets that lacked this output option.
+        self.ur10e_output_correction = getattr(args, "ur10e_output_correction", True)
+        # Old saved configurations predate the mounting-plane assumption.
+        self.common_base_plane = getattr(args, "common_base_plane", False)
+        if not isinstance(self.common_base_plane, bool):
+            raise ValueError("common_base_plane must be a boolean")
+        self.mappings = {name: calibration_output_mapping(
+            name, ur10e_output_correction=self.ur10e_output_correction) for name in ROBOTS}
         self.models = models or {name: NominalKinematics(name, self.offsets[name]) for name in ROBOTS}
         self.guard = guard or WorkspaceGuard(self.models, args.workspace_config)
         self.gate = CalibrationTracker(
@@ -96,7 +148,7 @@ class CooperativeController:
         self.stationary_acquisition = StationaryCalibrationAcquisition(self.gate)
         self.preview_recovery = PreviewCalibrationRecovery()
         self.reacquisition_count = 0
-        # Keep the original phase limits in args: alignment and hold use
+        # Keep the original phase limits in args: initial alignment uses
         # max_speed, while following has its own TCP translation cap.
         follow_max_speed = getattr(args, "follow_max_speed", None)
         self.limits = MotionLimits(
@@ -116,14 +168,17 @@ class CooperativeController:
         self.invalid_since = None
         self.last_rejection = ""
         self.task_paused = False
+        self.gap_approach = GapApproach()
         self.apply_target({"type": "target", "gap": args.gap, "path": args.path,
                            "path_delta": args.path_delta, "path_radius": args.path_radius,
                            "path_duration": args.path_duration})
 
     def _new_estimator(self):
         args = self.args
+        mode = ("pose" if self.base_motion_mode == "pose" else
+                "direct" if args.method == "direct" else "predict")
         return RelativeStateEstimator(
-            mode="direct" if args.method == "direct" else "predict", alpha=args.filter_alpha,
+            mode=mode, alpha=1. if args.method == "direct" else args.filter_alpha,
             velocity_alpha=args.velocity_alpha, max_prediction_age=args.prediction_horizon,
             max_measurement_age=args.max_calibration_age,
             max_linear_speed=args.max_base_speed, max_angular_speed=args.max_base_angular_speed)
@@ -140,13 +195,20 @@ class CooperativeController:
         self.estimator = self._new_estimator()
         self.preview_recovery.reset()
         self.stationary_acquisition.reset()
+        if self.live_calibration is not None:
+            self.live_calibration.reset()
+        self._last_live_snapshot = None
         self.ever_ready = False
+        if self.pose_smoother is not None:
+            self.pose_smoother.reset()
         self.invalid_since, self.last_rejection = None, ""
         for attribute in ("previous_twist", "previous_qdot", "previous_compensation",
                           "previous_compensation_qdot", "previous_feedback",
                           "previous_base_compensation", "previous_base_compensation_qdot"):
             getattr(self, attribute)[:] = 0.
-        self.tracking_offset = None
+        self.pause_gap_approach("motion stopped; resume explicitly after Arm")
+        self.tracking_offset = np.eye(4) if self.gap_approach.state != "idle" else None
+        self.previous_task_scale = 0.
         self.settle_elapsed, self.finished = 0., False
 
     def apply_target(self, command):
@@ -161,6 +223,9 @@ class CooperativeController:
                             radius=command.get("path_radius", self.args.path_radius),
                             duration=command.get("path_duration", self.args.path_duration))
         # The relative pose is configured, never re-captured from measured error.
+        if self.gap_approach.state != "idle":
+            self.task_paused = False
+        self.gap_approach.reset()
         self.path, self.gap, self.progress = path, gap, 0.
         self.settle_elapsed, self.finished = 0., False
         self.previous_twist[:] = 0
@@ -168,9 +233,93 @@ class CooperativeController:
         self.previous_compensation[:] = 0
         self.previous_compensation_qdot[:] = 0
         self.previous_feedback[:] = 0
+        self.previous_task_scale = 0.
         self.tracking_offset = None
         self.previous_base_compensation[:] = 0
         self.previous_base_compensation_qdot[:] = 0
+        if self.live_calibration is not None:
+            self.live_calibration.reset()
+        self._last_live_snapshot = None
+
+        if self.pose_smoother is not None:
+            self.pose_smoother.reset()
+
+    def _gap_approach_block(self, enabled):
+        if not enabled:
+            return "available during active following"
+        if not self.bounded_leader or self.base_motion_mode != "pose":
+            return "requires separated, bounded following with pose base updates"
+        if self.invalid_since is not None or (self.live_calibration is not None and
+                (self.live_calibration.waiting or self.live_calibration.blending)):
+            return "waiting for live calibration recovery"
+        if self.tracking_offset is None:
+            return "waiting for the first committed following command"
+        if self.gap_approach.state == "idle":
+            if self.path.kind != "hold":
+                return "approach requires stationary relative following"
+            if self.args.min_gap > .15:
+                return "configured minimum flange gap exceeds 15 cm"
+            reference = self.path.pose(self.progress) @ self.tracking_offset
+            if reference[2, 3] <= .15 + 1e-12:
+                return "commanded axial gap is already at or below 15 cm"
+        return ""
+
+    def handle_gap_approach(self, action, *, enabled):
+        """Change only the relative path; never reset an active motion history."""
+        if action not in ("start", "pause", "resume"):
+            raise ValueError("unknown gap approach action")
+        if action == "pause":
+            self.pause_gap_approach("operator paused approach; leader following continues")
+            return
+        # Explicit actions are idempotent, including delayed duplicate starts.
+        if ((action == "start" and self.gap_approach.state != "idle") or
+                (action == "resume" and self.gap_approach.state != "paused")):
+            return
+        reason = self._gap_approach_block(enabled)
+        if reason:
+            raise ValueError(reason)
+        if action == "start":
+            path = self.gap_approach.start(
+                self.path, self.progress, self.tracking_offset,
+                speed=getattr(self.args, "approach_speed", .005), min_gap=self.args.min_gap)
+            # The former offset is already in path.start. Identity preserves
+            # the command exactly and makes its final signed axial gap 15 cm.
+            self.path, self.gap, self.progress = path, float(path.start[2, 3]), 0.
+            self.tracking_offset = np.eye(4)
+            self.settle_elapsed, self.finished = 0., False
+        else:
+            self.gap_approach.resume()
+        self.task_paused = False
+
+    def pause_gap_approach(self, reason):
+        if self.gap_approach.pause(reason):
+            self.task_paused = True
+
+    def _gap_approach_temporary_hold(self):
+        return bool(self.gap_approach.state == "running" and
+                    (self.invalid_since is not None or
+                     (self.live_calibration is not None and self.live_calibration.blending)))
+
+    def gap_approach_status(self, *, enabled, states=None, snapshot=None):
+        info = self.gap_approach.info(self.progress if self.gap_approach.state != "idle" else 0.)
+        blocked = self._gap_approach_block(enabled)
+        info["enabled"] = bool(enabled and self.gap_approach.state != "complete" and
+                               (self.gap_approach.state == "running" or not blocked))
+        info["reason"] = blocked or info["reason"]
+        info["temporary_hold"] = self._gap_approach_temporary_hold()
+        if info["temporary_hold"]:
+            info["reason"] = "Approach waiting for fresh coordinates; continues automatically when ready"
+        info["target_gap_m"] = .15
+        offset = np.eye(4) if self.tracking_offset is None else self.tracking_offset
+        info["commanded_gap_m"] = float((self.path.pose(self.progress) @ offset)[2, 3])
+        info["estimated_gap_m"] = None
+        snapshot = self._last_live_snapshot if snapshot is None else snapshot
+        if states is not None and snapshot is not None:
+            bases = snapshot.base_poses
+            leader = bases[self.leader] @ flange_from_tcp(states[self.leader].tcp, self.offsets[self.leader])
+            follower = bases[self.follower] @ flange_from_tcp(states[self.follower].tcp, self.offsets[self.follower])
+            info["estimated_gap_m"] = float((inverse(leader) @ follower)[2, 3])
+        return info
 
     def _following_reference(self, nominal, current_relative):
         """Keep one accepted task offset, without absorbing later following lag.
@@ -188,7 +337,68 @@ class CooperativeController:
             offset = inverse(nominal) @ accepted
         return nominal @ offset, offset.copy()
 
-    def ingest(self, packet, received_at, *, allow_reacquire=False):
+    def _start_live_observation(self, now, reason, *, pause_approach=True):
+        if pause_approach:
+            self.pause_gap_approach("calibration observation; resume approach after recovery")
+        if self._last_live_snapshot is None:
+            raise self._measurement_fault("measurement_unavailable", reason, now)
+        # Collect independent replacement evidence during the short outlier
+        # grace too. Entering braking must not discard those real captures or
+        # assign them new receipt times. start() resets its collector, so keep
+        # the existing one when this is the first transition to observation.
+        candidate = copy.deepcopy(self.live_calibration.candidate)
+        entering = not self.live_calibration.waiting
+        self.live_calibration.start(self._last_live_snapshot, now, reason)
+        if entering:
+            self.live_calibration.candidate = candidate
+            # The grace consumes part of the existing recovery budget; it
+            # must not postpone the absolute loss deadline. In particular a
+            # late good packet cannot restart a full observation interval.
+            if self.invalid_since is not None:
+                self.live_calibration.started_at = min(float(now), self.invalid_since)
+                self.live_calibration.check_deadline(now)
+        if self.invalid_since is None:
+            self.invalid_since = now
+        self.last_rejection = reason
+
+    def _offer_live_candidate(self, packet, received_at):
+        window = self.live_calibration
+        window.check_deadline(received_at)
+        candidate = window.candidate.offer(packet, received_at, self.gate)
+        if candidate is None:
+            if window.waiting:
+                self.last_rejection = window.candidate.reason
+                self.gate.reject(packet.sequence, reason=self.last_rejection)
+            return False
+        # Pose-only estimation has no visual base velocity to replay. This
+        # installs only real, fresh candidate captures, without changing the
+        # frozen coordinates used by the bounded braking proposals.
+        estimator = stationary_estimator(self._new_estimator, candidate, self.mappings, received_at)
+        estimator.estimate(received_at, leader=self.leader)
+        if not window.waiting:
+            # Three coherent fresh captures can establish a new baseline
+            # while the old one is still usable. Blend from the held geometry
+            # without inserting a gratuitous brake/restart between them.
+            # This replacement has already passed the fresh-capture consensus
+            # checks while normal following remains authorized. Freeze the
+            # approach clock during blending, without latching operator pause.
+            self._start_live_observation(received_at, self.last_rejection, pause_approach=False)
+        window.complete(received_at)
+        self.gate, self.estimator = candidate, estimator
+        self.invalid_since, self.last_rejection, self.ever_ready = None, "", True
+        return True
+
+    def ingest(self, packet, received_at, *, allow_reacquire=False, active_recovery=False):
+        active_recovery = active_recovery and self.live_calibration is not None
+        if active_recovery:
+            # A fresh packet arriving after the observation budget expires
+            # cannot silently authorize continuing the old motion session.
+            self.live_calibration.check_deadline(received_at)
+            if (not self.live_calibration.waiting and self.invalid_since is not None
+                    and not self._live_grace_usable(received_at)):
+                self._start_live_observation(received_at, self.last_rejection)
+            if self.live_calibration.waiting:
+                return self._offer_live_candidate(packet, received_at)
         if (allow_reacquire and getattr(self.args, "initial_align", False)
                 and getattr(self.args, "calibration_acquisition", "consecutive") == "consensus"):
             previous_sequence = self.stationary_acquisition.sequence
@@ -221,12 +431,27 @@ class CooperativeController:
                 self.invalid_since, self.last_rejection = None, ""
                 self.ever_ready = self.ever_ready or self.gate.ready
                 self.preview_recovery.reset()
+                if active_recovery:
+                    self.live_calibration.candidate.reset()
             return accepted
         except (ControlFault, RelativeStateError, ValueError) as exc:
+            if not active_recovery:
+                self.pause_gap_approach("calibration rejected; resume approach after recovery")
+            stable_count = self.gate.stable_count
             self.gate.reject(packet.sequence, reason=str(exc))
             self.last_rejection = str(exc)
             if self.invalid_since is None:
                 self.invalid_since = received_at
+            if active_recovery:
+                # reject() consumes the sequence but normally resets startup
+                # stability. An ACTIVE outlier does not erase the evidence for
+                # the last accepted pose: hold it only while its original
+                # capture is fresh and the short invalid-input budget remains.
+                self.gate.stable_count = stable_count
+                if not self._live_grace_usable(received_at):
+                    self.gate.stable_count = 0
+                    self._start_live_observation(received_at, str(exc))
+                return self._offer_live_candidate(packet, received_at)
             if allow_reacquire:
                 candidate = self.preview_recovery.offer(packet, received_at, self.gate)
                 if candidate is not None:
@@ -264,6 +489,8 @@ class CooperativeController:
         return ResearchFault(category, message, details)
 
     def state(self, now, active):
+        if active and self.live_calibration is not None and self.live_calibration.waiting:
+            raise CalibrationBrakingRequired("calibration observation requires a braking proposal")
         if not active or not self.ever_ready:
             try:
                 self.gate.check_fresh(now)
@@ -272,14 +499,84 @@ class CooperativeController:
         if self.invalid_since is not None and now - self.invalid_since > self.args.max_invalid_duration:
             raise self._measurement_fault("measurement_invalid", self.last_rejection, now)
         try:
-            return self.estimator.estimate(now, leader=self.leader)
+            snapshot = self.estimator.estimate(now, leader=self.leader)
         except RelativeStateError as exc:
             raise self._measurement_fault("measurement_expired", str(exc), now) from exc
+        if self.common_base_plane:
+            snapshot = constrain_base_snapshot(snapshot, self.leader, self.mappings)
+        if active and self.pose_smoother is not None:
+            # Retained across live estimator replacement: a new PnP branch
+            # must not bypass gradual coordinate application. Only a new
+            # stopped/target session resets this filter; no timestamps change.
+            snapshot = self.pose_smoother.apply(snapshot, now, self.leader)
+        if active and self.live_calibration is not None:
+            snapshot = self.live_calibration.blend(snapshot, now, self.leader)
+        # Independent temporal interpolation can leave the common-plane
+        # manifold even when all input image pairs satisfy it exactly.
+        if self.common_base_plane and active:
+            snapshot = constrain_base_snapshot(snapshot, self.leader, self.mappings)
+        self._last_live_snapshot = copy.deepcopy(snapshot)
+        return snapshot
 
-    def prepare(self, now, states, dt, active=False):
+    def _live_grace_usable(self, now):
+        if (self._last_live_snapshot is None or not self.ever_ready
+                or self.invalid_since is None
+                or not 0. <= now - self.invalid_since <= self.args.max_invalid_duration):
+            return False
+        try:
+            self.gate.check_fresh(now)
+            self.estimator.estimate(now, leader=self.leader)
+        except (ControlFault, RelativeStateError):
+            return False
+        return True
+
+    def check_live_calibration(self, now):
+        """Check the shared observation deadline without advancing pose blending."""
+        window = self.live_calibration
+        if window is None:
+            raise ControlFault("live calibration observation is not enabled")
+        window.check_deadline(now)
+        if window.waiting:
+            return False
+        if self._live_grace_usable(now):
+            return True
+        reason = self.last_rejection if self.invalid_since is not None else ""
+        if not reason:
+            try:
+                self.gate.check_fresh(now)
+                self.estimator.estimate(now, leader=self.leader)
+            except (ControlFault, RelativeStateError) as exc:
+                reason = str(exc)
+        if reason:
+            self._start_live_observation(now, reason)
+            return False
+        return True
+
+    def prepare_live(self, now, states, dt):
+        if self.live_calibration is None:
+            return self.prepare(now, states, dt, active=True)
+        if self.check_live_calibration(now):
+            proposal = self.prepare(now, states, dt, active=True)
+        else:
+            proposal = prepare_calibration_braking(self, now, states, dt, self.live_calibration.frozen)
+        proposal.record["live_calibration"] = self.live_calibration.status(now)
+        proposal.record["live_calibration"].update({
+            "grace": self.invalid_since is not None and not self.live_calibration.waiting,
+            "grace_elapsed": 0. if self.invalid_since is None else max(0., now - self.invalid_since),
+            "grace_timeout": self.args.max_invalid_duration,
+            "grace_reason": self.last_rejection,
+            "last_accepted_capture": self.gate.last_capture,
+        })
+        return proposal
+
+    def prepare(self, now, states, dt, active=False, *, snapshot_override=None, calibration_braking=False):
         if not np.isfinite(dt) or dt <= 0:
             raise ResearchFault("timing", "invalid control period")
-        snapshot = self.state(now, active)
+        if calibration_braking and snapshot_override is None:
+            raise ResearchFault("robot_state", "calibration braking needs an explicit frozen snapshot")
+        snapshot = self.state(now, active) if snapshot_override is None else snapshot_override
+        bounded_command = self.bounded_leader or calibration_braking
+        incremental_target = self.approximate_targets or calibration_braking
         bases = snapshot.base_poses
         flanges, nominal_tcp, jacobians, qdots, fk_corrections = {}, {}, {}, {}, {}
         for name in ROBOTS:
@@ -292,7 +589,7 @@ class CooperativeController:
             # Anchor short-horizon nominal FK at the measured controller TCP.
             # This is a local motion model, never a replacement calibration.
             fk_corrections[name] = inverse(nominal_tcp[name]) @ actual
-            if self.approximate_targets:
+            if incremental_target:
                 jacobians[name] = jacobians[name].copy()
                 jacobians[name][:3] += np.cross(
                     jacobians[name][3:].T, actual[:3, 3] - nominal_tcp[name][:3, 3]).T
@@ -315,7 +612,8 @@ class CooperativeController:
         tracking_relative, tracking_offset = relative_goal, None
         if self.bounded_leader:
             tracking_relative, tracking_offset = self._following_reference(relative_goal, current_relative)
-        if min(np.linalg.norm(current_relative[:3, 3]), np.linalg.norm(relative_goal[:3, 3])) < self.args.min_gap:
+        if (np.linalg.norm(current_relative[:3, 3]) < self.args.min_gap
+                or (not calibration_braking and np.linalg.norm(relative_goal[:3, 3]) < self.args.min_gap)):
             raise ResearchFault("clearance", "flange-origin separation below min_gap")
         dp_rel, dr_rel = pose_delta(current_relative, relative_goal)
         error_m, error_rad = np.linalg.norm(dp_rel), np.linalg.norm(dr_rel)
@@ -324,13 +622,24 @@ class CooperativeController:
             leader_jacobian = leader_jacobian.copy()
             leader_jacobian[:3] += np.cross(
                 leader_jacobian[3:].T, flanges[leader][:3, 3] - nominal_leader_flange[:3, 3]).T
-        target, base_comp, leader_comp, task_twist = target_components(
-            bases, snapshot.base_twists, leader, follower, flanges[leader],
-            leader_jacobian @ qdots[leader], relative_goal,
-            self.path.derivative(self.progress), self.offsets[follower])
-        nominal_base_comp, nominal_leader_comp, nominal_task_twist = (
-            base_comp.copy(), leader_comp.copy(), task_twist.copy())
-        if self.approximate_targets:
+        pose_command_target = None
+        if self.follow_law == "pose":
+            # Recompute the complete TCP target from this tick's coordinates.
+            # The nominal goal remains available for the unchanged task gates;
+            # feedback follows the one accepted, fixed relative offset.
+            follower_from_leader_flange = inverse(bases[follower]) @ bases[leader] @ flanges[leader]
+            target = follower_from_leader_flange @ relative_goal @ self.offsets[follower]
+            pose_command_target = follower_from_leader_flange @ tracking_relative @ self.offsets[follower]
+            base_comp, leader_comp, task_twist = (np.zeros(6) for _ in range(3))
+            nominal_base_comp, nominal_leader_comp, nominal_task_twist = (np.zeros(6) for _ in range(3))
+        else:
+            target, base_comp, leader_comp, task_twist = target_components(
+                bases, snapshot.base_twists, leader, follower, flanges[leader],
+                leader_jacobian @ qdots[leader], relative_goal,
+                self.path.derivative(self.progress), self.offsets[follower])
+            nominal_base_comp, nominal_leader_comp, nominal_task_twist = (
+                base_comp.copy(), leader_comp.copy(), task_twist.copy())
+        if self.approximate_targets and self.follow_law != "pose":
             # Carry the currently achieved relative pose with the moving bases
             # and leader. A feasible offset inside the task allowance must not
             # become an artificial lever-arm error under leader rotation.
@@ -338,7 +647,7 @@ class CooperativeController:
                 bases, snapshot.base_twists, leader, follower, flanges[leader],
                 leader_jacobian @ qdots[leader], current_relative,
                 self.path.derivative(self.progress), self.offsets[follower])
-        if self.bounded_leader:
+        if self.bounded_leader and self.follow_law != "pose":
             # The fixed allowed offset follows the nominal relative path.
             # Include the lever arm introduced by its translated origin.
             tracking_derivative = self.path.derivative(self.progress).copy()
@@ -354,7 +663,7 @@ class CooperativeController:
         tracking_error_m, tracking_error_rad = ((error_m, error_rad) if self.approximate_targets
                                                 else (tcp_error_m, tcp_error_rad))
         rotation_limit = np.deg2rad(self.args.max_target_deg)
-        if tracking_error_m > self.args.max_target_m or tracking_error_rad > rotation_limit:
+        if not calibration_braking and (tracking_error_m > self.args.max_target_m or tracking_error_rad > rotation_limit):
             raise ResearchFault(
                 "tracking_error",
                 f"{follower} relative target error: {tracking_error_m * 1000:.1f}/{self.args.max_target_m * 1000:.1f} mm, "
@@ -367,10 +676,16 @@ class CooperativeController:
                  "rotation_exceeded": bool(tracking_error_rad > rotation_limit),
                  "current_tcp": current, "target_tcp": target,
                  "current_relative_flange": current_relative, "desired_relative_flange": relative_goal})
-        for pose in ((current,) if self.approximate_targets else (current, target)):
-            if np.linalg.norm(pose[:3, 3] - self.initial_tcp[:3, 3]) > self.args.max_travel:
-                raise ResearchFault("workspace", "TCP outside start-position travel envelope")
-            if self.approximate_targets and not self.guard.pose_allowed(follower, pose):
+        for pose in ((current,) if incremental_target else (current, target)):
+            travel = float(np.linalg.norm(pose[:3, 3] - self.initial_tcp[:3, 3]))
+            if travel > self.args.max_travel:
+                raise ResearchFault("workspace",
+                                    f"TCP outside start-position travel envelope ({travel * 1000:.1f}/"
+                                    f"{self.args.max_travel * 1000:.1f}mm)",
+                                    {"travel_m": travel, "limit_m": self.args.max_travel,
+                                     "origin_tcp": self.initial_tcp, "checked_tcp": pose,
+                                     "frame": follower + "_controller_base"})
+            if incremental_target and not self.guard.pose_allowed(follower, pose):
                 raise ResearchFault("workspace", "controller TCP outside workspace")
         valid, reason, clearance = self.guard.check(bases, {name: states[name].joints for name in ROBOTS})
         if not valid:
@@ -378,7 +693,46 @@ class CooperativeController:
         # A deadband reduces stationary sensor jitter. Bound the requested
         # feedback before assessing the whole command. Bounded following may
         # ramp leader+feedback, while the base component remains mandatory.
-        if self.approximate_targets:
+        damped = self.bounded_leader and self.follow_damping_time > 0. and not calibration_braking
+        relative_tcp_velocity = measured_twist - base_comp - leader_comp - task_twist * self.previous_task_scale
+        braking_linear = braking_angular = None
+        if damped:
+            # speedL uses one scalar acceleration for both Cartesian groups.
+            # Bound it for arbitrary simultaneous unit directions through J^-1;
+            # reserve half for the other correction/leader response. This is a
+            # local braking budget, with final feasibility still governed below.
+            try:
+                inverse_jacobian = np.linalg.solve(jacobians[follower], np.eye(6))
+            except np.linalg.LinAlgError as exc:
+                raise MotionInfeasible("cannot solve feedback braking Jacobian", "singularity") from exc
+            joint_response = (np.linalg.norm(inverse_jacobian[:, :3], axis=1)
+                              + np.linalg.norm(inverse_jacobian[:, 3:], axis=1))
+            ramp_budget = min(self.args.max_accel, self.args.max_angular_accel,
+                              float(np.min(self.limits.joint_accel / np.maximum(joint_response, 1e-12))))
+            lever_length = np.linalg.norm(current[:3, 3] - flanges[follower][:3, 3])
+            braking_linear = .5 * ramp_budget / (1. + lever_length)
+            braking_angular = .5 * ramp_budget / max(1., lever_length)
+        if self.follow_law == "pose":
+            # One Cartesian pose-error demand, expressed at the measured TCP
+            # in follower-base axes. No leader, visual-base or path velocity
+            # is subtracted from damping or added to the resulting command.
+            pose_dp, pose_dr = pose_delta(current, pose_command_target)
+            effective_dp = outside_tolerance(pose_dp, self.args.position_deadband)
+            effective_dr = outside_tolerance(pose_dr, np.deg2rad(self.args.rotation_deadband_deg))
+            desired_feedback = np.r_[
+                norm_limit(effective_dp * self.args.kp_linear, self.args.feedback_speed),
+                norm_limit(effective_dr * self.args.kp_angular, self.args.feedback_angular_speed)]
+            if damped:
+                desired_feedback = np.r_[
+                    damped_feedback_velocity(
+                        effective_dp, measured_twist[:3], gain=self.args.kp_linear,
+                        speed_limit=self.args.feedback_speed, deceleration=braking_linear,
+                        reaction_time=self.follow_damping_time),
+                    damped_feedback_velocity(
+                        effective_dr, measured_twist[3:], gain=self.args.kp_angular,
+                        speed_limit=self.args.feedback_angular_speed, deceleration=braking_angular,
+                        reaction_time=self.follow_damping_time)]
+        elif self.approximate_targets:
             if self.bounded_leader:
                 follow_dp, follow_dr = pose_delta(current_relative, tracking_relative)
                 effective_dp = outside_tolerance(follow_dp, self.args.position_deadband)
@@ -391,6 +745,18 @@ class CooperativeController:
                                        self.args.feedback_speed)
             angular = norm_limit(relative_to_base @ effective_dr * self.args.kp_angular,
                                  self.args.feedback_angular_speed)
+            if damped:
+                lever = current[:3, 3] - flanges[follower][:3, 3]
+                relative_flange_velocity = (relative_tcp_velocity[:3]
+                                            - np.cross(relative_tcp_velocity[3:], lever))
+                flange_linear = damped_feedback_velocity(
+                    relative_to_base @ effective_dp, relative_flange_velocity,
+                    gain=self.args.kp_linear, speed_limit=self.args.feedback_speed,
+                    deceleration=braking_linear, reaction_time=self.follow_damping_time)
+                angular = damped_feedback_velocity(
+                    relative_to_base @ effective_dr, relative_tcp_velocity[3:],
+                    gain=self.args.kp_angular, speed_limit=self.args.feedback_angular_speed,
+                    deceleration=braking_angular, reaction_time=self.follow_damping_time)
             tcp_linear = flange_linear + np.cross(angular, current[:3, 3] - flanges[follower][:3, 3])
             desired_feedback = np.r_[tcp_linear, angular]
             # Preserve the flange/TCP lever-arm relation when a long tool makes
@@ -403,9 +769,24 @@ class CooperativeController:
             desired_feedback = np.concatenate((
                 norm_limit(dp * self.args.kp_linear, self.args.feedback_speed) if np.linalg.norm(dp) > self.args.position_deadband else np.zeros(3),
                 norm_limit(dr * self.args.kp_angular, self.args.feedback_angular_speed) if np.linalg.norm(dr) > np.deg2rad(self.args.rotation_deadband_deg) else np.zeros(3)))
-        feedback = self.previous_feedback.copy()
-        feedback[:3] += norm_limit(desired_feedback[:3] - feedback[:3], self.args.max_accel * dt * .5)
-        feedback[3:] += norm_limit(desired_feedback[3:] - feedback[3:], self.args.max_angular_accel * dt * .5)
+            if damped:
+                desired_feedback = np.r_[
+                    damped_feedback_velocity(
+                        outside_tolerance(dp, self.args.position_deadband), relative_tcp_velocity[:3],
+                        gain=self.args.kp_linear, speed_limit=self.args.feedback_speed,
+                        deceleration=braking_linear, reaction_time=self.follow_damping_time),
+                    damped_feedback_velocity(
+                        outside_tolerance(dr, np.deg2rad(self.args.rotation_deadband_deg)), relative_tcp_velocity[3:],
+                        gain=self.args.kp_angular, speed_limit=self.args.feedback_angular_speed,
+                        deceleration=braking_angular, reaction_time=self.follow_damping_time)]
+        if damped:
+            # The governor bounds the complete command against measured and
+            # transmitted motion. A second feedback-only slew delayed braking.
+            feedback = desired_feedback
+        else:
+            feedback = self.previous_feedback.copy()
+            feedback[:3] += norm_limit(desired_feedback[:3] - feedback[:3], self.args.max_accel * dt * .5)
+            feedback[3:] += norm_limit(desired_feedback[3:] - feedback[3:], self.args.max_angular_accel * dt * .5)
         separated = self.args.method == "separated"
         compensation = base_comp + leader_comp if separated else np.zeros(6)
         mandatory_compensation = base_comp if self.bounded_leader else compensation
@@ -417,25 +798,43 @@ class CooperativeController:
                               np.deg2rad(self.args.max_target_deg - self.args.slow_error_deg)))
         if self.task_paused or self.invalid_since is not None or self.progress >= 1.:
             rho_cap = 0.
+        if self._gap_approach_temporary_hold():
+            # A transient visual rejection already freezes the clock above.
+            # Keep it frozen while a fresh consensus is blended in as well;
+            # only a successfully sent command can advance it afterwards.
+            rho_cap = 0.
+        if calibration_braking:
+            # Decelerate the physical robot, independent of the unavailable
+            # visual target, leader feedforward or previously requested base
+            # compensation. Complete command/encoder bounds still apply.
+            feedback = np.zeros(6)
+            base_comp, leader_comp, task_twist = (np.zeros(6) for _ in range(3))
+            compensation, mandatory_compensation, work_twist = (np.zeros(6) for _ in range(3))
+            rho_cap = 0.
         next_targets, next_nominal_targets, next_relative_commands = {}, {}, {}
         geometry_failure = None
+        geometry_details = {}
 
-        # Even with task rate zero, externally moving bases require motion.
-        # Check that mandatory compensation itself has geometric room.
-        try:
-            compensation_qdot = np.linalg.solve(jacobians[follower], mandatory_compensation)
-        except np.linalg.LinAlgError as exc:
-            raise ResearchFault("singularity", "cannot solve mandatory compensation joints") from exc
-        for fraction in (.5, 1.):
-            trial_bases = {name: advance_origin_pose(bases[name], snapshot.base_twists[name], dt * fraction) for name in ROBOTS}
-            trial_q = {leader: states[leader].joints + qdots[leader] * dt * fraction,
-                       follower: states[follower].joints + compensation_qdot * dt * fraction}
-            allowed, why, _ = self.guard.check(trial_bases, trial_q)
-            if not allowed:
-                raise ResearchFault("compensation_infeasible", "mandatory compensation: " + why)
+        # Velocity research mode requires independent feasibility of external
+        # base compensation. Pose/bounded following has no such mandatory
+        # motion: test the actual candidate's sweep below, rather than a
+        # hypothetical stationary follower with the leader still moving.
+        if not calibration_braking and not (self.base_motion_mode == "pose" and self.bounded_leader):
+            try:
+                compensation_qdot = np.linalg.solve(jacobians[follower], mandatory_compensation)
+            except np.linalg.LinAlgError as exc:
+                raise ResearchFault("singularity", "cannot solve mandatory compensation joints") from exc
+            for fraction in (.5, 1.):
+                trial_bases = {name: advance_origin_pose(bases[name], snapshot.base_twists[name], dt * fraction) for name in ROBOTS}
+                trial_q = {leader: states[leader].joints + qdots[leader] * dt * fraction,
+                           follower: states[follower].joints + compensation_qdot * dt * fraction}
+                allowed, why, _ = self.guard.check(trial_bases, trial_q)
+                if not allowed:
+                    raise ResearchFault("compensation_infeasible", "mandatory compensation: " + why)
 
         def candidate_allowed(rho, twist, qdot):
-            nonlocal geometry_failure
+            nonlocal geometry_failure, geometry_details
+            geometry_details = {}
             # The governor constrains transitions from measured motion; also
             # preserve the slew limit between successive transmitted commands.
             if (np.linalg.norm(twist[:3] - self.previous_twist[:3]) > self.args.max_accel * dt + 1e-12
@@ -445,18 +844,18 @@ class CooperativeController:
                 return False
             next_progress = min(1., self.progress + rho * dt / self.path.duration) if self.path.kind != "hold" else self.progress
             desired = self.path.pose(next_progress)
-            if np.linalg.norm(desired[:3, 3]) < self.args.min_gap:
+            if not calibration_braking and np.linalg.norm(desired[:3, 3]) < self.args.min_gap:
                 geometry_failure = ("clearance_infeasible", "next relative flange gap below min_gap")
                 return False
             future_bases = {name: advance_origin_pose(bases[name], snapshot.base_twists[name], dt) for name in ROBOTS}
             future_leader = advance_origin_pose(flanges[leader], leader_jacobian @ qdots[leader], dt)
             next_target = inverse(future_bases[follower]) @ future_bases[leader] @ future_leader @ desired @ self.offsets[follower]
             nominal_next_target = next_target.copy()
-            if not self.approximate_targets and (not self.guard.pose_allowed(follower, next_target)
+            if not incremental_target and (not self.guard.pose_allowed(follower, next_target)
                     or np.linalg.norm(next_target[:3, 3] - self.initial_tcp[:3, 3]) > self.args.max_travel):
                 geometry_failure = ("workspace_infeasible", "next target outside TCP workspace/travel envelope")
                 return False
-            if not self.approximate_targets:
+            if not incremental_target:
                 goal_q = self.models[follower].inverse(next_target, states[follower].joints,
                                                        self.guard.lower[follower], self.guard.upper[follower])
                 if goal_q is None:
@@ -476,7 +875,7 @@ class CooperativeController:
                 if not self.guard.check(trial_bases, trial_q)[0]:
                     geometry_failure = ("clearance_infeasible", "next command sweep violates geometric clearance")
                     return False
-                if self.approximate_targets:
+                if incremental_target or bounded_command:
                     trial_tcp, trial_flange = {}, {}
                     for name in ROBOTS:
                         predicted, predicted_jacobian = self.models[name].pose_and_jacobian(trial_q[name])
@@ -489,7 +888,7 @@ class CooperativeController:
                             if np.linalg.svd(predicted_jacobian, compute_uv=False)[-1] < self.args.min_singular_value:
                                 geometry_failure = ("singularity", "next command approaches a joint singularity")
                                 return False
-                            if self.bounded_leader:
+                            if bounded_command:
                                 # Follow uses speedL: the requested TCP twist
                                 # stays constant while its required joint
                                 # velocity changes with the local Jacobian.
@@ -505,6 +904,13 @@ class CooperativeController:
                                         or np.any(np.abs(future_qdot - qdots[follower]) > self.args.max_joint_accel * dt + 1e-9)
                                         or np.any(np.abs(future_qdot - self.previous_qdot) > self.args.max_joint_accel * dt + 1e-9)):
                                     geometry_failure = ("transition_infeasible", "predicted following joint speed/acceleration limit")
+                                    geometry_details = {
+                                        "predicted_qdot": future_qdot.copy(), "candidate_qdot": qdot.copy(),
+                                        "prediction_fraction": fraction,
+                                        "speed_exceeded": bool(np.any(np.abs(future_qdot) > self.args.max_joint_speed + 1e-9)),
+                                        "measured_acceleration_exceeded": bool(np.any(np.abs(future_qdot - qdots[follower]) > self.args.max_joint_accel * dt + 1e-9)),
+                                        "command_acceleration_exceeded": bool(np.any(np.abs(future_qdot - self.previous_qdot) > self.args.max_joint_accel * dt + 1e-9)),
+                                    }
                                     return False
                                 predicted_twist = predicted_jacobian @ qdot
                                 for part, speed_limit, acceleration_limit in (
@@ -526,10 +932,10 @@ class CooperativeController:
                         return False
                     trial_progress = self.progress + fraction * (next_progress - self.progress)
                     trial_dp, trial_dr = pose_delta(trial_relative, self.path.pose(trial_progress))
-                    if np.linalg.norm(trial_dp) > self.args.max_target_m or np.linalg.norm(trial_dr) > rotation_limit:
+                    if not calibration_braking and (np.linalg.norm(trial_dp) > self.args.max_target_m or np.linalg.norm(trial_dr) > rotation_limit):
                         geometry_failure = ("tracking_error", "next command exceeds allowed relative tracking error")
                         return False
-                    if fraction == 1.:
+                    if fraction == 1. and incremental_target:
                         next_target = executed
                         next_relative_commands[float(rho)] = trial_relative
             next_targets[float(rho)] = next_target
@@ -539,14 +945,18 @@ class CooperativeController:
         failure = None
         decision = None
         for feedback_scale in (1., .75, .5, .25, 0.):
+            geometry_failure, geometry_details = None, {}
             try:
-                if self.bounded_leader:
+                if bounded_command:
                     decision = govern_follow(
                         base_comp, leader_comp + feedback * feedback_scale, work_twist, jacobians[follower],
                         measured_twist, qdots[follower], self.previous_twist, self.previous_qdot, dt, self.limits,
-                        previous_base=self.previous_base_compensation,
-                        previous_base_qdot=self.previous_base_compensation_qdot,
-                        rho_cap=rho_cap, extra_feasible=candidate_allowed)
+                        previous_base=np.zeros(6) if calibration_braking else self.previous_base_compensation,
+                        previous_base_qdot=np.zeros(6) if calibration_braking else self.previous_base_compensation_qdot,
+                        rho_cap=rho_cap, extra_feasible=candidate_allowed,
+                        moving_reference=(self.follow_law == "pose" and self.path.kind != "hold"
+                                          and not calibration_braking),
+                        extra_feasible_depends_on_rho=self.path.kind != "hold")
                 else:
                     decision = govern_task(
                         compensation, feedback * feedback_scale, work_twist, jacobians[follower],
@@ -562,16 +972,34 @@ class CooperativeController:
                 if exc.category in ("compensation_infeasible", "singularity"):
                     raise
         if decision is None:
+            details = {
+                "dt": dt, "measured_qdot": qdots[follower], "previous_command_qdot": self.previous_qdot,
+                "measured_tcp_speed": measured_twist, "previous_command_twist": self.previous_twist,
+                "joint_speed_limit": self.args.max_joint_speed, "joint_acceleration_limit": self.args.max_joint_accel,
+                **geometry_details,
+            }
             if geometry_failure is not None:
-                raise ResearchFault(*geometry_failure)
+                raise ResearchFault(*geometry_failure, details=details)
+            if bounded_command and failure is not None:
+                raise ResearchFault(failure.category, str(failure), details)
             raise failure
         rho = decision.task_scale
         next_progress = min(1., self.progress + rho * dt / self.path.duration) if self.path.kind != "hold" else self.progress
         finish_m = max(self.args.finish_position_m, self.target_tolerance_m)
         finish_rad = max(np.deg2rad(self.args.finish_rotation_deg), self.target_tolerance_rad)
-        command_target = current.copy() if self.approximate_targets else target
+        command_target = current.copy() if incremental_target else target
         record = {
             "kind": "control", "at": now, "active": active, "method": self.args.method,
+            "follow_law": self.follow_law,
+            "calibration_braking": bool(calibration_braking),
+            "base_motion_mode": self.base_motion_mode,
+            "base_velocity_used": self.base_motion_mode == "velocity",
+            "leader_velocity_source": "joint_encoders",
+            "follower_velocity_source": "rtde",
+            "follow_damping_time": self.follow_damping_time if damped else 0.,
+            "feedback_relative_tcp_velocity": relative_tcp_velocity,
+            "feedback_braking_linear_accel": braking_linear,
+            "feedback_braking_angular_accel": braking_angular,
             "leader": leader, "follower": follower, "path": self.path.kind, "path_duration": self.path.duration,
             "progress": self.progress, "next_progress": next_progress,
             "task_scale": rho, "requested_task_scale": rho_cap, "task_paused": self.task_paused,
@@ -595,8 +1023,8 @@ class CooperativeController:
             "relative_error_rad": error_rad, "target_tcp": target,
             "next_target_tcp": next_nominal_targets[float(rho)],
             "commanded_target_tcp": command_target, "next_commanded_target_tcp": next_targets[float(rho)],
-            "native_safety_target_mode": "current_and_predicted_motion" if self.approximate_targets else "nominal_task_goal",
-            "commanded_relative_pose": current_relative.copy() if self.approximate_targets else relative_goal.copy(),
+            "native_safety_target_mode": "current_and_predicted_motion" if incremental_target else "nominal_task_goal",
+            "commanded_relative_pose": current_relative.copy() if incremental_target else relative_goal.copy(),
             "next_commanded_relative_pose": next_relative_commands.get(float(rho), self.path.pose(next_progress)),
             "twist": decision.twist,
             "joint_command": decision.qdot, "base_compensation": base_comp,
@@ -610,6 +1038,7 @@ class CooperativeController:
             "tracking_relative_target": tracking_relative,
             "tracking_offset": tracking_offset,
             "tracking_limited": bool(decision.components.get("tracking_limited", False)),
+            "tracking_braking": bool(decision.components.get("tracking_braking", False)),
             "tracking_scale": decision.components.get("tracking_scale", 1.),
             "tracking_speed_scale": decision.components.get("tracking_speed_scale", 1.),
             "tracking_endpoint": decision.components.get("tracking_endpoint", leader_comp + feedback),
@@ -620,26 +1049,41 @@ class CooperativeController:
             "robots": {name: {"q": states[name].joints, "qd": qdots[name], "tcp": states[name].tcp,
                               "tcp_speed": states[name].speed, "robot_timestamp": states[name].robot_timestamp}
                        for name in ROBOTS}}
-        if self.bounded_leader:
+        if self.follow_law == "pose":
+            record.update(pose_command_target_tcp=pose_command_target.copy(),
+                          pose_command_error_m=float(np.linalg.norm(pose_dp)),
+                          pose_command_error_rad=float(np.linalg.norm(pose_dr)),
+                          leader_velocity_command_used=False,
+                          feedback_error_origin="tcp", feedback_error_frame="follower_base",
+                          feedback_velocity_source="rtde_actual_tcp")
+        if active and self.pose_smoother is not None:
+            record["base_pose_smoothing"] = self.pose_smoother.diagnostics()
+        if bounded_command:
             record["speedl_acceleration"] = bounded_speedl_acceleration(
                 jacobians[follower], measured_twist, decision.twist, dt, self.limits)
         return Proposal({follower: bases[follower] @ target @ inverse(self.offsets[follower])},
                         {follower: command_target}, {follower: decision.twist}, record, next_progress,
                         decision, feedback, mandatory_compensation, {follower: next_targets[float(rho)]},
-                        tracking_offset if active else None)
+                        tracking_offset if active and not calibration_braking else None)
 
     def commit(self, proposal):
         self.progress = proposal.next_progress
+        self.gap_approach.commit(self.progress)
+        proposal.record["gap_approach"] = self.gap_approach.info(self.progress)
+        proposal.record["gap_approach"]["temporary_hold"] = self._gap_approach_temporary_hold()
         self.previous_twist = proposal.decision.twist.copy()
         self.previous_qdot = proposal.decision.qdot.copy()
         self.previous_compensation = proposal.compensation.copy()
         self.previous_compensation_qdot = np.asarray(proposal.decision.components["compensation_qdot"]).copy()
         self.previous_feedback = proposal.feedback.copy()
+        self.previous_task_scale = proposal.decision.task_scale
         if self.bounded_leader:
             self.previous_base_compensation = proposal.compensation.copy()
             self.previous_base_compensation_qdot = np.asarray(proposal.decision.components["compensation_qdot"]).copy()
             if self.tracking_offset is None and proposal.tracking_offset is not None:
                 self.tracking_offset = proposal.tracking_offset.copy()
+        if proposal.record.get("calibration_braking"):
+            return  # Observation does not complete or reset a relative task.
         if proposal.record["path_finished"] and proposal.record["within_finish_tolerance"]:
             self.settle_elapsed += proposal.record["control_dt"]
         else:

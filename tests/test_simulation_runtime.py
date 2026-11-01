@@ -51,7 +51,8 @@ def synthetic_snapshot():
 
 def options(mode="follow", motion="none", *extra):
     return parse_args(["--simulate", "--mode", mode, "--initial_state", "synthetic.json",
-                       "--sim_motion", motion, "--target_tolerance_m", "0", "--target_tolerance_deg", "0", *extra])
+                       "--sim_motion", motion, "--target_tolerance_m", "0", "--target_tolerance_deg", "0",
+                       "--gap", ".30", "--max_travel", ".15", "--base_motion_mode", "velocity", *extra])
 
 
 def line_target():
@@ -99,27 +100,27 @@ class SimulationSessionTests(unittest.TestCase):
         for name in ROBOTS:
             np.testing.assert_array_equal(session.plant.joints[name], before[name])
 
-    def test_hold_moves_both_arms_to_camera_fixed_target_with_static_or_moving_bases(self):
-        for motion in ("none", "bases"):
-            with self.subTest(motion=motion):
-                session = SimulationSession(options("hold", motion), self.initial)
-                self.assertFalse(session.ready)
-                session.command({"type": "target", "gap": .30, "center_pose": self.demo.center_pose})
-                self.assertTrue(session.ready, session.message)
-                goals = copy.deepcopy(session.planner.hold_targets)
-                original = world_flanges(session)
-                before = {name: np.linalg.norm(goals[name][:3, 3] - original[name][:3, 3]) for name in ROBOTS}
-                session.command("arm")
-                self.assert_tick(session, 125)  # Five seconds of virtual control.
-                actual = world_flanges(session)
+    def test_saved_output_convention_overrides_cli_and_preserves_virtual_base_sensor(self):
+        for legacy in (True, False):
+            with self.subTest(legacy=legacy):
+                initial = copy.deepcopy(self.initial)
+                if not legacy:
+                    initial["calibration"]["ur10e_output_correction"] = False
+                    initial["calibration"]["poses"] = copy.deepcopy(initial["bases"])
+                args = options()
+                args.ur10e_output_correction = not legacy
+                session = SimulationSession(args, initial)
+                self.assertEqual(session.args.ur10e_output_correction, legacy)
+                self.assertEqual(args.ur10e_output_correction, not legacy)
+                sensor = session._calibration()
+                state = session.engine.state(session.now, active=False)
                 for name in ROBOTS:
-                    self.assertLess(np.linalg.norm(goals[name][:3, 3] - actual[name][:3, 3]), .003)
-                    self.assertGreater(before[name], .03)
-                    self.assertGreater(np.linalg.norm(session.plant.joints[name] - self.initial["robots"][name]["q"]), .001)
-                    np.testing.assert_array_equal(session.planner.hold_targets[name], goals[name])
-                self.assertEqual(session.elapsed, 5.)
-                if motion == "bases":
-                    self.assertGreater(np.linalg.norm(session.plant.bases["ur5e"] - self.initial["bases"]["ur5e"]), .004)
+                    np.testing.assert_allclose(sensor[name], initial["calibration"]["poses"][name], atol=1e-12)
+                    np.testing.assert_allclose(state.base_poses[name], initial["bases"][name], atol=1e-12)
+                session.command(line_target())
+                self.assertTrue(session.ready, session.message)
+                session.command("arm")
+                self.assert_tick(session, 3)
 
     def test_follow_line_reaches_endpoint_with_static_or_both_external_motions(self):
         for motion in ("none", "both"):
@@ -136,26 +137,6 @@ class SimulationSessionTests(unittest.TestCase):
                 else:
                     self.assertGreater(np.linalg.norm(session.plant.joints["ur10e"] - self.initial["robots"]["ur10e"]["q"]), .01)
                     self.assertGreater(np.linalg.norm(session.plant.bases["ur10e"] - self.initial["bases"]["ur10e"]), .005)
-
-    def test_hold_small_rotation_target_survives_joint_slew_limits_and_converges(self):
-        # Slightly perturb only the synthetic UR10e pose, as the viewer does.
-        # Independent joint clipping previously increased the Cartesian speed
-        # and made this reachable millimetre-scale alignment remain in WAIT.
-        moving = DemoState("hold", now=10.).status(10.)["scene"]
-        for name in ROBOTS:
-            self.initial["robots"][name].update(moving["robots"][name])
-        session = SimulationSession(options("hold"), self.initial)
-        center = session.status()["center_pose"]
-        session.command({"type": "target", "gap": .30, "center_pose": center})
-        self.assertTrue(session.ready, session.message)
-        goals = copy.deepcopy(session.planner.hold_targets)
-        before = world_flanges(session)
-        self.assertGreater(np.linalg.norm(goals["ur5e"][:3, 3] - before["ur5e"][:3, 3]), .004)
-        session.command("arm")
-        self.assert_tick(session, 125)
-        after = world_flanges(session)
-        for name in ROBOTS:
-            self.assertLess(np.linalg.norm(goals[name][:3, 3] - after[name][:3, 3]), .001)
 
     def test_pause_freezes_time_motion_and_controller_history_then_resume_continues(self):
         session = self.start_line("both")
@@ -178,11 +159,10 @@ class SimulationSessionTests(unittest.TestCase):
         self.assertGreater(session.engine.progress, progress)
 
     def test_reset_restores_original_plant_and_retains_applied_target(self):
-        for mode in ("follow", "hold"):
+        for mode in ("follow",):
             with self.subTest(mode=mode):
                 session = SimulationSession(options(mode), self.initial)
-                target = line_target() if mode == "follow" else {"type": "target", "gap": .30,
-                                                               "center_pose": self.demo.center_pose.copy()}
+                target = line_target()
                 session.command(target)
                 session.command("arm")
                 self.assert_tick(session, 5)
@@ -201,8 +181,6 @@ class SimulationSessionTests(unittest.TestCase):
                     self.assertEqual(session.engine.path.kind, "line")
                     np.testing.assert_array_equal(session.engine.path.delta, target["path_delta"])
                     self.assertEqual(session.engine.progress, 0.)
-                else:
-                    np.testing.assert_allclose(session.planner.center_pose, target["center_pose"], atol=1e-12)
 
     def test_rejected_plant_step_never_commits_task_or_advances_virtual_clock(self):
         session = self.start_line()
@@ -228,17 +206,15 @@ class SimulationSessionTests(unittest.TestCase):
         self.assert_tick(session, 1)
 
     def test_target_failure_remains_visible_without_motion_and_can_be_replaced(self):
-        session = SimulationSession(options("hold"), self.initial)
-        far = self.demo.center_pose.copy()
-        far[0] += 1.
-        session.command({"type": "target", "gap": .30, "center_pose": far})
+        session = SimulationSession(options(), self.initial)
+        session.command({"type": "target", "gap": 1.30})
         self.assertFalse(session.ready)
         self.assertIn("WAIT", session.message)
         self.assertIn("goals", session.status()["scene"])
         with self.assertRaises(ValueError):
             session.command("arm")
         self.assertEqual(session.steps, 0)
-        session.command({"type": "target", "gap": .30, "center_pose": self.demo.center_pose})
+        session.command({"type": "target", "gap": .30})
         self.assertTrue(session.ready, session.message)
 
     def test_status_preserves_capture_provenance_and_returns_independent_geometry(self):
@@ -261,6 +237,28 @@ class SimulationSessionTests(unittest.TestCase):
         args.execute = True
         with self.assertRaisesRegex(ValueError, "without --execute"):
             SimulationSession(args, self.initial)
+
+    def test_removed_fixed_target_requests_are_rejected_without_mutating_follow_task(self):
+        session = SimulationSession(options(), self.initial)
+        before = session.engine.path.pose(0.).copy()
+        with self.assertRaisesRegex(ValueError, "fixed camera-center"):
+            session.command({"type": "target", "gap": .35, "center_pose": [0, 0, 1, 0, 0, 0]})
+        np.testing.assert_array_equal(session.engine.path.pose(0.), before)
+        self.assertFalse(session.active)
+        self.assertEqual(session.steps, 0)
+        args = options()
+        args.mode = "hold"
+        with self.assertRaisesRegex(ValueError, "only follower"):
+            SimulationSession(args, self.initial)
+
+    def test_demo_rejects_removed_fixed_target_mode_and_commands(self):
+        with self.assertRaisesRegex(ValueError, "only follower"):
+            DemoState("hold")
+        before = copy.deepcopy(self.demo.request)
+        with self.assertRaisesRegex(ValueError, "fixed camera-center"):
+            self.demo.apply({"type": "target", "gap": .35, "center_pose": [0, 0, 1, 0, 0, 0]})
+        self.assertEqual(self.demo.request, before)
+        self.assertNotIn("center_pose", self.demo.status())
 
 
 class OfflineSimulationEntryTests(unittest.TestCase):

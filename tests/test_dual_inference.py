@@ -16,6 +16,7 @@ import torch
 BUNDLE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BUNDLE))
 import urcal.inference.infer_live_dual as dual
+from urcal.inference.reporting import InferenceReporter, inference_status_line
 
 
 def cli_args(*extra):
@@ -150,6 +151,94 @@ class DualInferenceTests(unittest.TestCase):
         self.assertIs(left[3], K)
         self.assertIs(right[3], K)
         self.assertEqual(len(results), 2)
+
+    def test_empty_results_leave_both_images_unobstructed_without_divider_or_text(self):
+        args = cli_args()
+        robots = [estimator("ur5e", dual.ur5e_keypoints_from_joints, args),
+                  estimator("ur10e", dual.ur10e_keypoints_from_joints, args)]
+        frame = np.full((480, 640, 3), [13, 25, 37], dtype=np.uint8)
+        results = [dual.RobotResult(np.full((7, 2), np.nan), np.zeros(7, dtype=bool),
+                                   np.zeros((7, 480, 320), dtype=np.float32), False,
+                                   None, None, np.nan) for _ in robots]
+        with patch.object(dual.cv2, "putText", wraps=cv2.putText) as text:
+            vis, seg_vis = dual.draw_results(frame, dual.split_regions(640, 480), robots, results,
+                                            np.eye(3), np.zeros(5), .06, 23.4, True, False)
+        text.assert_not_called()
+        np.testing.assert_array_equal(vis, frame)
+        np.testing.assert_array_equal(seg_vis, frame)
+
+    def test_clean_render_preserves_points_pose_axes_and_segmentation(self):
+        args = cli_args()
+        robots = [estimator("ur5e", dual.ur5e_keypoints_from_joints, args),
+                  estimator("ur10e", dual.ur10e_keypoints_from_joints, args)]
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        regions = dual.split_regions(640, 480)
+        results = []
+        for region, x in zip(regions, (-.5, .5)):
+            probs = np.zeros((7, 480, 320), dtype=np.float32)
+            probs[0] = 1.
+            results.append(dual.RobotResult(np.tile([region[0] + 70., 100.], (7, 1)),
+                                           np.ones(7, dtype=bool), probs, True,
+                                           np.zeros(3), np.array([x, 0., 2.]), 1.))
+        K = np.array([[600., 0., 320.], [0., 600., 240.], [0., 0., 1.]])
+        with patch.object(dual.cv2, "putText", wraps=cv2.putText) as text, \
+                patch.object(dual, "draw_pose_axes", wraps=dual.draw_pose_axes) as axes:
+            vis, seg_vis = dual.draw_results(frame, regions, robots, results,
+                                            K, np.zeros(5), .06, 23.4, True)
+        text.assert_not_called()
+        self.assertEqual(axes.call_count, 2)
+        for x in (70, 390):
+            self.assertTrue(vis[100, x].any())
+        self.assertTrue(seg_vis.any())
+        # A uniform single-class mask remains uniform: no legend blocks/text.
+        self.assertTrue(np.all(seg_vis == seg_vis[0, 0]))
+
+    def test_shared_single_robot_rendering_keeps_labels_by_default(self):
+        frame = np.zeros((80, 120, 3), dtype=np.uint8)
+        with patch.object(dual.cv2, "putText", wraps=cv2.putText) as text:
+            dual.draw_keypoints(frame, np.array([[25., 30.]]), ["joint"])
+            self.assertEqual(text.call_count, 1)
+            text.reset_mock()
+            dual.draw_keypoints(frame, np.array([[25., 30.]]), ["joint"], show_labels=False)
+            text.assert_not_called()
+            probs = np.ones((1, 80, 120), dtype=np.float32)
+            dual.make_segmentation_debug_bgr(frame, probs, ["joint"], .5)
+            self.assertEqual(text.call_count, 2)
+            text.reset_mock()
+            dual.make_segmentation_debug_bgr(frame, probs, ["joint"], .5, show_legend=False)
+            text.assert_not_called()
+
+    def test_terminal_reports_are_throttled_and_keep_solver_and_vote_status(self):
+        robots = [argparse.Namespace(name="ur5e"), argparse.Namespace(name="UR10E")]
+        results = [dual.RobotResult(np.zeros((7, 2)), np.array([True] * 6 + [False]),
+                                   None, True, None, None, .00001, base_plane={"applied": True}),
+                   dual.RobotResult(np.zeros((7, 2)), np.zeros(7, dtype=bool),
+                                    None, False, None, None, np.nan)]
+        output = []
+        reporter = InferenceReporter(writer=output.append)
+        first = reporter.emit(10., 12.3, robots, results)
+        self.assertIn("FPS 12.3", first)
+        self.assertIn("UR5E PnP+plane OK keypoints=6/7", first)
+        self.assertIn("UR10E EMPnP FAIL keypoints=0/7", first)
+        self.assertNotIn("raw", first)
+        for at in (10.01, 10.3, 10.999):
+            self.assertIsNone(reporter.emit(at, 20., robots, results))
+        self.assertIsNotNone(reporter.emit(11., 20., robots, results))
+        self.assertEqual(len(output), 2)
+
+    def test_control_summary_uses_original_pixel_residuals_and_packet_reason(self):
+        robot = argparse.Namespace(name="ur5e")
+        result = dual.RobotResult(np.zeros((7, 2)), np.ones(7, dtype=bool), None,
+                                  True, None, None, .00001)
+        packet = argparse.Namespace(raw_mean_px={"ur5e": 5.6}, raw_max_px={"ur5e": 8.9},
+                                    valid_counts={"ur5e": 5}, captured_at=9.8,
+                                    reason="joint/image\n timestamp mismatch")
+        line = inference_status_line(10., [robot], [result], packet=packet, now=10.)
+        self.assertIn("keypoints=5/7", line)
+        self.assertIn("raw mean/max=5.6/8.9px", line)
+        self.assertIn("capture age=200.0ms", line)
+        self.assertIn("measurement: joint/image timestamp mismatch", line)
+        self.assertNotIn("\n", line)
 
     def test_cli_requires_two_sources_and_preserves_robot_defaults(self):
         args = cli_args()

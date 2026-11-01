@@ -33,11 +33,11 @@ class CalibrationRelaxationTests(unittest.TestCase):
         expected = dict(max_calibration_jump_m=.05, max_calibration_jump_deg=5.,
                         handoff_max_shift_m=.15, handoff_max_shift_deg=15., handoff_timeout=15.,
                         max_target_m=.2, target_tolerance_m=.05, target_tolerance_deg=10.,
-                        stable_frames=5, max_calibration_age=.5, max_base_speed=.15,
-                        max_base_angular_speed=.5, max_speed=.02, follow_max_speed=1.,
-                        max_accel=.1, max_joint_speed=.2, max_joint_accel=.5,
-                        max_travel=.15, min_gap=.15)
-        for mode in ("hold", "follow"):
+                        stable_frames=3, max_calibration_age=.5, max_base_speed=.25,
+                        max_base_angular_speed=.15, max_speed=.02, follow_max_speed=1.,
+                        max_accel=.1, max_joint_speed=.2, max_joint_accel=.75,
+                        max_travel=.30, min_gap=.15, base_motion_mode="pose")
+        for mode in ("follow",):
             args = options(mode=mode)
             for key, value in expected.items():
                 self.assertEqual(getattr(args, key), value, (mode, key))
@@ -78,7 +78,7 @@ class CalibrationRelaxationTests(unittest.TestCase):
             engine.gate.update(sample, 10.4)
 
     def test_relaxed_jump_does_not_disable_observed_base_velocity_checks(self):
-        engine = CooperativeController(options())
+        engine = CooperativeController(options("--base_motion_mode", "velocity"))
         self.assertTrue(engine.ingest(packet(0, 10.), 10.))
         self.assertFalse(engine.ingest(packet(1, 10.04, .04), 10.04))
         self.assertIn("base linear speed", engine.last_rejection)
@@ -114,17 +114,15 @@ class CalibrationRelaxationTests(unittest.TestCase):
                 handoff.try_validate(10.21, Mock(side_effect=failure))
             self.assertIs(caught.exception, failure)
 
-    def test_hold_and_follow_wait_past_five_seconds_without_realigning(self):
+    def test_follow_waits_past_five_seconds_without_realigning(self):
         original = lifecycle.config
         def longer_wait(execute=False):
             args = original(execute)
             args.handoff_timeout = options().handoff_timeout
             return args
-        for fixture in (lifecycle.LiveAlignmentRuntimeTests(), lifecycle.HoldAlignmentRuntimeTests()):
+        for fixture in (lifecycle.LiveAlignmentRuntimeTests(),):
             kwargs = {"done_after": 1, "stop_after": 158,
                       "calibration_events": {index: 0. for index in range(150, 155)}}
-            if isinstance(fixture, lifecycle.HoldAlignmentRuntimeTests):
-                kwargs["handoff_frames"] = False
             with self.subTest(mode=type(fixture).__name__), patch.object(lifecycle, "config", longer_wait):
                 result = fixture.run_fake(**kwargs)
             self.assertIsNone(result.caught)
@@ -133,12 +131,10 @@ class CalibrationRelaxationTests(unittest.TestCase):
             self.assertGreater(result.session.send.call_count, 0)
 
     def test_shift_failure_can_recover_at_rest_without_another_arm_or_alignment(self):
-        for fixture in (lifecycle.LiveAlignmentRuntimeTests(), lifecycle.HoldAlignmentRuntimeTests()):
+        for fixture in (lifecycle.LiveAlignmentRuntimeTests(),):
             kwargs = {"done_after": 1, "stop_after": 15,
                       "calibration_events": {**{i: .02 for i in range(3, 8)},
                                              **{i: 0. for i in range(8, 14)}}}
-            if isinstance(fixture, lifecycle.HoldAlignmentRuntimeTests):
-                kwargs["handoff_frames"] = False
             result = fixture.run_fake(**kwargs)
             self.assertIsNone(result.caught)
             self.assertEqual(result.alignment.commit.call_count, 1)
@@ -146,7 +142,9 @@ class CalibrationRelaxationTests(unittest.TestCase):
 
     def test_recorded_121mm_shift_is_accepted_but_infeasible_motion_waits(self):
         data = json.loads((Path(__file__).parent / "fixtures/calibration_handoff_shift.json").read_text())
-        args = options()
+        args = options("--base_motion_mode", "velocity", "--gap", ".30", "--max_travel", ".15",
+                       "--stable_frames", "5", "--max_base_speed", ".15", "--max_base_angular_speed", ".5",
+                       "--ur10e_output_correction")  # Recorded targets used the original corrected frame.
         engine = CooperativeController(args)
         handoff = CalibrationHandoff(engine.gate, data["started_at"], timeout=args.handoff_timeout,
                                      estimator_factory=engine._new_estimator, mappings=engine.mappings,

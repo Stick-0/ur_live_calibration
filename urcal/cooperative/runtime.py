@@ -19,7 +19,7 @@ import numpy as np
 
 from urcal.control.runtime import BUNDLE, ROBOTS, ArmConditioningUnavailable, ArmConnectionError, ArmIKUnavailable, CommandInbox, MotionSession, StateReader, make_gui_scene, parse_args, put_latest, take_latest
 from urcal.control.geometry import flange_from_tcp, inverse
-from urcal.cooperative.controller import CooperativeController, ResearchFault
+from urcal.cooperative.controller import CalibrationBrakingRequired, CooperativeController, ResearchFault
 from urcal.cooperative.logging import ExperimentLogger
 from urcal.control.policy import ActiveCalibrationGuard, CalibrationUnavailable, ControlFault
 from urcal.control.recovery import RecoveryStopGate, is_recoverable_fault
@@ -30,6 +30,7 @@ from urcal.control.startup import (
 )
 from urcal.cooperative.diagnostics import WaitDiagnostics, fault_diagnostics
 from urcal.control.transport_diagnostics import capture_runtime_fault, fault_transport_summary, transport_record
+from urcal.control.tracking_error import position_error_sample
 
 
 def finite_record(value):
@@ -73,6 +74,9 @@ def cooperative_gui_scene(now, engine, states, readers, previous_timestamps, max
                 if exc.category != "measurement_unavailable" or engine.invalid_since is not None:
                     raise
                 snapshot = engine.estimator.estimate(now, leader=engine.leader)
+                if getattr(engine, "common_base_plane", False):
+                    from urcal.cooperative.base_plane import constrain_base_snapshot
+                    snapshot = constrain_base_snapshot(snapshot, engine.leader, engine.mappings)
                 calibration_valid, reason = False, str(exc)
             bases, age = snapshot.base_poses, snapshot.measurement_age
             leader_flange = bases[engine.leader] @ flange_from_tcp(
@@ -90,7 +94,7 @@ def cooperative_gui_scene(now, engine, states, readers, previous_timestamps, max
                                                engine.offsets[engine.follower])}
         task = {"leader": engine.leader, "kind": engine.path.kind, "delta": engine.path.delta.copy(),
                 "radius": engine.path.radius, "duration": engine.path.duration,
-                "gap": engine.gap, "progress": engine.progress}
+                "gap": engine.gap, "progress": engine.progress, "start_pose": engine.path.start.copy()}
         scene = make_gui_scene(now, bases, states, engine.offsets, goals, age, readers,
                                previous_timestamps, max_robot_age,
                                calibration_valid=calibration_valid, reason=reason,
@@ -110,7 +114,7 @@ def run(args):
     from urcal.control.vision import vision_worker
 
     if args.mode != "follow":
-        raise ValueError("research collaboration uses follow mode; use run_dual_control.sh for camera-fixed hold")
+        raise ValueError("Only follower mode is supported")
     log_path = args.log or BUNDLE / "runs" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
                                             + "-" + args.method + "-" + uuid.uuid4().hex[:8] + ".jsonl")
     logger = ExperimentLogger(log_path)
@@ -129,6 +133,8 @@ def run(args):
     recovery_reason = ""
     recovery_capture_after = None
     recovery_ready = False
+    gap_request_after, last_gap_request_at = float("inf"), float("-inf")
+    gap_error = ""
     waits = WaitDiagnostics()
     ctx = mp.get_context("spawn")
     frames, commands, statuses, gui_statuses = (ctx.Queue(maxsize=size) for size in (1, 8, 1, 1))
@@ -167,22 +173,60 @@ def run(args):
             cleanup.push(observe_fault)
             gui.start()
             vision.start()
-            print(f"[research] PREVIEW method={args.method}; leader={engine.leader}, follower={engine.follower}; log={log_path}", flush=True)
+            follow_law = getattr(args, "follow_law", "feedforward")
+            print(f"[research] PREVIEW method={args.method}; law={follow_law}; "
+                  f"leader={engine.leader}, follower={engine.follower}; log={log_path}", flush=True)
+            if follow_law == "pose":
+                print("[info] Follow law: POSE; transformed follower TCP target each cycle, "
+                      "one pose-error velocity with measured follower-motion damping. "
+                      "Leader/base/path velocity feedforward is not added; existing limits are unchanged.", flush=True)
+            else:
+                print("[info] Follow law: FEEDFORWARD; leader tracking and relative pose feedback "
+                      "with bounded relative-path motion.", flush=True)
             follow_max_speed = getattr(args, "follow_max_speed", None)
             if follow_max_speed is None:
                 follow_max_speed = args.max_speed
             print(f"[info] Follower tracking TCP linear limit: {follow_max_speed * 1000:g}mm/s; "
                   f"linear acceleration limit: {args.max_accel:g}m/s^2; "
                   f"hold/initial-alignment linear limit: {args.max_speed * 1000:g}mm/s.", flush=True)
+            print(f"[info] Follower catch-up feedback caps: {args.feedback_speed * 1000:g}mm/s / "
+                  f"{args.feedback_angular_speed:g}rad/s; position/orientation gains: "
+                  f"{args.kp_linear:g}/{args.kp_angular:g} per second.", flush=True)
+            print(f"[info] Motion bounds: joint acceleration {args.max_joint_accel:g}rad/s^2; "
+                  f"travel radius {args.max_travel * 100:g}cm from the original start position.", flush=True)
             print("[info] Mean/max reprojection rejection: " +
                   (f"ON (mean <= {args.max_reproj_px:g}px, max <= {args.max_point_reproj_px:g}px)."
                    if args.check_reprojection else "OFF (preview and execution)."), flush=True)
             print(f"[info] Estimated flange task tolerance: {getattr(args, 'target_tolerance_m', 0.) * 100:g}cm / "
                   f"{getattr(args, 'target_tolerance_deg', 0.):g}deg; nominal targets retained.", flush=True)
+            print("[info] UR10e PnP output correction: " + (
+                "ON (local Z 180deg, +5mm)." if getattr(args, "ur10e_output_correction", True)
+                else "OFF (raw PnP rotation/translation used as the control base)."), flush=True)
+            print("[info] Common base plane: " + (
+                "ON (shared physical mounting normal and height)." if getattr(args, "common_base_plane", False)
+                else "OFF (independent base estimates)."), flush=True)
+            if engine.base_motion_mode == "pose":
+                print("[info] Base updates: POSE; live calibration updates coordinates without visual velocity "
+                      "feedforward or base-speed rejection. Following uses measured joint/RTDE velocities.", flush=True)
+                if getattr(engine, "pose_smoother", None) is not None:
+                    smoother = engine.pose_smoother
+                    print(f"[info] Base coordinates: median of {smoother.window} images, "
+                          f"deadband {smoother.deadband_m * 1000:g}mm / "
+                          f"{np.rad2deg(smoother.deadband_rad):g}deg, "
+                          f"update cap {smoother.linear_rate * 1000:g}mm/s / "
+                          f"{smoother.angular_rate:g}rad/s. Robot motion limits are unchanged.", flush=True)
+            else:
+                print("[info] Base updates: VELOCITY; visual speed checks and mandatory base compensation enabled.",
+                      flush=True)
             print(f"[info] Calibration limits: jump {args.max_calibration_jump_m * 100:g}cm / "
                   f"{args.max_calibration_jump_deg:g}deg; handoff target shift "
                   f"{args.handoff_max_shift_m * 100:g}cm / {args.handoff_max_shift_deg:g}deg; "
                   f"handoff wait {args.handoff_timeout:g}s; tracking error stop {args.max_target_m * 100:g}cm.", flush=True)
+            if engine.live_calibration is not None:
+                print(f"[info] Live calibration: skip transient rejects for up to {args.max_invalid_duration:g}s "
+                      "while the last accepted capture is fresh; then brake/observe. "
+                      f"Total loss budget {engine.live_calibration.timeout:g}s; "
+                      "fresh consistent frames restart tracking with gradual coordinate blending.", flush=True)
             if args.initial_align:
                 print(f"[info] Stationary calibration: {args.calibration_acquisition}; "
                       f"after {args.handoff_timeout:g}s handoff wait: {args.handoff_wait}.", flush=True)
@@ -199,6 +243,7 @@ def run(args):
             scene_timestamps = {}
 
             def ingest_latest(when, *, allow_reacquire=False):
+                nonlocal gap_request_after
                 packet = take_latest(frames)
                 if packet is not None:
                     if recovery is not None and (recovery_capture_after is None
@@ -218,7 +263,18 @@ def run(args):
                             "reason": handoff.reason if handoff is not None else "captured Arm calibration in use"}))
                         return False
                     previous_reacquisitions = engine.reacquisition_count
-                    accepted = engine.ingest(packet, when, allow_reacquire=allow_reacquire)
+                    live = engine.live_calibration
+                    previous_live = live.reacquisitions if live is not None else 0
+                    accepted = engine.ingest(packet, when, allow_reacquire=allow_reacquire,
+                                             active_recovery=session is not None and live is not None)
+                    if session is not None and (
+                            (not accepted and engine.invalid_since is not None)
+                            or (live is not None and live.reacquisitions != previous_live)):
+                        # Keep an already requested approach on temporary
+                        # hold during grace, but reject earlier queued Start /
+                        # Resume clicks even if the next good frame arrives
+                        # before that click reaches this process.
+                        gap_request_after = when
                     reacquired = engine.reacquisition_count != previous_reacquisitions
                     logger.log(finite_record({
                         "kind": "measurement", "at": when, "sequence": packet.sequence,
@@ -227,8 +283,15 @@ def run(args):
                         "raw_max_px": packet.raw_max_px, "valid_counts": packet.valid_counts,
                         "pose_diagnostics": packet.pose_diagnostics,
                         "accepted": accepted, "rejection": engine.last_rejection,
+                        "live_calibration": live.status(when) if live is not None else None,
                         "preview_reacquiring_frames": engine.preview_recovery.count,
                         "preview_reacquired": reacquired}))
+                    if live is not None and live.reacquisitions != previous_live:
+                        print("[research] CALIBRATION REACQUIRED: blending fresh coordinates; continuing tracking", flush=True)
+                        logger.log({"kind": "calibration_reacquired_live", "at": when,
+                                    "sequence": packet.sequence, "captured_at": packet.captured_at,
+                                    "stable_frames": engine.gate.stable_count, "motion_active": True,
+                                    "live_calibration": live.status(when)})
                     if reacquired:
                         print("[research] PREVIEW: calibration reacquired from stable frames; review pose, then Arm", flush=True)
                         logger.log({"kind": "calibration_reacquired", "at": when,
@@ -263,6 +326,10 @@ def run(args):
                     return False
                 return requested
 
+            def approach_enabled():
+                return (session is not None and recovery is None
+                        and (not args.initial_align or alignment_complete))
+
             while not stop.is_set():
                 now = time.monotonic()
                 dt, last_tick = now - last_tick, now
@@ -276,11 +343,15 @@ def run(args):
                     if session is not None and dt > min(args.max_robot_age, 1. / args.watchdog_hz):
                         raise ResearchFault("control_deadline", "control loop missed its deadline")
                     arm, target_changed = False, False
+                    gap_requests = []
                     for command in inbox.read():
-                        if isinstance(command, dict):
+                        if isinstance(command, dict) and command.get("type") == "gap_approach":
+                            gap_requests.append(command)
+                        elif isinstance(command, dict):
                             if session is not None:
                                 raise ResearchFault("target_change", "stop before changing the relative task")
                             engine.apply_target(command)
+                            gap_error = ""
                             target_changed = True
                             logger.log({"kind": "target", "at": now, "command": command})
                         elif command == "arm":
@@ -288,7 +359,11 @@ def run(args):
                         elif command in ("stop", "quit"):
                             stop.set()
                         elif command in ("pause_task", "resume_task"):
-                            engine.task_paused = command == "pause_task"
+                            if engine.gap_approach.state != "idle":
+                                gap_requests.append({"type": "gap_approach", "requested_at": now,
+                                                     "action": "pause" if command == "pause_task" else "resume"})
+                            else:
+                                engine.task_paused = command == "pause_task"
                             logger.log({"kind": "task_pause", "at": now, "paused": engine.task_paused})
                     if stop.is_set():
                         break
@@ -316,9 +391,34 @@ def run(args):
                         arm = False
                     calibration_current = True
                     if session is not None and not (args.initial_align and not alignment_complete):
-                        calibration_current = calibration_guard.check(engine.gate, now)
+                        calibration_current = (engine.check_live_calibration(now) if engine.live_calibration is not None
+                                               else calibration_guard.check(engine.gate, now))
                     states = {name: reader.read(now) for name, reader in readers.items()}
                     initializing = args.initial_align and not alignment_complete
+                    live = engine.live_calibration
+                    if not calibration_current or (live is not None and (live.waiting or live.blending)):
+                        gap_request_after = now
+                    if not calibration_current or (live is not None and live.waiting):
+                        engine.pause_gap_approach("calibration recovery; resume approach when tracking is ready")
+                    for request in gap_requests:
+                        try:
+                            requested_at = float(request.get("requested_at", float("nan")))
+                            if (not np.isfinite(requested_at) or requested_at > now
+                                    or now - requested_at > 1. or requested_at <= last_gap_request_at):
+                                raise ValueError("expired, future or duplicate approach request")
+                            last_gap_request_at = requested_at
+                            action = request.get("action")
+                            if action != "pause" and requested_at <= gap_request_after:
+                                raise ValueError("approach request predates the current tracking phase")
+                            engine.handle_gap_approach(action, enabled=approach_enabled() and calibration_current)
+                            gap_error = ""
+                            logger.log({"kind": "gap_approach", "at": now, "action": action,
+                                        **engine.gap_approach_status(enabled=approach_enabled(), states=states)})
+                            print(f"[research] APPROACH: {engine.gap_approach.state}; "
+                                  "15 cm flange target; leader following continues", flush=True)
+                        except (ValueError, TypeError) as exc:
+                            gap_error = str(exc)
+                            logger.log({"kind": "gap_approach_rejected", "at": now, "reason": gap_error})
                     if initializing:
                         if session is None:
                             engine.gate.check_fresh(now)
@@ -382,6 +482,7 @@ def run(args):
                                     recovery = None
                                     recovery_reason = ""
                                     last_tick = time.monotonic()
+                                    gap_request_after = last_tick
                                     logger.log({"kind": "armed", "at": last_tick, "path": engine.path.kind,
                                                 "phase": "initial_alignment", "goal_joints": alignment.goal_joints,
                                                 "tcp_goals": chosen if isinstance(chosen, dict) else targets,
@@ -433,6 +534,9 @@ def run(args):
                                 message = "ALIGNED; WAITING FOR LIVE CALIBRATION: " + handoff.status
                                 if handoff.ready(now):
                                     live_snapshot = handoff.estimator.estimate(now, leader=engine.leader)
+                                    if engine.common_base_plane:
+                                        from urcal.cooperative.base_plane import constrain_base_snapshot
+                                        live_snapshot = constrain_base_snapshot(live_snapshot, engine.leader, engine.mappings)
                                     live_bases = live_snapshot.base_poses
                                     live_leader = live_bases[engine.leader] @ flange_from_tcp(
                                         states[engine.leader].tcp, engine.offsets[engine.leader])
@@ -461,6 +565,7 @@ def run(args):
                                         engine.preview_recovery.reset()
                                         calibration_guard.arm(engine.gate, now)
                                         alignment_complete = True
+                                        gap_request_after = now
                                         message = "LIVE CALIBRATION READY: following starts next fresh tick"
                                         logger.log({"kind": "alignment_complete", "at": now,
                                                     "progress": engine.progress,
@@ -474,7 +579,7 @@ def run(args):
                                                   "previous_base_compensation", "previous_base_compensation_qdot"):
                                     getattr(engine, attribute)[:] = 0.
                                 engine.settle_elapsed, engine.finished = 0., False
-                                engine.tracking_offset = None
+                                engine.tracking_offset = (np.eye(4) if engine.gap_approach.state != "idle" else None)
                                 # A fresh estimator prevents the entire frozen
                                 # interval from becoming an artificial velocity.
                                 completed_at = time.monotonic()
@@ -490,17 +595,23 @@ def run(args):
                                             "progress": engine.progress, "frozen_capture": alignment_capture})
                         waits.clear()
                     else:
-                        proposal = engine.prepare(now, states, min(max(dt, 1e-6), 2*period), active=session is not None)
+                        planning_dt = min(max(dt, 1e-6), 2*period)
+                        proposal = (engine.prepare_live(now, states, planning_dt)
+                                    if session is not None and engine.live_calibration is not None else
+                                    engine.prepare(now, states, planning_dt, active=session is not None))
                         proposal.record["command_sent"] = False
                         goals, ready = proposal.goals, session is None
                         if engine.path.kind == "hold":
-                            following = "following with bounded acceleration" if proposal.record.get("tracking_limited") else "relative pose following"
-                            message = f"{'ACTIVE' if session else 'READY (preview)'} {args.method}; {following}"
+                            following = ("decelerating tracking; checking next frame" if proposal.record.get("tracking_braking")
+                                         else "following with bounded acceleration" if proposal.record.get("tracking_limited")
+                                         else "relative pose following")
+                            message = f"{'ACTIVE' if session else 'READY (preview)'} {args.method}; law={follow_law}; {following}"
                             if "relative_error_m" in proposal.record and "relative_error_rad" in proposal.record:
                                 message += (f"; error={proposal.record['relative_error_m'] * 1000:.1f}mm / "
                                             f"{np.rad2deg(proposal.record['relative_error_rad']):.2f}deg")
                         else:
-                            message = f"{'ACTIVE' if session else 'READY (preview)'} {args.method}; progress={engine.progress:.1%}, rate={proposal.decision.task_scale:.2f}"
+                            message = (f"{'ACTIVE' if session else 'READY (preview)'} {args.method}; law={follow_law}; "
+                                       f"progress={engine.progress:.1%}, rate={proposal.decision.task_scale:.2f}")
                         if session is None:
                             arm = require_new_recovery_arm(arm)
                         if arm and session is None:
@@ -513,6 +624,7 @@ def run(args):
                                 recovery_reason = ""
                                 ready = False
                                 last_tick = time.monotonic()
+                                gap_request_after = last_tick
                                 logger.log({"kind": "armed", "at": last_tick, "path": engine.path.kind})
                                 message = "ARMED; waiting for fresh state before movement"
                             else:
@@ -522,47 +634,77 @@ def run(args):
                                 checked = time.monotonic()
                                 if stop.is_set() or not vision.is_alive() or not gui.is_alive():
                                     raise ResearchFault("operator_stop", "operator/vision stop requested")
-                                calibration_guard.check(engine.gate, checked)
-                                engine.state(checked, active=True)
+                                needs_braking = False
+                                if engine.live_calibration is not None:
+                                    current = engine.check_live_calibration(checked)
+                                    needs_braking = not current and not proposal.record.get("calibration_braking")
+                                else:
+                                    calibration_guard.check(engine.gate, checked)
+                                    engine.state(checked, active=True)
                                 if checked - now > args.max_robot_age or any(
                                         checked - reader.last_advance > args.max_robot_age for reader in readers.values()):
                                     raise ResearchFault("robot_state_expired", "state/command expired during controller checks")
+                                if needs_braking:
+                                    raise CalibrationBrakingRequired(
+                                        "calibration expired during command checks; discard tracking and brake next tick")
                             logger.log({"kind": "command_proposal", "at": now,
                                         "prepared_at": time.monotonic(), "tcp_goals": proposal.tcp_goals,
                                         "twists": proposal.twists, "next_progress": proposal.next_progress})
                             send_options = {}
                             if "speedl_acceleration" in proposal.record:
                                 send_options["accelerations"] = {engine.follower: proposal.record["speedl_acceleration"]}
-                            session.send(proposal.tcp_goals, proposal.twists, check_fresh=check_fresh,
-                                         safety_targets=proposal.future_tcp_goals, **send_options)
-                            engine.commit(proposal)
-                            proposal.record["command_sent"] = True
-                            proposal.record["sent_at"] = time.monotonic()
-                            proposal.record["transport"] = transport_record(session)
-                            proposal.record["committed_progress"] = engine.progress
-                            proposal.record["committed_finished"] = engine.finished
+                            try:
+                                session.send(proposal.tcp_goals, proposal.twists, check_fresh=check_fresh,
+                                             safety_targets=proposal.future_tcp_goals, **send_options)
+                            except CalibrationBrakingRequired as exc:
+                                # Native checks ran, but check_fresh precedes
+                                # speedL. No stale tracking command is sent or
+                                # committed; the next bounded tick brakes.
+                                logger.log({"kind": "calibration_command_discarded",
+                                            "at": time.monotonic(), "reason": str(exc)})
+                            else:
+                                engine.commit(proposal)
+                                proposal.record["command_sent"] = True
+                                proposal.record["sent_at"] = time.monotonic()
+                                proposal.record["transport"] = transport_record(session)
+                                proposal.record["committed_progress"] = engine.progress
+                                proposal.record["committed_finished"] = engine.finished
                         else:
                             proposal.record["command_sent"] = False
                         logger.log(proposal.record)
                         waits.clear()
                     if session is not None and not (args.initial_align and not alignment_complete):
-                        degraded = not calibration_current
+                        live = engine.live_calibration
+                        degraded = live.waiting if live is not None else not calibration_current
                         if degraded != calibration_degraded:
-                            event = ("CALIBRATION HOLD: rejected pair; using last accepted calibration"
-                                     if degraded else "CALIBRATION RECOVERED: accepted new frame")
+                            event = (("CALIBRATION OBSERVE: braking; collecting fresh consistent frames"
+                                      if degraded else "CALIBRATION BLEND: applying fresh coordinates gradually")
+                                     if live is not None else
+                                     ("CALIBRATION HOLD: rejected pair; using last accepted calibration"
+                                      if degraded else "CALIBRATION RECOVERED: accepted new frame"))
                             print("[research] " + event, flush=True)
-                            logger.log({"kind": "calibration_hold" if degraded else "calibration_recovered",
+                            logger.log({"kind": ("calibration_observation" if degraded else "calibration_blending")
+                                        if live is not None else ("calibration_hold" if degraded else "calibration_recovered"),
                                         "at": now, "reason": engine.gate.last_rejection,
                                         "last_accepted_capture": engine.gate.last_capture,
+                                        "live_calibration": live.status(now) if live is not None else None,
                                         "max_invalid_duration": args.max_invalid_duration})
                             calibration_degraded = degraded
                         if degraded:
-                            message += "; CALIBRATION HOLD: waiting for next valid frame"
+                            if live is not None:
+                                info = live.status(now)
+                                message = (f"CALIBRATION OBSERVE: braking; {info['elapsed']:.2f}/{info['timeout']:g}s; "
+                                           + info["candidate_reason"])
+                            else:
+                                message += "; CALIBRATION HOLD: waiting for next valid frame"
+                        elif live is not None and live.blending:
+                            message += "; CALIBRATION BLEND: applying fresh coordinates gradually"
                     if session is None and arm_error is not None:
                         message = "ARM BLOCKED: " + arm_error
                         category = arm_error_category
                 except (ControlFault, ValueError, KeyError, TypeError) as exc:
                     category = getattr(exc, "category", "control_fault")
+                    engine.pause_gap_approach("motion unavailable: " + str(exc))
                     if session is not None:
                         if (getattr(args, "fault_response", "exit") != "preview"
                                 or not is_recoverable_fault(exc) or stop.is_set()
@@ -572,7 +714,10 @@ def run(args):
                         # fatal and cannot unlock preview or another Arm.
                         session.stop_for_recovery()
                         session = None
+                        if engine.live_calibration is not None:
+                            engine.live_calibration.reset()
                         stopped_at = time.monotonic()
+                        gap_request_after = stopped_at
                         if stop.is_set():
                             break
                         stop_states = {name: reader.read(stopped_at) for name, reader in readers.items()}
@@ -631,11 +776,26 @@ def run(args):
                           "measurement_age": proposal.record["measurement_age"] if proposal is not None else None,
                           "fault_category": category,
                           "calibration_degraded": calibration_degraded,
+                          "live_calibration": engine.live_calibration.status(now) if engine.live_calibration is not None else None,
                           "preview_reacquiring_frames": engine.preview_recovery.count,
                           "phase": "recovery" if recovery is not None else (
                               ("alignment_calibration_handoff" if handoff is not None else "alignment")
-                              if args.initial_align and not alignment_complete else "tracking"),
+                              if args.initial_align and not alignment_complete else (
+                                  "calibration_observation" if engine.live_calibration is not None and engine.live_calibration.waiting
+                                  else "calibration_blending" if engine.live_calibration is not None and engine.live_calibration.blending
+                                  else "tracking")),
                           "alignment_progress": alignment.progress if alignment is not None else None}
+                status["gap_approach"] = engine.gap_approach_status(
+                    enabled=approach_enabled() and not category, states=states)
+                status["gap_approach"]["error"] = gap_error
+                approach_status = status["gap_approach"]
+                if approach_status["state"] != "idle":
+                    approach_phase = ("waiting for coordinates (auto-continue)" if approach_status["temporary_hold"]
+                                      else "paused (press Resume)" if approach_status["state"] == "paused"
+                                      else approach_status["state"])
+                    message += (f"; APPROACH {approach_phase}, "
+                                f"gap={approach_status['commanded_gap_m'] * 100:.2f}->15.00cm")
+                    status["message"] = message
                 put_latest(statuses, status)
                 scene = cooperative_gui_scene(now, engine, states, readers, scene_timestamps,
                                               args.max_robot_age, proposal=proposal,
@@ -648,7 +808,33 @@ def run(args):
                                               and args.initial_align and not alignment_complete else None,
                                               nominal_goals_override=alignment_nominal_goals if session is not None
                                               and args.initial_align and not alignment_complete else None)
-                put_latest(gui_statuses, {**status, "scene": scene})
+                error_target, error_relative = None, None
+                error_source = "preview_nominal_relative"
+                error_phase = status["phase"] if session is not None or recovery is not None else "preview"
+                if session is not None and alignment is not None and not alignment_complete:
+                    chosen = getattr(alignment, "targets", None)
+                    if isinstance(chosen, dict):
+                        error_target = chosen.get(engine.follower)
+                    error_source = "initial_alignment_endpoint"
+                elif proposal is not None and "tracking_relative_target" in proposal.record:
+                    error_relative = proposal.record["tracking_relative_target"]
+                    error_source = ("tracking_accepted_relative" if proposal.record.get("command_sent")
+                                    else "tracking_candidate_relative" if session is not None
+                                    else "preview_candidate_relative")
+                    if proposal.record.get("calibration_braking"):
+                        error_source += "_during_calibration_braking"
+                else:
+                    error_relative = engine.path.pose(engine.progress)
+                    offset = getattr(engine, "tracking_offset", None)
+                    if isinstance(offset, np.ndarray):
+                        error_relative = error_relative @ offset
+                        error_source = "tracking_accepted_relative"
+                error_sample = position_error_sample(
+                    scene, now=now, leader=engine.leader, follower=engine.follower,
+                    phase=error_phase, target_tcp=error_target, relative_target=error_relative,
+                    target_source=error_source, max_robot_age=args.max_robot_age,
+                    max_calibration_age=args.max_calibration_age)
+                put_latest(gui_statuses, {**status, "scene": scene, "position_error": error_sample})
                 if now - last_report >= 1.:
                     print("[research] " + message, flush=True)
                     last_report = now
@@ -664,6 +850,8 @@ def run(args):
             print(f"[log STOP] {logging_exc}", flush=True)
         raise
     finally:
+        if engine is not None:
+            engine.pause_gap_approach("controller stopped")
         if session is not None:
             session.close()
         stop.set()

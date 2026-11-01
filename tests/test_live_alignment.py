@@ -18,10 +18,14 @@ ROBOTS = ("ur5e", "ur10e")
 
 
 def fixture(mode="hold", already_at_goal=False):
-    args = parse_args(["--mode", mode, "--ur5e_ip", "192.0.2.1", "--ur10e_ip", "192.0.2.2",
+    args = parse_args(["--mode", "follow", "--ur5e_ip", "192.0.2.1", "--ur10e_ip", "192.0.2.2",
                        "--align_speed_scale", "1",
+                       "--max_robot_age", ".15", "--max_travel", ".15",
                        "--max_speed", ".1", "--max_angular_speed", ".4", "--max_accel", ".4",
                        "--max_angular_accel", "1", "--max_joint_speed", ".8", "--max_joint_accel", "1"])
+    # The generic joint-plan fixture also exercises simultaneous actuators;
+    # its historical 'hold' label is internal, not a supported live mode.
+    args.mode = mode
     offsets = {name: pose_matrix([.02, 0, .04, .1, -.2, .3]) for name in ROBOTS}
     initial = {"bases": {"ur5e": pose_matrix([-2, 0, 1, 0, 0, .2]),
                          "ur10e": pose_matrix([2, 0, 1, 0, 0, -.2])}, "robots": {}}

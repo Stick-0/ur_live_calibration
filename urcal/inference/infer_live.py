@@ -187,7 +187,7 @@ def color_table(count: int):
     return (base * ((count + len(base) - 1) // len(base)))[:count]
 
 
-def draw_keypoints(bgr: np.ndarray, points_2d: np.ndarray, names: List[str]) -> np.ndarray:
+def draw_keypoints(bgr: np.ndarray, points_2d: np.ndarray, names: List[str], *, show_labels=True) -> np.ndarray:
     out = bgr.copy()
     colors = color_table(len(points_2d))
     for idx, (x, y) in enumerate(points_2d):
@@ -195,11 +195,13 @@ def draw_keypoints(bgr: np.ndarray, points_2d: np.ndarray, names: List[str]) -> 
             continue
         pt = (int(round(x)), int(round(y)))
         cv2.circle(out, pt, 5, colors[idx], -1, cv2.LINE_AA)
-        cv2.putText(out, names[idx], (pt[0] + 6, pt[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, colors[idx], 1, cv2.LINE_AA)
+        if show_labels:
+            cv2.putText(out, names[idx], (pt[0] + 6, pt[1] - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, colors[idx], 1, cv2.LINE_AA)
     return out
 
 
-def make_segmentation_debug_bgr(bgr: np.ndarray, probs: np.ndarray, names: List[str], threshold: float) -> np.ndarray:
+def make_segmentation_debug_bgr(bgr: np.ndarray, probs: np.ndarray, names: List[str], threshold: float,
+                               *, show_legend=True) -> np.ndarray:
     colors = np.asarray(color_table(probs.shape[0]), dtype=np.uint8)
     best_idx = np.argmax(probs, axis=0)
     best_prob = np.max(probs, axis=0)
@@ -213,12 +215,13 @@ def make_segmentation_debug_bgr(bgr: np.ndarray, probs: np.ndarray, names: List[
     if np.any(mask):
         out[mask] = cv2.addWeighted(out[mask], 0.45, color_mask[mask], 0.55, 0)
 
-    y = 24
-    for idx, name in enumerate(names):
-        cv2.rectangle(out, (12, y - 12), (28, y + 4), tuple(int(c) for c in colors[idx]), -1)
-        cv2.putText(out, name, (36, y + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
-        y += 20
-    cv2.putText(out, "seg debug (s toggle)", (12, out.shape[0] - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+    if show_legend:
+        y = 24
+        for idx, name in enumerate(names):
+            cv2.rectangle(out, (12, y - 12), (28, y + 4), tuple(int(c) for c in colors[idx]), -1)
+            cv2.putText(out, name, (36, y + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+            y += 20
+        cv2.putText(out, "seg debug (s toggle)", (12, out.shape[0] - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
     return out
 
 

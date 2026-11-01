@@ -30,7 +30,9 @@ def is_recoverable_fault(exc):
     # Local import avoids the runtime/controller import cycle and requires a
     # known fault type, not an arbitrary object bearing a category attribute.
     from urcal.cooperative.controller import ResearchFault
-    return isinstance(exc, ResearchFault) and exc.category in _PLANNING_CATEGORIES
+    from urcal.cooperative.task import MotionInfeasible
+    return (isinstance(exc, (ResearchFault, MotionInfeasible))
+            and exc.category in _PLANNING_CATEGORIES)
 
 
 def fresh_calibration_tracker(template):

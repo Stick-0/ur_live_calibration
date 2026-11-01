@@ -168,30 +168,25 @@ class TargetApproximationTests(unittest.TestCase):
         np.testing.assert_array_equal(first[1]["ur5e"], second[1]["ur5e"])
 
     def test_recorded_candidate_passes_the_complete_existing_geometric_alignment_path(self):
-        for mode in ("follow", "hold"):
-            with self.subTest(mode=mode):
-                _, offsets, bases, states, targets = recorded_request()
-                if mode == "hold":
-                    targets["ur10e"] = states["ur10e"].tcp.copy()
-                args = parse_args(["--mode", mode, "--ur5e_ip", "192.0.2.1", "--ur10e_ip", "192.0.2.2"])
-                args.target_tolerance_m, args.target_tolerance_deg = .05, 10.
-                selected, seeds, _ = select_alignment_candidate(args, offsets, bases, states, targets)
-                self.assertEqual(set(selected), set(targets))
-                for name in targets:
-                    dp, dr = flange_adjustment(targets[name], selected[name], offsets[name])
-                    self.assertLess(dp, .05)
-                    self.assertLess(dr, np.deg2rad(10.))
-                # Pure kinematic path validation only: these candidate seeds
-                # still need native IK/FK before becoming motion goals.
-                plan = LiveAlignment(args, offsets, bases, states, selected, seeds)
-                self.assertEqual(len(plan.samples), 81)
-                np.testing.assert_array_equal(plan.samples[0]["ur5e"], states["ur5e"].joints)
-                np.testing.assert_allclose(plan.samples[-1]["ur5e"], seeds["ur5e"], rtol=0, atol=1e-15)
-                for sample in plan.samples:
-                    self.assertTrue(plan.guard.check(bases, sample)[0])
-                    if mode == "follow":
-                        np.testing.assert_array_equal(sample["ur10e"], states["ur10e"].joints)
-                self.assertLess(plan.estimated_duration, 600.)
+        _, offsets, bases, states, targets = recorded_request()
+        args = parse_args(["--mode", "follow", "--ur5e_ip", "192.0.2.1", "--ur10e_ip", "192.0.2.2"])
+        args.target_tolerance_m, args.target_tolerance_deg = .05, 10.
+        selected, seeds, _ = select_alignment_candidate(args, offsets, bases, states, targets)
+        self.assertEqual(set(selected), set(targets))
+        for name in targets:
+            dp, dr = flange_adjustment(targets[name], selected[name], offsets[name])
+            self.assertLess(dp, .05)
+            self.assertLess(dr, np.deg2rad(10.))
+        # Pure kinematic path validation only: these candidate seeds
+        # still need native IK/FK before becoming motion goals.
+        plan = LiveAlignment(args, offsets, bases, states, selected, seeds)
+        self.assertEqual(len(plan.samples), 81)
+        np.testing.assert_array_equal(plan.samples[0]["ur5e"], states["ur5e"].joints)
+        np.testing.assert_allclose(plan.samples[-1]["ur5e"], seeds["ur5e"], rtol=0, atol=1e-15)
+        for sample in plan.samples:
+            self.assertTrue(plan.guard.check(bases, sample)[0])
+            np.testing.assert_array_equal(sample["ur10e"], states["ur10e"].joints)
+        self.assertLess(plan.estimated_duration, 600.)
 
 
 if __name__ == "__main__":

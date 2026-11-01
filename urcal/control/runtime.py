@@ -1,28 +1,23 @@
-"""Live-calibrated flange facing: fixed camera pose or read-only leader/follower.
+"""Live-calibrated flange facing with a read-only leader and controlled follower.
 
 Preview never constructs RTDEControlInterface. Motion needs --execute AND Arm
-in the GUI (or 'a' in the preview). No hardware connection occurs on import. The controller
-is a bounded Cartesian proportional regulator, not a collision-aware planner.
+in the GUI (or 'a' in the preview). No hardware connection occurs on import.
+The follower runtime checks bounded velocity commands and nominal link capsules.
 UR API: https://sdurobotics.gitlab.io/ur_rtde/pages/reference/api.html
 """
 
 import argparse
 from copy import deepcopy
-from contextlib import ExitStack
 from dataclasses import dataclass
-import multiprocessing as mp
 from pathlib import Path
 from queue import Empty, Full
 import time
 
 import numpy as np
 
-from urcal.control.geometry import (
-    facing_follower, fixed_facing_targets, flange_from_tcp, inverse, matrix_pose,
-    model_flange_pose, model_from_controller_base, pose_matrix, rotation_distance,
-)
-from urcal.control.policy import ActiveCalibrationGuard, CalibrationTracker, ControlFault, PlanningUnavailable, PreviewCalibrationRecovery, bounded_twist
-from urcal.control.transport_diagnostics import capture_runtime_fault, fault_transport_summary
+from urcal.control.geometry import inverse, matrix_pose, pose_matrix, rotation_distance
+from urcal.control.policy import ControlFault
+from urcal.control.transport_diagnostics import fault_transport_summary
 
 
 ROBOTS = ("ur5e", "ur10e")
@@ -132,64 +127,6 @@ def make_gui_scene(now, bases, states, offsets, goals, measurement_age, readers,
         previous_timestamps.update(timestamps)
         return scene
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
-        return None
-
-
-def task_tolerance_options(args, offset):
-    """Keep saved configurations without the new settings in exact-pose mode."""
-    return {"position_tolerance_m": getattr(args, "target_tolerance_m", 0.),
-            "rotation_tolerance_rad": np.deg2rad(getattr(args, "target_tolerance_deg", 0.)),
-            "tcp_offset": offset}
-
-
-def near_term_tcp_targets(states, twists, dt):
-    """Targets for native checks of the actual bounded Cartesian command.
-
-    The full nominal task pose may be unreachable while a pose inside the
-    accepted task tolerance is reachable. Check the measured TCP and its next
-    commanded increment; the nominal goal remains unchanged for task errors.
-    """
-    result = {}
-    for name, twist in twists.items():
-        current = states[name].tcp
-        step = pose_matrix(np.concatenate((np.zeros(3), np.asarray(twist)[3:] * dt)))
-        target = current.copy()
-        target[:3, :3] = step[:3, :3] @ current[:3, :3]
-        target[:3, 3] += np.asarray(twist)[:3] * dt
-        result[name] = target
-    return result
-
-
-def facing_gui_scene(now, tracker, planner, states, readers, previous_timestamps, max_robot_age, *,
-                     active=False, command_tcp_goals=None):
-    """Render accepted calibration and intended goals even before motion is feasible."""
-    try:
-        age = now - tracker.last_capture
-        if age < 0 or age > tracker.max_age:
-            return None
-        calibration = tracker.poses
-        bases = {name: calibration[name] @ planner.mappings[name] for name in ROBOTS}
-        flanges = {name: bases[name] @ flange_from_tcp(states[name].tcp, planner.offsets[name])
-                   for name in ROBOTS}
-        calibration_valid = not tracker.last_rejection if active else tracker.ready
-        reason = "" if calibration_valid else (tracker.last_rejection or "last accepted calibration; not ready")
-        try:
-            if planner.args.mode == "hold":
-                goals = planner.hold_targets
-                if goals is None:
-                    goals = fixed_facing_targets(flanges["ur5e"], flanges["ur10e"],
-                                                 planner.gap, planner.args.center_pose)
-            else:
-                goals = {planner.commanded[0]: facing_follower(flanges[planner.args.leader], planner.gap)}
-        except (ValueError, TypeError, KeyError, AttributeError) as exc:
-            goals = {}
-            reason = (reason + "; " if reason else "") + "target preview unavailable: " + str(exc)
-        return make_gui_scene(now, bases, states, planner.offsets, goals, age, readers,
-                              previous_timestamps, max_robot_age, calibration_valid=calibration_valid,
-                              reason=reason, command_goals=None if command_tcp_goals is None else {
-                                  name: bases[name] @ flange_from_tcp(pose, planner.offsets[name])
-                                  for name, pose in command_tcp_goals.items()})
-    except (ValueError, TypeError, KeyError, AttributeError):
         return None
 
 
@@ -794,102 +731,14 @@ class MotionSession:
             raise ControlFault("recovery stop could not be confirmed: " + "; ".join(failures))
 
 
-class FacingPlanner:
-    """Freeze hold goals in C; recompute follower goals from fresh leader pose."""
-
-    def __init__(self, args):
-        self.args = args
-        self.offsets = {name: pose_matrix(getattr(args, name + "_tcp_offset") or [0.] * 6) for name in ROBOTS}
-        self.mappings = {name: model_from_controller_base(name) for name in ROBOTS}
-        self.gap = args.gap
-        self.hold_targets = None
-        self.initial_tcp = None
-        self.target_applied = args.mode == "follow" or args.center_pose is not None
-
-    @property
-    def commanded(self):
-        return ROBOTS if self.args.mode == "hold" else tuple(name for name in ROBOTS if name != self.args.leader)
-
-    @property
-    def center_pose(self):
-        if self.args.mode != "hold":
-            return None
-        if self.hold_targets is None:
-            return None if self.args.center_pose is None else list(self.args.center_pose)
-        center = self.hold_targets["ur5e"].copy()
-        center[:3, 3] = (self.hold_targets["ur5e"][:3, 3] + self.hold_targets["ur10e"][:3, 3]) / 2.
-        return matrix_pose(center).tolist()
-
-    def apply_target(self, command):
-        """Atomically replace a preview target; the runtime forbids active edits."""
-        if command.get("type") != "target":
-            raise ValueError("unknown GUI command")
-        gap = float(command["gap"])
-        if not np.isfinite(gap) or gap < self.args.min_gap:
-            raise ValueError("gap must be finite and at least min_gap")
-        if self.args.mode == "hold":
-            center = matrix_pose(pose_matrix(command["center_pose"])).tolist()
-        else:
-            if "center_pose" in command:
-                raise ValueError("center_pose is only for hold mode")
-            center = None
-        # Validate everything above before altering the previously applied goal.
-        self.gap, self.args.center_pose = gap, center
-        self.hold_targets = None
-        self.target_applied = True
-
-    def plan(self, calibration, states):
-        bases, flanges = {}, {}
-        for name in ROBOTS:
-            bases[name] = calibration[name] @ self.mappings[name]
-            flange = flange_from_tcp(states[name].tcp, self.offsets[name])
-            nominal = model_flange_pose(name, states[name].joints)
-            observed = self.mappings[name] @ flange
-            position_error = np.linalg.norm(nominal[:3, 3] - observed[:3, 3])
-            angle_error = rotation_distance(nominal, observed)
-            if position_error > self.args.frame_check_m or angle_error > np.deg2rad(self.args.frame_check_deg):
-                raise ControlFault(f"{name}: FK/base/TCP mismatch {position_error:.3f} m, {np.rad2deg(angle_error):.1f} deg")
-            flanges[name] = bases[name] @ flange
-        separation = np.linalg.norm(flanges[ROBOTS[0]][:3, 3] - flanges[ROBOTS[1]][:3, 3])
-        if separation < self.args.min_gap:
-            raise PlanningUnavailable(f"flange separation {separation:.3f} m is below min_gap")
-        if self.gap is None:
-            self.gap = float(separation)
-        if self.gap < self.args.min_gap:
-            raise PlanningUnavailable("target gap is below min_gap")
-        if self.args.mode == "hold":
-            if self.hold_targets is None:
-                self.hold_targets = fixed_facing_targets(
-                    flanges["ur5e"], flanges["ur10e"], self.gap, self.args.center_pose,
-                )
-            goals = {name: pose.copy() for name, pose in self.hold_targets.items()}
-        else:
-            goals = {self.commanded[0]: facing_follower(flanges[self.args.leader], self.gap)}
-        tcp_goals = {name: inverse(bases[name]) @ goals[name] @ self.offsets[name] for name in self.commanded}
-        return goals, tcp_goals
-
-    def check_envelope(self, states, targets):
-        if self.initial_tcp is None:
-            self.initial_tcp = {name: state.tcp.copy() for name, state in states.items()}
-        for name in self.commanded:
-            origin = self.initial_tcp[name]
-            for pose in (states[name].tcp, targets[name]):
-                if np.linalg.norm(pose[:3, 3] - origin[:3, 3]) > self.args.max_travel:
-                    raise PlanningUnavailable(f"{name}: outside {self.args.max_travel:.3f} m start-position envelope")
-            if (np.linalg.norm(states[name].speed[:3]) > self.args.max_speed * 1.5 + 0.005
-                    or np.linalg.norm(states[name].speed[3:]) > self.args.max_angular_speed * 1.5 + 0.02):
-                raise ControlFault(f"{name}: measured speed exceeded configured limit")
-
-
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--mode", choices=("hold", "follow"), required=True)
+    p.add_argument("--mode", choices=("follow",), default="follow", help="Follower control (default; retained for existing commands)")
     p.add_argument("--leader", choices=ROBOTS, default="ur10e")
-    p.add_argument("--gap", type=float, default=.30, help="Flange origin separation in metres (default: 0.30); editable in GUI")
-    p.add_argument("--center_pose", nargs=6, type=float, help="Hold pair center in camera frame: x y z rx ry rz (m, rotation vector rad)")
+    p.add_argument("--gap", type=float, default=.20, help="Flange origin separation in metres (default: 0.20); editable in GUI")
     p.add_argument("--execute", action="store_true", help="Allow motion after GUI Arm or a in preview; otherwise receive-only")
     p.add_argument("--initial_align", action="store_true",
-                   help="After explicit Arm, validate and slowly align from rest before hold/follow; keep leader/bases stationary")
+                   help="After explicit Arm, validate and slowly align from rest before following; keep leader/bases stationary")
     p.add_argument("--align_speed_scale", type=float, default=2.,
                    help="Live initial alignment speed multiplier: 1 keeps the previous half-speed cap; "
                         "2 (default) uses up to 90%% of configured speed limits, reserving servo headroom. "
@@ -901,12 +750,12 @@ def parse_args(argv=None):
     p.add_argument("--align_leader_max_joint_speed", type=float, default=.025,
                    help="Leader per-joint rest threshold during follow alignment/handoff (default: 0.025 rad/s)")
     p.add_argument("--simulate", action="store_true",
-                   help="Capture current joints/calibration once, disconnect hardware, then run a virtual joint simulation")
+                   help="Capture current joints/calibration once, disconnect hardware, then run a virtual follower simulation")
     p.add_argument("--initial_state", type=Path,
                    help="Saved simulation initial-state JSON; with --simulate, skips all camera/RTDE connections")
     p.add_argument("--sim_initial_timeout", type=float, default=60., help="Initial live snapshot timeout in seconds")
     p.add_argument("--sim_motion", choices=("none", "leader", "bases", "both"), default="none",
-                   help="Virtual external motion after Start simulation; hold supports none/bases")
+                   help="Virtual external motion after Start simulation")
     for name, folder, default_lambda in (("ur5e", "v3m2a3", .5), ("ur10e", "ur10e_2", .2)):
         p.add_argument("--" + name + "_ip")
         p.add_argument("--" + name + "_tcp_offset", nargs=6, type=float,
@@ -931,11 +780,24 @@ def parse_args(argv=None):
     p.add_argument("--watchdog_hz", type=float, default=5.)
     p.add_argument("--max_calibration_age", type=float, default=.5)
     p.add_argument("--max_joint_skew", type=float, default=.08)
-    p.add_argument("--max_robot_age", type=float, default=.15)
-    p.add_argument("--stable_frames", type=int, default=5)
+    p.add_argument("--max_robot_age", type=float, default=.5)
+    p.add_argument("--stable_frames", type=int, default=3)
     p.add_argument("--calibration_acquisition", choices=("consensus", "consecutive"), default="consensus",
                    help="Stationary initial-alignment acquisition: recent 1s consensus or consecutive raw frames")
     p.add_argument("--filter_alpha", type=float, default=.2)
+    output_correction = p.add_mutually_exclusive_group()
+    output_correction.add_argument("--ur10e_output_correction", action="store_true",
+                                   help="Apply Z 180deg and local Z +5mm to UR10e PnP output before control (default: ON)")
+    output_correction.add_argument("--no_ur10e_output_correction", action="store_false",
+                                   dest="ur10e_output_correction",
+                                   help="Use raw UR10e PnP output as the control base without the output transform")
+    p.set_defaults(ur10e_output_correction=True)
+    plane = p.add_mutually_exclusive_group()
+    plane.add_argument("--common_base_plane", action="store_true",
+                       help="Estimate both physical bases on a shared mounting plane with matching +Z normals (default)")
+    plane.add_argument("--no_common_base_plane", dest="common_base_plane", action="store_false",
+                       help="Disable the shared base-plane constraint for independently mounted bases")
+    p.set_defaults(common_base_plane=True)
     p.add_argument("--check_reprojection", action="store_true",
                    help="Enable mean/max reprojection rejection in preview and execution (default: off)")
     p.add_argument("--max_reproj_px", type=float, default=5.,
@@ -958,7 +820,8 @@ def parse_args(argv=None):
     p.add_argument("--frame_check_m", type=float, default=.03)
     p.add_argument("--frame_check_deg", type=float, default=5.)
     p.add_argument("--min_gap", type=float, default=.15)
-    p.add_argument("--max_travel", type=float, default=.15)
+    p.add_argument("--max_travel", type=float,
+                   help="TCP radius from the original start position in metres (default: 0.30)")
     p.add_argument("--max_target_m", type=float, default=.20,
                    help="Tracking position error stop threshold in metres (default: 0.20); does not change travel/speed limits")
     p.add_argument("--max_target_deg", type=float, default=25.)
@@ -967,7 +830,7 @@ def parse_args(argv=None):
     p.add_argument("--target_tolerance_deg", type=float, default=10.,
                    help="Allowed estimated flange orientation adjustment/error in degrees (default: 10); zero with zero position tolerance restores exact goals")
     p.add_argument("--max_speed", type=float,
-                   help="TCP linear limit in m/s for hold and initial alignment (default: 0.02); "
+                   help="TCP linear limit in m/s for initial alignment (default: 0.02); "
                         "an explicit value also sets following unless --follow_max_speed is supplied")
     p.add_argument("--max_angular_speed", type=float, default=.1)
     p.add_argument("--max_accel", type=float, default=.1)
@@ -976,13 +839,36 @@ def parse_args(argv=None):
     p.add_argument("--fault_response", choices=("preview", "exit"), default="preview",
                    help="Recoverable calibration/planning faults: stop and keep preview for a fresh explicit Arm (default), "
                         "or exit as in earlier versions; hardware/operator faults still stop and exit")
-    p.add_argument("--kp_linear", type=float, default=1.)
-    p.add_argument("--kp_angular", type=float, default=1.)
+    p.add_argument("--kp_linear", type=float,
+                   help="Position error feedback gain in 1/s (default: 3)")
+    p.add_argument("--kp_angular", type=float,
+                   help="Orientation error feedback gain in 1/s (default: 3)")
     research = p.add_argument_group("moving-base relative collaboration (--mode follow)")
     research.add_argument("--method", choices=("direct", "predict", "separated"), default="separated")
+    research.add_argument("--follow_law", choices=("feedforward", "pose"), default="feedforward",
+                          help="Tracking law: feedforward (default) combines leader tracking and pose feedback; "
+                               "pose recomputes the follower TCP target each cycle and uses only pose-error velocity "
+                               "with measured-motion damping. Requires separated + pose base updates + bounded response; "
+                               "all existing feedback and motion limits remain unchanged")
+    research.add_argument("--base_motion_mode", choices=("pose", "velocity"), default="pose",
+                          help="Visual base updates: pose (default) updates coordinates without inferred velocity; "
+                               "velocity restores research prediction and mandatory base-velocity compensation. "
+                               "Robot motion limits always use encoder/RTDE measurements")
+    research.add_argument("--base_pose_window", type=int, default=5,
+                          help="ACTIVE pose-mode relative-base medoid window: odd 3..31 images, 0 disables")
+    research.add_argument("--base_pose_smoothing_time", type=float, default=.35,
+                          help="Relative-base coordinate smoothing time constant in seconds; not leader motion filtering")
+    research.add_argument("--base_pose_deadband_m", type=float, default=.005,
+                          help="Ignore relative-base coordinate jitter within this translation radius (default: 5mm)")
+    research.add_argument("--base_pose_deadband_deg", type=float, default=.5,
+                          help="Ignore relative-base coordinate jitter within this angle (default: 0.5deg)")
+    research.add_argument("--base_pose_update_speed", type=float, default=.02,
+                          help="Relative-base coordinate application rate in m/s (default: 0.02); not a robot speed limit")
+    research.add_argument("--base_pose_update_angular_speed", type=float, default=.05,
+                          help="Relative-base coordinate application rate in rad/s (default: 0.05)")
     research.add_argument("--follow_max_speed", type=float,
                           help="Follower tracking TCP linear limit in m/s (default: 1.0, or explicit --max_speed); "
-                               "does not change initial alignment, hold or acceleration limits")
+                               "does not change initial alignment or acceleration limits")
     research.add_argument("--leader_response", choices=("bounded", "strict"), default="bounded",
                           help="Separated following with target tolerance: bounded ramps leader tracking within motion limits; "
                                "strict requires immediate full leader compensation for research comparisons")
@@ -991,17 +877,44 @@ def parse_args(argv=None):
                           help="Line delta in leader flange axes: XYZ metres, rotation vector radians")
     research.add_argument("--path_radius", type=float, default=.02)
     research.add_argument("--path_duration", type=float, default=10.)
+    research.add_argument("--approach_speed", type=float, default=.005,
+                          help="peak axial target speed in m/s for the GUI approach to 15 cm")
     research.add_argument("--velocity_alpha", type=float, default=.3)
-    research.add_argument("--prediction_horizon", type=float, default=.5)
-    research.add_argument("--max_base_speed", type=float, default=.15)
-    research.add_argument("--max_base_angular_speed", type=float, default=.5)
+    research.add_argument("--prediction_horizon", type=float, default=.5,
+                          help="Maximum base-velocity extrapolation age in seconds (velocity mode only)")
+    research.add_argument("--max_base_speed", type=float, default=.25,
+                          help="Visual base speed rejection in m/s (velocity mode only; not robot TCP speed)")
+    research.add_argument("--max_base_angular_speed", type=float, default=.15,
+                          help="Visual base angular speed rejection in rad/s (velocity mode only)")
     research.add_argument("--max_invalid_duration", type=float, default=.3,
-                          help="maximum active calibration rejection grace in seconds (alignment/hold/follow)")
+                          help="Active rejected-image grace while the last accepted capture remains fresh, seconds")
+    recovery = research.add_mutually_exclusive_group()
+    recovery.add_argument("--live_calibration_recovery", dest="live_calibration_recovery", action="store_true",
+                          help="Bounded pose following: brake and observe consistent new calibration before resuming (default)")
+    recovery.add_argument("--no_live_calibration_recovery", dest="live_calibration_recovery", action="store_false",
+                          help="Use legacy immediate calibration expiry/rejection faults")
+    p.set_defaults(live_calibration_recovery=True)
+    research.add_argument("--calibration_recovery_timeout", type=float, default=2.,
+                          help="Maximum observation/braking time from detection, seconds (default: 2)")
+    research.add_argument("--calibration_recovery_max_shift_m", type=float, default=.15,
+                          help="Maximum new calibration displacement from the observation baseline (default: 0.15m)")
+    research.add_argument("--calibration_recovery_max_shift_deg", type=float, default=15.,
+                          help="Maximum new calibration rotation from the observation baseline (default: 15deg)")
+    research.add_argument("--calibration_blend_time", type=float, default=.5,
+                          help="Minimum time to blend recovered calibration; rate limits may extend it (default: 0.5s)")
     research.add_argument("--max_joint_speed", type=float, default=.2)
-    research.add_argument("--max_joint_accel", type=float, default=.5)
+    research.add_argument("--max_joint_accel", type=float,
+                          help="Per-joint acceleration limit in rad/s^2 (default: 0.75)")
     research.add_argument("--min_singular_value", type=float, default=.01)
-    research.add_argument("--feedback_speed", type=float, default=.01)
-    research.add_argument("--feedback_angular_speed", type=float, default=.05)
+    research.add_argument("--feedback_speed", type=float,
+                          help="Follow catch-up linear feedback cap in m/s (default: 0.10); "
+                               "total commands still obey TCP/joint speed and acceleration limits")
+    research.add_argument("--feedback_angular_speed", type=float,
+                          help="Follow catch-up angular feedback cap in rad/s (default: 0.15); "
+                               "total commands still obey TCP/joint speed and acceleration limits")
+    research.add_argument("--follow_damping_time", type=float, default=.12,
+                          help="Measured relative-motion anticipation in seconds (default: 0.12); "
+                               "bounded following brakes near the target; 0 selects legacy feedback")
     research.add_argument("--position_deadband", type=float, default=.001)
     research.add_argument("--rotation_deadband_deg", type=float, default=.3)
     research.add_argument("--slow_error_m", type=float, default=.01)
@@ -1012,10 +925,18 @@ def parse_args(argv=None):
     research.add_argument("--workspace_config", type=Path, help="Joint limits, TCP boxes, collision capsule radii and camera keep-outs JSON")
     research.add_argument("--log", type=Path, help="Exclusive JSONL output; default: runs/<timestamp>-<method>-<uuid>.jsonl")
     args = p.parse_args(argv)
+    if args.follow_law == "pose" and (args.method != "separated"
+                                    or args.base_motion_mode != "pose"
+                                    or args.leader_response != "bounded"):
+        p.error("--follow_law pose requires --method separated --base_motion_mode pose --leader_response bounded")
     if args.follow_max_speed is None:
         args.follow_max_speed = 1. if args.max_speed is None else args.max_speed
     if args.max_speed is None:
         args.max_speed = .02
+    for name, default in {"kp_linear": 3., "kp_angular": 3., "feedback_speed": .10,
+                          "feedback_angular_speed": .15, "max_joint_accel": .75, "max_travel": .30}.items():
+        if getattr(args, name) is None:
+            setattr(args, name, default)
     if args.simulate and args.initial_align:
         p.error("--initial_align is for live control; simulation already provides its own initial alignment")
     if args.simulate and args.execute:
@@ -1024,8 +945,6 @@ def parse_args(argv=None):
         p.error("--initial_state requires --simulate")
     if not args.simulate and args.sim_motion != "none":
         p.error("--sim_motion requires --simulate")
-    if args.simulate and args.mode == "hold" and args.sim_motion in ("leader", "both"):
-        p.error("hold simulation commands both arms; use --sim_motion none or bases")
     if args.initial_state is None:
         for name in ROBOTS:
             if not getattr(args, name + "_ip"):
@@ -1040,12 +959,22 @@ def parse_args(argv=None):
                 "max_target_m", "max_target_deg", "max_speed", "follow_max_speed", "max_angular_speed", "max_accel",
                 "max_angular_accel", "stop_accel", "kp_linear", "kp_angular", "camera_w", "camera_h", "fps",
                 "align_leader_max_speed", "align_leader_max_angular_speed", "align_leader_max_joint_speed",
-                "path_radius", "path_duration", "prediction_horizon", "max_base_speed", "max_base_angular_speed",
+                "path_radius", "path_duration", "approach_speed", "prediction_horizon", "max_base_speed", "max_base_angular_speed",
                 "max_invalid_duration", "max_joint_speed", "max_joint_accel", "min_singular_value",
                 "feedback_speed", "feedback_angular_speed", "slow_error_m", "slow_error_deg",
-                "finish_position_m", "finish_rotation_deg", "finish_dwell")
+                "finish_position_m", "finish_rotation_deg", "finish_dwell", "calibration_recovery_timeout",
+                "calibration_recovery_max_shift_m", "calibration_recovery_max_shift_deg", "calibration_blend_time",
+                "base_pose_smoothing_time", "base_pose_update_speed", "base_pose_update_angular_speed")
     if any(not np.isfinite(getattr(args, key)) or getattr(args, key) <= 0 for key in positive):
         p.error("rates, limits, camera dimensions and gains must be finite and positive")
+    if not np.isfinite(args.follow_damping_time) or args.follow_damping_time < 0:
+        p.error("follow_damping_time must be finite and nonnegative")
+    if args.base_pose_window != 0 and (args.base_pose_window < 3 or args.base_pose_window > 31
+                                      or args.base_pose_window % 2 != 1):
+        p.error("base_pose_window must be 0 or an odd integer from 3 to 31")
+    if (not np.isfinite([args.base_pose_deadband_m, args.base_pose_deadband_deg]).all()
+            or min(args.base_pose_deadband_m, args.base_pose_deadband_deg) < 0):
+        p.error("base pose deadbands must be finite and nonnegative")
     if (not np.isfinite([args.handoff_max_shift_m, args.handoff_max_shift_deg]).all()
             or min(args.handoff_max_shift_m, args.handoff_max_shift_deg) < 0):
         p.error("calibration handoff shift limits must be finite and nonnegative")
@@ -1062,8 +991,6 @@ def parse_args(argv=None):
         p.error("watchdog_hz must be less than half of control_hz")
     if args.gap is not None and (not np.isfinite(args.gap) or args.gap < args.min_gap):
         p.error("gap must be finite and at least min_gap")
-    if args.mode != "hold" and args.center_pose is not None:
-        p.error("center_pose is only for hold mode")
     if args.ur5e_ip is not None and args.ur5e_ip == args.ur10e_ip:
         p.error("UR5e and UR10e must have different controller IPs")
     for name in ROBOTS:
@@ -1075,8 +1002,6 @@ def parse_args(argv=None):
             p.error(f"--execute requires explicit --{name}_tcp_offset from the robot installation")
         if offset is not None and not np.isfinite(offset).all():
             p.error("TCP offsets must be finite")
-    if args.center_pose is not None and not np.isfinite(args.center_pose).all():
-        p.error("center_pose must be finite")
     if not np.isfinite(args.path_delta).all() or not 0 < args.velocity_alpha <= 1:
         p.error("invalid path_delta or velocity_alpha")
     if (not np.isfinite([args.position_deadband, args.rotation_deadband_deg]).all()
@@ -1084,512 +1009,17 @@ def parse_args(argv=None):
         p.error("deadbands must be finite and nonnegative")
     if args.slow_error_m >= args.max_target_m or args.slow_error_deg >= args.max_target_deg:
         p.error("slow_error thresholds must be below final target error limits")
-    if args.prediction_horizon > args.max_calibration_age:
+    if args.base_motion_mode == "velocity" and args.prediction_horizon > args.max_calibration_age:
         p.error("prediction_horizon must not exceed max_calibration_age")
     return args
 
 
 def run(args):
-    from rtde_receive import RTDEReceiveInterface
-    from urcal.control.gui import gui_worker
-    from urcal.control.vision import vision_worker
-    from urcal.control.startup import (
-        AlignmentCalibrationTimeout,
-        check_alignment_request, check_handoff_snapshot, prepare_alignment,
-    )
-    from urcal.control.handoff import CalibrationHandoff
-    from urcal.control.acquisition import StationaryCalibrationAcquisition
-    from urcal.control.recovery import RecoveryStopGate, fresh_calibration_tracker, is_recoverable_fault
-    from urcal.cooperative.kinematics import NominalKinematics, WorkspaceGuard
-
-    ctx = mp.get_context("spawn")
-    frames, commands, statuses, gui_statuses = (ctx.Queue(maxsize=size) for size in (1, 8, 1, 1))
-    inbox = CommandInbox(commands)
-    stop = ctx.Event()
-    worker = ctx.Process(target=vision_worker, args=(args, frames, commands, statuses, stop), daemon=True)
-    gui = ctx.Process(target=gui_worker, args=(args, commands, gui_statuses, stop), daemon=True)
-    tracker = CalibrationTracker(
-        max_age=args.max_calibration_age, stable_frames=args.stable_frames, alpha=args.filter_alpha,
-        max_jump_m=args.max_calibration_jump_m, max_jump_rad=np.deg2rad(args.max_calibration_jump_deg),
-        max_mean_px=args.max_reproj_px, max_pixel_px=args.max_point_reproj_px, min_points=args.min_points,
-        check_reprojection=args.check_reprojection,
-    )
-    planner = FacingPlanner(args)
-    calibration_guard = ActiveCalibrationGuard(args.max_invalid_duration)
-    preview_recovery = PreviewCalibrationRecovery()
-    stationary_acquisition = StationaryCalibrationAcquisition(tracker)
-    calibration_degraded = False
-    session = None
-    arm_error = None
-    alignment, alignment_complete = None, False
-    alignment_bases, alignment_goals, alignment_tcp_goals = None, None, None
-    alignment_nominal_goals = None
-    alignment_capture = None
-    handoff, endpoint_states = None, None
-    models = {name: NominalKinematics(name, planner.offsets[name]) for name in ROBOTS} if args.initial_align else None
-    guard = WorkspaceGuard(models, args.workspace_config) if args.initial_align else None
-    previous = {name: np.zeros(6) for name in planner.commanded}
-    last_tick = time.monotonic()
-    period = 1.0 / args.control_hz
-    last_report = 0.
-    scene_timestamps = {}
-    recovery_stop = None
-    recovery_reason = None
-    recovery_capture_after = None
-    recovery_ready = False
-    try:
-        with ExitStack() as cleanup:
-            readers = {}
-            for name in ROBOTS:
-                receiver = RTDEReceiveInterface(getattr(args, name + "_ip"))
-                cleanup.callback(receiver.disconnect)
-                readers[name] = StateReader(receiver, args.max_robot_age, require_joint_velocity=args.initial_align)
-            cleanup.callback(lambda: session.close() if session is not None else None)
-
-            def observe_fault(_kind, exception, _traceback):
-                if exception is not None:
-                    capture_runtime_fault(exception, session, readers, time.monotonic())
-                return False
-
-            cleanup.push(observe_fault)
-            # Import nominal FK outside the timed motion loop (no robot writes).
-            for name in ROBOTS:
-                model_flange_pose(name, np.zeros(6))
-            gui.start()
-            worker.start()
-            print("[info] PREVIEW. GUI: Apply target, then Arm (--execute only). SPACE/q/ESC: stop+exit.", flush=True)
-            print("[info] Recoverable faults: " + (
-                "stop motion, keep preview; fresh calibration and a new Arm are required."
-                if getattr(args, "fault_response", "exit") == "preview" else "stop and exit."), flush=True)
-            print("[info] Mean/max reprojection rejection: " +
-                  (f"ON (mean <= {args.max_reproj_px:g}px, max <= {args.max_point_reproj_px:g}px)."
-                   if args.check_reprojection else "OFF (preview and execution)."), flush=True)
-            print(f"[info] Estimated flange task tolerance: {getattr(args, 'target_tolerance_m', 0.) * 100:g}cm / "
-                  f"{getattr(args, 'target_tolerance_deg', 0.):g}deg; nominal targets retained.", flush=True)
-            print(f"[info] Calibration limits: jump {args.max_calibration_jump_m * 100:g}cm / "
-                  f"{args.max_calibration_jump_deg:g}deg; handoff target shift "
-                  f"{args.handoff_max_shift_m * 100:g}cm / {args.handoff_max_shift_deg:g}deg; "
-                  f"handoff wait {args.handoff_timeout:g}s; tracking error stop {args.max_target_m * 100:g}cm.", flush=True)
-            if args.initial_align:
-                print(f"[info] Stationary calibration: {args.calibration_acquisition}; "
-                      f"after {args.handoff_timeout:g}s handoff wait: {args.handoff_wait}.", flush=True)
-            if any(getattr(args, name + "_tcp_offset") is None for name in ROBOTS):
-                print("[info] preview assumes zero TCP offsets where omitted; specify actual offsets before motion.", flush=True)
-            def read_alignment_inputs():
-                checked = time.monotonic()
-                if stop.is_set() or not worker.is_alive() or not gui.is_alive():
-                    raise ControlFault("operator/vision stop during initial alignment")
-                measured = {name: reader.read(checked) for name, reader in readers.items()}
-                # Arm selected a complete, stable calibration. Native path
-                # validation uses exactly that snapshot; vision may keep
-                # running, but cannot change the path under validation.
-                return {name: pose.copy() for name, pose in alignment_bases.items()}, measured
-
-            def alignment_report(message):
-                print("[control] " + message, flush=True)
-                put_latest(gui_statuses, {"message": message, "active": True, "ready": False,
-                                          "phase": "alignment_preflight"})
-
-            while not stop.is_set():
-                now = time.monotonic()
-                dt, last_tick = now - last_tick, now
-                arm_requested = False
-                target_updated = False
-                if not worker.is_alive() or not gui.is_alive():
-                    raise ControlFault("vision or GUI process exited")
-                if session is not None and dt > min(args.max_robot_age, 1. / args.watchdog_hz):
-                    raise ControlFault("control loop missed its deadline")
-                goals = {}
-                display_command_targets = None
-                ready = False
-                states = None
-                try:
-                    for command in inbox.read():
-                        if isinstance(command, dict):
-                            if session is not None:
-                                raise ControlFault("stop before changing targets")
-                            planner.apply_target(command)
-                            target_updated = True
-                        elif command in ("quit", "stop"):
-                            stop.set()
-                        elif command == "arm":
-                            arm_requested = True
-                    if target_updated:
-                        # Show/check the new goal before a later explicit Arm.
-                        arm_requested = False
-                    if stop.is_set():
-                        break
-                    packet = take_latest(frames)
-                    if recovery_stop is not None:
-                        # Robot stop acknowledgement alone does not prove rest.
-                        # Only fresh encoder observations unlock calibration
-                        # collection, and only a later Arm can restart motion.
-                        states = {name: reader.read(now) for name, reader in readers.items()}
-                        if not recovery_stop.observe(states, now):
-                            recovery_capture_after = None
-                            inbox.cancel_arm_requests()
-                            arm_requested = False
-                            raise PlanningUnavailable("RECOVERY WAIT: " + recovery_stop.reason)
-                        if recovery_capture_after is None:
-                            recovery_capture_after = recovery_stop.ready_at
-                            tracker = fresh_calibration_tracker(tracker)
-                            preview_recovery.reset()
-                            stationary_acquisition.reset()
-                        if packet is not None and packet.captured_at <= recovery_capture_after:
-                            packet = None
-                    frozen_alignment = session is not None and args.initial_align and not alignment_complete
-                    if session is not None:
-                        preview_recovery.reset()
-                    if packet is not None and frozen_alignment:
-                        if handoff is not None:
-                            handoff.ingest(packet, now)
-                    elif (packet is not None and session is None and args.initial_align
-                          and args.calibration_acquisition == "consensus"):
-                        candidate = stationary_acquisition.offer(packet, now)
-                        if candidate is None:
-                            tracker.reject(packet.sequence, stationary_acquisition.reason)
-                        else:
-                            if tracker.poses and (now - tracker.last_capture > tracker.max_age or
-                                    stationary_acquisition._distance(tracker.poses, candidate.poses) > 1.):
-                                arm_requested = False
-                            tracker = candidate
-                    elif packet is not None:
-                        stationary_acquisition.reset()
-                        try:
-                            accepted = tracker.update(packet, now)
-                        except ControlFault as exc:
-                            # Only classified vision rejections use bounded
-                            # grace. Malformed input propagates immediately.
-                            if session is not None and not is_recoverable_fault(exc):
-                                raise
-                            if session is None:
-                                candidate = preview_recovery.offer(packet, now, tracker)
-                                if candidate is None:
-                                    raise
-                                tracker = candidate
-                                preview_recovery.reset()
-                                arm_requested = False
-                                print("[control] PREVIEW: calibration reacquired from stable frames; review pose, then Arm", flush=True)
-                        else:
-                            if accepted:
-                                preview_recovery.reset()
-                    calibration_current = True
-                    if session is None:
-                        tracker.check_fresh(now)
-                    elif not frozen_alignment:
-                        calibration_current = calibration_guard.check(tracker, now)
-                    if states is None:
-                        states = {name: reader.read(now) for name, reader in readers.items()}
-                    if frozen_alignment:
-                        goals = {name: pose.copy() for name, pose in alignment_goals.items()}
-                        tcp_goals = {name: pose.copy() for name, pose in alignment_tcp_goals.items()}
-                    else:
-                        goals, tcp_goals = planner.plan(tracker.poses, states)
-                    initializing = args.initial_align and not alignment_complete
-                    tolerant = bool(getattr(args, "target_tolerance_m", 0.) or
-                                    getattr(args, "target_tolerance_deg", 0.))
-                    # The nominal task may lie beyond the travel envelope
-                    # while the accepted current/next command remains inside
-                    # it. Initial path planning keeps its conservative full
-                    # nominal-target check before any selected endpoint.
-                    envelope_targets = ({name: states[name].tcp for name in planner.commanded}
-                                        if tolerant and not initializing else tcp_goals)
-                    planner.check_envelope(states, envelope_targets)
-                    if recovery_stop is not None and not recovery_ready:
-                        # This tick first establishes readiness. Invalidate
-                        # clicks made while stopping or rebuilding calibration.
-                        arm_requested = False
-                        inbox.cancel_arm_requests()
-                    if initializing:
-                        bases = (alignment_bases if frozen_alignment else
-                                 {name: tracker.poses[name] @ planner.mappings[name] for name in ROBOTS})
-                        if session is None:
-                            check_alignment_request(args, planner.offsets, bases, states, tcp_goals,
-                                                    models, guard, planner.initial_tcp)
-                            ready = planner.target_applied
-                            message = ("READY: Arm to validate joint path and align; keep bases stationary"
-                                       if ready else "PREVIEW: Apply target in GUI")
-                            if arm_requested:
-                                if not ready:
-                                    message = "WAIT: Apply the hold target in GUI before arming"
-                                elif args.execute:
-                                    alignment_bases = {name: pose.copy() for name, pose in bases.items()}
-                                    alignment_goals = {name: pose.copy() for name, pose in goals.items()}
-                                    alignment_nominal_goals = {name: pose.copy() for name, pose in goals.items()}
-                                    alignment_tcp_goals = {name: pose.copy() for name, pose in tcp_goals.items()}
-                                    alignment_capture = tracker.last_capture
-                                    handoff, endpoint_states = None, None
-                                    alignment_report("PREFLIGHT: connecting commanded arms; no motion yet")
-                                    arm_error = None
-                                    preview_recovery.reset()
-                                    calibration_guard.arm(tracker, now)
-                                    session = MotionSession(args, planner.commanded, planner.offsets,
-                                                            stop_event=stop, defer_watchdog=True)
-                                    recovery_stop, recovery_reason = None, None
-                                    recovery_capture_after, recovery_ready = None, False
-                                    try:
-                                        alignment = prepare_alignment(session, args, planner.offsets, alignment_bases, states,
-                                                                      alignment_tcp_goals, read_alignment_inputs, alignment_report,
-                                                                      wait=stop.wait)
-                                    except (AlignmentCalibrationTimeout, ArmIKUnavailable, ArmConditioningUnavailable):
-                                        session.close()
-                                        session = None
-                                        alignment = None
-                                        now, states = time.monotonic(), None
-                                        raise
-                                    chosen = getattr(alignment, "targets", None)
-                                    if isinstance(chosen, dict):
-                                        alignment_tcp_goals = {name: pose.copy() for name, pose in chosen.items()}
-                                        alignment_goals = {name: alignment_bases[name] @ flange_from_tcp(pose, planner.offsets[name])
-                                                           for name, pose in chosen.items()}
-                                    ready = False
-                                    last_tick = time.monotonic()
-                                    message = "ARMED: initial alignment starts on the next fresh tick"
-                                else:
-                                    message = "PREVIEW ONLY: restart with --execute to allow motion"
-                        else:
-                            def alignment_fresh():
-                                checked = time.monotonic()
-                                if stop.is_set() or not worker.is_alive() or not gui.is_alive():
-                                    raise ControlFault("operator/vision stop requested")
-                                if checked - now > args.max_robot_age or any(
-                                        checked - reader.last_advance > args.max_robot_age for reader in readers.values()):
-                                    raise ControlFault("alignment state/command expired")
-                            if handoff is None:
-                                qdots = alignment.propose(states, alignment_bases, max(dt, 1e-6))
-                                session.send_joints(qdots, alignment.predicted_joints, check_fresh=alignment_fresh,
-                                                    accelerations=alignment.joint_accelerations)
-                                alignment.commit()
-                                message = "ALIGNING: %.1f%%; Arm calibration frozen; keep bases stationary" % (100*alignment.progress)
-                                if alignment.done:
-                                    endpoint_states = deepcopy(states)
-                                    handoff = CalibrationHandoff(tracker, time.monotonic(),
-                                                                 timeout=args.handoff_timeout,
-                                                                 consensus=args.calibration_acquisition == "consensus",
-                                                                 wait_at_rest=args.handoff_wait == "hold")
-                                    message = "ALIGNED: waiting for fresh stable calibration; holding position"
-                            else:
-                                handoff.check_timeout(now)
-                                qdots = alignment.propose_hold(states, alignment_bases, max(dt, 1e-6))
-                                session.send_joints(qdots, alignment.predicted_joints, check_fresh=alignment_fresh,
-                                                    accelerations=alignment.joint_accelerations)
-                                message = ("ALIGNED: " + handoff.status
-                                           + f" ({len(handoff.frames)}/{args.stable_frames} frames); holding position")
-                                if handoff.ready(now):
-                                    live_bases = {name: handoff.tracker.poses[name] @ planner.mappings[name]
-                                                  for name in ROBOTS}
-                                    live_goals, live_tcp_goals = planner.plan(handoff.tracker.poses, states)
-                                    def validate_live_calibration():
-                                        nominal = getattr(alignment, "nominal_targets", None)
-                                        check_handoff_snapshot(
-                                            args, alignment_bases, endpoint_states, live_bases, states,
-                                            offsets=planner.offsets,
-                                            nominal_targets=nominal if isinstance(nominal, dict) else alignment_tcp_goals,
-                                            live_targets=live_tcp_goals,
-                                        )
-                                        planner.check_envelope(
-                                            states, {name: states[name].tcp for name in planner.commanded}
-                                            if tolerant else live_tcp_goals,
-                                        )
-                                        for name in planner.commanded:
-                                            bounded_twist(
-                                                states[name].tcp, live_tcp_goals[name], np.zeros(6), min(dt, 2 * period),
-                                                kp_linear=args.kp_linear, kp_angular=args.kp_angular,
-                                                max_linear=args.max_speed, max_angular=args.max_angular_speed,
-                                                max_accel=args.max_accel, max_angular_accel=args.max_angular_accel,
-                                                max_target_m=args.max_target_m,
-                                                max_target_rad=np.deg2rad(args.max_target_deg),
-                                                **task_tolerance_options(args, planner.offsets[name]),
-                                            )
-                                    if handoff.try_validate(now, validate_live_calibration):
-                                        tracker = handoff.tracker
-                                        calibration_guard.arm(tracker, now)
-                                        calibration_degraded = False
-                                        alignment_complete = True
-                                        previous = {name: np.zeros(6) for name in planner.commanded}
-                                        goals, tcp_goals = live_goals, live_tcp_goals
-                                        message = "ALIGNED: fresh calibration validated; starting live hold on next tick"
-                                    else:
-                                        message = "ALIGNED: " + handoff.status + "; holding position"
-                    else:
-                        twists = {
-                            name: bounded_twist(
-                                states[name].tcp, tcp_goals[name], previous[name], min(dt, 2 * period),
-                                kp_linear=args.kp_linear, kp_angular=args.kp_angular,
-                                max_linear=args.max_speed, max_angular=args.max_angular_speed,
-                                max_accel=args.max_accel, max_angular_accel=args.max_angular_accel,
-                                max_target_m=args.max_target_m, max_target_rad=np.deg2rad(args.max_target_deg),
-                                **task_tolerance_options(args, planner.offsets[name]),
-                            ) for name in planner.commanded
-                        }
-                        if getattr(args, "target_tolerance_m", 0.) or getattr(args, "target_tolerance_deg", 0.):
-                            display_command_targets = near_term_tcp_targets(states, twists, min(dt, 2 * period))
-                        ready = planner.target_applied and session is None
-                        label = "ACTIVE" if session else "READY (preview)" if ready else "PREVIEW: Apply target in GUI"
-                        message = f"{label} {args.mode}; gap={planner.gap:.3f}m"
-                        if arm_requested and session is None:
-                            if not ready:
-                                message = "WAIT: Apply the hold target in GUI before arming"
-                            elif args.execute:
-                                arm_error = None
-                                preview_recovery.reset()
-                                calibration_guard.arm(tracker, now)
-                                session = MotionSession(args, planner.commanded, planner.offsets, stop_event=stop)
-                                recovery_stop, recovery_reason = None, None
-                                recovery_capture_after, recovery_ready = None, False
-                                ready = False
-                                # Do not move on the connection tick: require fresh vision/state again.
-                                previous = {name: np.zeros(6) for name in planner.commanded}
-                                last_tick = time.monotonic()
-                                message = "ARMED; waiting for next validated control tick"
-                            else:
-                                message = "PREVIEW ONLY: restart with --execute to allow motion"
-                        elif session is not None:
-                            def check_fresh():
-                                checked = time.monotonic()
-                                if stop.is_set() or not worker.is_alive() or not gui.is_alive():
-                                    raise ControlFault("operator/vision stop requested")
-                                calibration_guard.check(tracker, checked)
-                                if checked - now > args.max_robot_age:
-                                    raise ControlFault("state/command expired during controller checks")
-                                if any(checked - reader.last_advance > args.max_robot_age for reader in readers.values()):
-                                    raise ControlFault("robot state expired during controller checks")
-                            if getattr(args, "target_tolerance_m", 0.) or getattr(args, "target_tolerance_deg", 0.):
-                                next_targets = display_command_targets
-                                planner.check_envelope(states, next_targets)
-                                for fraction in (.5, 1.):
-                                    intermediate = (next_targets if fraction == 1. else
-                                                    near_term_tcp_targets(states, twists, fraction * min(dt, 2 * period)))
-                                    future_flanges = {
-                                        name: tracker.poses[name] @ planner.mappings[name]
-                                        @ flange_from_tcp(intermediate.get(name, states[name].tcp), planner.offsets[name])
-                                        for name in ROBOTS
-                                    }
-                                    if np.linalg.norm(future_flanges[ROBOTS[0]][:3, 3]
-                                                      - future_flanges[ROBOTS[1]][:3, 3]) < args.min_gap:
-                                        raise PlanningUnavailable("next commanded flange separation is below min_gap")
-                                # Native feasibility applies to what speedL
-                                # actually commands, while goals retain the
-                                # immutable nominal task for error display.
-                                session.send({name: states[name].tcp for name in planner.commanded}, twists,
-                                             check_fresh=check_fresh, safety_targets=next_targets)
-                            else:
-                                session.send(tcp_goals, twists, check_fresh=check_fresh)
-                            previous = twists
-                    if session is not None:
-                        degraded = not calibration_current
-                        if degraded != calibration_degraded:
-                            event = ("CALIBRATION HOLD: rejected pair; using last accepted calibration"
-                                     if degraded else "CALIBRATION RECOVERED: accepted new frame")
-                            print("[control] " + event, flush=True)
-                            calibration_degraded = degraded
-                        if degraded:
-                            message += "; CALIBRATION HOLD: waiting for next valid frame"
-                    if session is None and arm_error is not None:
-                        message = "ARM BLOCKED: " + arm_error
-                    if recovery_stop is not None:
-                        recovery_ready = ready
-                        if ready:
-                            message = "READY: stopped; fresh calibration validated; review pose, then press Arm again"
-                except (ControlFault, ValueError, KeyError, TypeError) as exc:
-                    if session is not None:
-                        if (getattr(args, "fault_response", "exit") != "preview" or not is_recoverable_fault(exc)
-                                or stop.is_set() or not worker.is_alive() or not gui.is_alive()):
-                            raise ControlFault(str(exc)) from exc
-                        # A failed stop/transport confirmation is fatal. Do not
-                        # enter recoverable preview until every arm confirms.
-                        session.stop_for_recovery()
-                        session = None
-                        now = time.monotonic()
-                        if stop.is_set():
-                            break
-                        baseline = {name: reader.read(now) for name, reader in readers.items()}
-                        recovery_stop = RecoveryStopGate(planner.commanded, baseline, now,
-                                                        max_state_age=args.max_robot_age)
-                        recovery_reason = str(exc)
-                        recovery_capture_after, recovery_ready = None, False
-                        inbox.cancel_arm_requests()
-                        take_latest(frames)
-                        calibration_guard = ActiveCalibrationGuard(args.max_invalid_duration)
-                        preview_recovery.reset()
-                        calibration_degraded = False
-                        alignment, alignment_complete = None, False
-                        alignment_bases, alignment_goals, alignment_tcp_goals = None, None, None
-                        alignment_nominal_goals, alignment_capture = None, None
-                        handoff, endpoint_states = None, None
-                        previous = {name: np.zeros(6) for name in planner.commanded}
-                        arm_error = None
-                        last_tick = now
-                        print("[control] RECOVERY STOP: " + recovery_reason +
-                              "; motion stopped; preview remains open; a new Arm is required", flush=True)
-                    elif (recovery_stop is not None and isinstance(exc, ControlFault) and not is_recoverable_fault(exc)
-                          and not isinstance(exc, (ArmConnectionError, AlignmentCalibrationTimeout,
-                                                   ArmIKUnavailable, ArmConditioningUnavailable))):
-                        raise
-                    if isinstance(exc, (ArmConnectionError, AlignmentCalibrationTimeout,
-                                        ArmIKUnavailable, ArmConditioningUnavailable)):
-                        inbox.cancel_arm_requests()
-                        arm_error = str(exc)
-                        print("[control] ARM BLOCKED: " + arm_error, flush=True)
-                    ready = False
-                    message = "WAIT: " + str(exc)
-                    if session is None and preview_recovery.count:
-                        message = (f"WAIT: PREVIEW REACQUIRING ({preview_recovery.count}/{args.stable_frames} frames); "
-                                   + str(exc))
-                    if recovery_stop is not None:
-                        recovery_ready = False
-                        inbox.cancel_arm_requests()
-                        message = "RECOVERY WAIT: " + str(exc) + "; new Arm required after readiness"
-                status = {"message": message, "goals": goals, "ready": ready, "arm_error": arm_error,
-                          "active": session is not None, "center_pose": planner.center_pose,
-                          "calibration_degraded": calibration_degraded,
-                          "preview_reacquiring_frames": preview_recovery.count,
-                          "recovery_required": recovery_stop is not None,
-                          "recovery_reason": recovery_reason,
-                          "recovery_stopped": recovery_stop.ready if recovery_stop is not None else False,
-                          "phase": ("recovery" if recovery_stop is not None else
-                                    "alignment_calibration_handoff" if handoff is not None and not alignment_complete
-                                    else "alignment" if args.initial_align and not alignment_complete else "tracking"),
-                          "alignment_progress": alignment.progress if alignment is not None else None}
-                # A rejected preview may still have useful accepted calibration
-                # and live encoder poses. These reads never authorize motion.
-                if states is None:
-                    try:
-                        states = {name: reader.read(now) for name, reader in readers.items()}
-                    except (ControlFault, ValueError, KeyError, TypeError):
-                        states = None
-                if session is not None and args.initial_align and not alignment_complete:
-                    scene = make_gui_scene(
-                        now, alignment_bases, states, planner.offsets, alignment_goals,
-                        max(0., now - alignment_capture), readers, scene_timestamps, args.max_robot_age,
-                        calibration_valid=True, reason="Arm calibration frozen; live encoder positions",
-                        calibration_mode="frozen", calibration_captured_at=alignment_capture,
-                        nominal_goals=alignment_nominal_goals, command_goals=alignment_goals,
-                    )
-                else:
-                    scene = facing_gui_scene(now, tracker, planner, states, readers,
-                                             scene_timestamps, args.max_robot_age, active=session is not None,
-                                             command_tcp_goals=display_command_targets)
-                put_latest(statuses, status)
-                put_latest(gui_statuses, {**status, "scene": scene})
-                if now - last_report >= 1.:
-                    print("[control] " + message, flush=True)
-                    last_report = now
-                stop.wait(max(0., period - (time.monotonic() - last_tick)))
-    finally:
-        # Stop motion before waiting for inference or camera resources to close.
-        if session is not None:
-            session.close()
-        stop.set()
-        for child in (worker, gui):
-            if child.pid is not None:
-                child.join(timeout=3.)
-                if child.is_alive():
-                    child.terminate()
-                    child.join(timeout=1.)
-        for queue in (frames, commands, statuses, gui_statuses):
-            queue.cancel_join_thread()
-            queue.close()
+    """Delegate every live entry point to the single follower controller."""
+    if args.mode != "follow":
+        raise ValueError("Only follower mode is supported")
+    from urcal.cooperative.runtime import run as run_follower
+    return run_follower(args)
 
 
 def main(argv=None):
@@ -1598,9 +1028,6 @@ def main(argv=None):
         if args.simulate:
             from urcal.simulation.runtime import run as run_simulation
             run_simulation(args)
-        elif args.mode == "follow":
-            from urcal.cooperative.runtime import run as run_research
-            run_research(args)
         else:
             run(args)
     except KeyboardInterrupt:

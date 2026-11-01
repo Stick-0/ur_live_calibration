@@ -14,6 +14,7 @@ import time
 import numpy as np
 
 from urcal.inference.display import import_opencv
+from urcal.inference.reporting import InferenceReporter
 
 cv2 = import_opencv()
 
@@ -120,7 +121,7 @@ def calibration_frame(sequence, captured, results, estimators, joints, K, dist, 
         valid = result.valid & np.isfinite(result.points).all(axis=1)
         counts[name] = int(valid.sum())
         if not result.ok:
-            reason = reason or f"{name}: EMPnP failed"
+            reason = reason or getattr(result, "constraint_error", "") or f"{name}: EMPnP failed"
             continue
         if counts[name] < 4:
             reason = reason or f"{name}: too few original detections"
@@ -198,6 +199,11 @@ def vision_worker(args, frames, commands, statuses, stop):
             last_frame = time.monotonic()
             status = {"message": "WAIT: collecting stable calibration", "goals": {}}
             show_seg, show_keypoints = args.show_seg, not args.hide_keypoints
+            reporter = InferenceReporter(interval=1.)
+            print("[vision] left=UR5e, right=UR10e; a: Arm | SPACE/q/ESC: stop+exit | "
+                  "k: keypoints | s: segmentation | d: save diagnostic (preview only)", flush=True)
+            print("[vision] Magenta crosses: pose reprojection; lines: detection residual. "
+                  "Pose/target axes are shown without text; controller status is printed by [research].", flush=True)
             while not stop.is_set():
                 sample = capture.read_after(sequence)
                 if sample is None:
@@ -211,6 +217,7 @@ def vision_worker(args, frames, commands, statuses, stop):
                 regions, results = dual.process_frame(
                     bgr, joints, estimators, stream.K, stream.dist, args.split_ratio,
                     transform, vote_cfg, device, show_seg,
+                    common_base_plane=getattr(args, "common_base_plane", False),
                 )
                 packet = calibration_frame(sequence, captured, results, estimators, joints,
                                            stream.K, stream.dist, args.max_joint_skew, skew, regions=regions)
@@ -219,6 +226,7 @@ def vision_worker(args, frames, commands, statuses, stop):
                 if update is not None:
                     status = update
                 fps = 1. / max(time.monotonic() - start, 1e-6)
+                reporter.emit(time.monotonic(), fps, estimators, results, packet=packet)
                 vis, seg_vis = dual.draw_results(
                     bgr, regions, estimators, results, stream.K, stream.dist, .06, fps, show_seg, show_keypoints,
                 )
@@ -227,19 +235,12 @@ def vision_worker(args, frames, commands, statuses, stop):
                     args.max_reproj_px, args.max_point_reproj_px, args.min_points,
                     check_reprojection=args.check_reprojection,
                 )
-                draw_calibration_debug(vis, debug, show_keypoints)
+                draw_calibration_debug(vis, debug, show_keypoints, show_text=False)
                 for name, goal in status.get("goals", {}).items():
                     pose = matrix_pose(goal)
                     if pose[2] <= 0:
                         continue
                     vis = dual.draw_pose_axes(vis, stream.K, stream.dist, pose[3:], pose[:3], .06, 2)
-                    pixel = cv2.projectPoints(np.zeros((1, 3)), pose[3:], pose[:3], stream.K, stream.dist)[0].reshape(2)
-                    if np.isfinite(pixel).all():
-                        cv2.putText(vis, name + " TARGET", tuple(np.rint(pixel).astype(int)),
-                                    cv2.FONT_HERSHEY_SIMPLEX, .45, (0, 255, 255), 1, cv2.LINE_AA)
-                cv2.putText(vis, status["message"][:95], (8, 52), cv2.FONT_HERSHEY_SIMPLEX, .42, (0, 255, 255), 1, cv2.LINE_AA)
-                cv2.putText(vis, "a: arm | SPACE: stop | q: quit | k: points | s: seg | d: save", (8, 73),
-                            cv2.FONT_HERSHEY_SIMPLEX, .4, (255, 255, 255), 1, cv2.LINE_AA)
                 cv2.imshow(window, vis)
                 if seg_vis is not None:
                     cv2.imshow(seg_window, seg_vis)
@@ -259,7 +260,8 @@ def vision_worker(args, frames, commands, statuses, stop):
                         print("[vision] diagnostic saving is available in preview without --execute", flush=True)
                     else:
                         try:
-                            path = save_calibration_debug(dual.BUNDLE / "runs/calibration-debug", bgr, vis,
+                            saved_overlay = draw_calibration_debug(vis.copy(), debug, show_keypoints, show_text=True)
+                            path = save_calibration_debug(dual.BUNDLE / "runs/calibration-debug", bgr, saved_overlay,
                                                           debug, status.get("message", ""))
                             print(f"[vision] diagnostic snapshot: {path}", flush=True)
                         except (OSError, ValueError, cv2.error) as exc:

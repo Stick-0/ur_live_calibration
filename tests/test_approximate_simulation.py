@@ -1,4 +1,4 @@
-"""Virtual alignment and hold use the same declared flange task allowance."""
+"""Virtual alignment and following share the declared flange task allowance."""
 
 from copy import deepcopy
 import unittest
@@ -9,7 +9,7 @@ import numpy as np
 from test_simulation_runtime import options, synthetic_snapshot
 from test_target_approximation import recorded_request
 from urcal.control.approximation import flange_adjustment
-from urcal.control.geometry import flange_from_tcp, inverse, model_from_controller_base
+from urcal.control.geometry import inverse, model_from_controller_base
 from urcal.simulation.approach import InitialApproach, InitialApproachIKUnavailable
 from urcal.simulation.plant import SimulationFault
 from urcal.simulation.runtime import SimulationSession
@@ -28,7 +28,8 @@ def recorded_snapshot():
 
 
 def tolerant_options(mode="follow"):
-    return options(mode, "none", "--target_tolerance_m", ".05", "--target_tolerance_deg", "10")
+    return options(mode, "none", "--target_tolerance_m", ".05", "--target_tolerance_deg", "10",
+                   "--gap", ".30", "--max_travel", ".15")
 
 
 class ApproximateSimulationTests(unittest.TestCase):
@@ -106,57 +107,8 @@ class ApproximateSimulationTests(unittest.TestCase):
             self.assertIn("exact IK unavailable", session.message)
             selector.assert_not_called()
 
-    def test_tolerated_hold_does_not_query_exact_nominal_ik_or_erase_target(self):
-        initial, _ = synthetic_snapshot()
-        session = SimulationSession(tolerant_options("hold"), initial)
-        states = session.plant.states(session.now)
-        session.planner.hold_targets = {
-            name: session.plant.bases[name] @ flange_from_tcp(state.tcp, session.plant.offsets[name])
-            for name, state in states.items()}
-        for target in session.planner.hold_targets.values():
-            target[0, 3] += .03
-        nominal = deepcopy(session.planner.hold_targets)
-        with patch.object(session.plant.models["ur5e"], "inverse", side_effect=AssertionError("no nominal IK")), \
-                patch.object(session.plant.models["ur10e"], "inverse", side_effect=AssertionError("no nominal IK")):
-            goals, _, twists, qdots = session._hold_proposal(states)
-        for name in states:
-            np.testing.assert_allclose(twists[name], 0., atol=1e-12)
-            np.testing.assert_allclose(qdots[name], 0., atol=1e-12)
-            np.testing.assert_array_equal(goals[name], nominal[name])
-            np.testing.assert_array_equal(session.planner.hold_targets[name], nominal[name])
 
-    def test_hold_checks_midpoint_and_endpoint_joint_geometry(self):
-        initial, _ = synthetic_snapshot()
-        session = SimulationSession(tolerant_options("hold"), initial)
-        states = session.plant.states(session.now)
-        original = session.plant.guard.check
-        calls = []
 
-        def reject_midpoint(bases, joints):
-            calls.append(1)
-            if len(calls) == 2:
-                return False, "midpoint obstacle", -.1
-            return original(bases, joints)
-
-        with patch.object(session.plant.guard, "check", reject_midpoint):
-            with self.assertRaisesRegex(SimulationFault, "midpoint obstacle"):
-                session._hold_proposal(states)
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(session.steps, 0)
-
-    def test_external_virtual_base_motion_cannot_bypass_minimum_gap(self):
-        initial, _ = synthetic_snapshot()
-        session = SimulationSession(tolerant_options("hold"), initial)
-        states = session.plant.states(session.now)
-        flanges = {name: session.plant.bases[name] @ flange_from_tcp(
-            state.tcp, session.plant.offsets[name]) for name, state in states.items()}
-        next_bases = deepcopy(session.plant.bases)
-        next_bases["ur5e"][:3, 3] += flanges["ur10e"][:3, 3] - flanges["ur5e"][:3, 3]
-        original = deepcopy(session.plant.bases)
-        with self.assertRaisesRegex(SimulationFault, "base motion.*below min_gap"):
-            session._check_hold_base_sweep({name: np.zeros(6) for name in states}, next_bases)
-        for name in states:
-            np.testing.assert_array_equal(session.plant.bases[name], original[name])
 
 
 if __name__ == "__main__":

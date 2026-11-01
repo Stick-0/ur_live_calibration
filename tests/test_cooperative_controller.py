@@ -56,7 +56,10 @@ def settings(**overrides):
     # Explicit research parameters keep this numerical fixture independent of
     # CLI safety defaults while still checking the production parser baseline.
     values = dict(
-        leader="ur10e", mode="follow", method="separated", path="hold", gap=.3, leader_response="strict",
+        leader="ur10e", mode="follow", method="separated", base_motion_mode="velocity",
+        ur10e_output_correction=True,  # Existing numerical/recorded fixtures use this frame convention.
+        common_base_plane=False,  # Invented scenes need not share a mounting plane.
+        path="hold", gap=.3, leader_response="strict", live_calibration_recovery=False,
         path_delta=[0., 0., -.05, 0., 0., 0.], path_radius=.02, path_duration=10.,
         ur5e_tcp_offset=[0.] * 6, ur10e_tcp_offset=[0.] * 6,
         workspace_config=None, stable_frames=1, filter_alpha=1., velocity_alpha=1.,
@@ -68,7 +71,7 @@ def settings(**overrides):
         max_joint_speed=1., max_joint_accel=10., min_singular_value=.01,
         max_travel=.3, max_target_m=.1, max_target_deg=25.,
         frame_check_m=.03, frame_check_deg=5.,
-        feedback_speed=.05, feedback_angular_speed=.2,
+        feedback_speed=.05, feedback_angular_speed=.2, kp_linear=1., kp_angular=1., follow_damping_time=0.,
         position_deadband=.0001, rotation_deadband_deg=.01,
         target_tolerance_m=0., target_tolerance_deg=0.,
         slow_error_m=.03, slow_error_deg=10.,

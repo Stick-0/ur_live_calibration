@@ -41,7 +41,8 @@ def initial_state():
 
 
 def config():
-    result = parse_args(["--mode", "hold", "--ur5e_ip", "192.0.2.1", "--ur10e_ip", "192.0.2.2"])
+    result = parse_args(["--mode", "follow", "--ur5e_ip", "192.0.2.1", "--ur10e_ip", "192.0.2.2",
+                         "--stable_frames", "5"])
     result.sim_initial_timeout = .3
     return result
 
@@ -61,9 +62,28 @@ class SnapshotValidationTests(unittest.TestCase):
                 for key in ("q", "qd", "speed", "tcp", "tcp_offset"):
                     np.testing.assert_allclose(result["robots"][name][key], original["robots"][name][key])
             self.assertEqual(result["calibration"]["raw_mean_px"]["ur5e"], 12.)
+            self.assertTrue(result["calibration"]["ur10e_output_correction"])
             with self.assertRaises(FileExistsError):
                 module.save_initial_state(path, original)
             self.assertEqual(path.read_bytes(), saved_bytes)
+
+    def test_raw_output_snapshot_roundtrip_preserves_unmodified_bases(self):
+        original = initial_state()
+        original["calibration"]["ur10e_output_correction"] = False
+        original["bases"] = {name: pose.copy() for name, pose in original["calibration"]["poses"].items()}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "raw.json"
+            module.save_initial_state(path, original)
+            result = module.load_initial_state(path)
+        self.assertFalse(result["calibration"]["ur10e_output_correction"])
+        for name in module.ROBOTS:
+            np.testing.assert_array_equal(result["bases"][name], original["calibration"]["poses"][name])
+
+    def test_snapshot_cannot_silently_change_stored_output_convention(self):
+        sample = initial_state()
+        sample["calibration"]["ur10e_output_correction"] = False
+        with self.assertRaisesRegex(ValueError, "model-to-controller"):
+            module.validate_initial_state(sample)
 
     def test_validation_result_does_not_alias_input(self):
         original = initial_state()
@@ -83,6 +103,8 @@ class SnapshotValidationTests(unittest.TestCase):
             (("captured_at_utc",), "2026-10-18T09:15:00"),
             (("captured_at_utc",), "2026-10-18T09:15:00+09:00"),
             (("calibration", "sequence"), True),
+            (("calibration", "ur10e_output_correction"), "false"),
+            (("calibration", "ur10e_output_correction"), 0),
             (("calibration", "captured_at_monotonic"), float("inf")),
             (("calibration", "raw_max_px", "ur5e"), 1.),
             (("calibration", "valid_counts", "ur5e"), 3),
@@ -261,10 +283,22 @@ class AcquisitionTests(unittest.TestCase):
         self.assertEqual(result["robots"]["ur10e"]["tcp_offset_source"], "zero_assumed")
         np.testing.assert_allclose(result["robots"]["ur5e"]["tcp_offset"], pose_matrix(args.ur5e_tcp_offset))
         np.testing.assert_allclose(result["robots"]["ur10e"]["qd"], np.arange(6) * .01)
+        self.assertTrue(result["calibration"]["ur10e_output_correction"])
         np.testing.assert_allclose(result["bases"]["ur10e"],
                                    result["calibration"]["poses"]["ur10e"] @ model_from_controller_base("ur10e"))
         self.assertGreater(result["robots"]["ur5e"]["robot_timestamp"], 10.)
         self.assertTrue(all(isinstance(call.args[0], str) for call in callback.call_args_list))
+        rig.assert_closed(self)
+
+    def test_capture_records_explicitly_disabled_output_mapping(self):
+        rig = AcquisitionRig()
+        args = config()
+        args.ur10e_output_correction = False
+        with rig.patches():
+            result = module.capture_initial_state(args)
+        self.assertFalse(result["calibration"]["ur10e_output_correction"])
+        np.testing.assert_allclose(result["bases"]["ur10e"],
+                                   result["calibration"]["poses"]["ur10e"])
         rig.assert_closed(self)
 
     def test_execute_rejected_before_any_hardware_or_context_access(self):

@@ -29,16 +29,13 @@ class SimulationAlignmentRuntimeTests(unittest.TestCase):
         # Reuse independently copied, unstarted plans. This avoids making every
         # pause/error test repeat the deterministic initial-path search.
         cls.planned = {}
-        for mode in ("hold", "follow"):
+        for mode in ("follow",):
             args = options(mode)
             if mode == "follow":
                 args.path = "line"
                 args.path_delta = [.015, 0, 0, 0, 0, 0]
                 args.path_duration = 5.
             session = SimulationSession(args, cls.initial)
-            if mode == "hold":
-                session.command({"type": "target", "gap": .30,
-                                 "center_pose": session.status()["center_pose"]})
             cls.planned[mode] = session
 
     def session(self, mode, motion="none"):
@@ -54,8 +51,8 @@ class SimulationAlignmentRuntimeTests(unittest.TestCase):
     def assert_tick(self, session):
         self.assertTrue(session.tick(), session.fault or session.message)
 
-    def test_large_roll_aligns_without_teleport_then_hands_over_to_hold_and_follow(self):
-        for mode, motion in (("hold", "bases"), ("follow", "both")):
+    def test_large_roll_aligns_without_teleport_then_hands_over_to_follow(self):
+        for mode, motion in (("follow", "both"),):
             with self.subTest(mode=mode):
                 session = self.session(mode, motion)
                 goals = copy.deepcopy(session.status()["scene"]["goals"])
@@ -116,9 +113,8 @@ class SimulationAlignmentRuntimeTests(unittest.TestCase):
                     self.assertGreater(session.engine.progress, 0.)
 
     def test_alignment_pauses_without_advancing_and_reset_restores_capture_and_target(self):
-        session = self.session("hold")
+        session = self.session("follow")
         desired = copy.deepcopy(session.status()["scene"]["goals"])
-        center = copy.deepcopy(session.status()["center_pose"])
         session.command("arm")
         for _ in range(4):
             self.assert_tick(session)
@@ -141,12 +137,12 @@ class SimulationAlignmentRuntimeTests(unittest.TestCase):
         self.assertEqual(session.elapsed, 0.)
         self.assertEqual(session.approach.progress, 0.)
         self.assertTrue(session.ready, session.message)
-        np.testing.assert_allclose(session.status()["center_pose"], center, atol=1e-12)
         for name in ROBOTS:
             np.testing.assert_array_equal(session.plant.joints[name], self.initial["robots"][name]["q"])
             np.testing.assert_array_equal(session.plant.bases[name], self.initial["bases"][name])
             np.testing.assert_array_equal(session.plant.joint_velocity[name], np.zeros(6))
-            np.testing.assert_allclose(session.status()["scene"]["goals"][name], desired[name], atol=1e-12)
+        for name, goal in desired.items():
+            np.testing.assert_allclose(session.status()["scene"]["goals"][name], goal, atol=1e-12)
 
     def test_rejected_alignment_step_commits_neither_approach_nor_task(self):
         session = self.session("follow", "leader")

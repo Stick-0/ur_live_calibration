@@ -52,6 +52,17 @@ def pose_input_diagnostics(results, estimators, joints, K, dist, regions):
             "detected_px": points, "valid": valid,
             "solver_indices": np.flatnonzero(selected), "empnp_ok": bool(result.ok),
         }
+        raw_rvec, raw_tvec = getattr(result, "empnp_rvec", None), getattr(result, "empnp_tvec", None)
+        robots[name].update({
+            "empnp_ok": bool(result.ok or getattr(result, "constraint_error", "")),
+            "pose_ok": bool(result.ok),
+            "empnp_rvec": None if raw_rvec is None and result.rvec is None else np.asarray(
+                result.rvec if raw_rvec is None else raw_rvec).copy(),
+            "empnp_tvec": None if raw_tvec is None and result.tvec is None else np.asarray(
+                result.tvec if raw_tvec is None else raw_tvec).copy(),
+            "output_rvec": None if result.rvec is None else np.asarray(result.rvec).copy(),
+            "output_tvec": None if result.tvec is None else np.asarray(result.tvec).copy(),
+        })
     return {
         "schema": "urcal.pnp-initialization.v1", "K": camera,
         "dist": np.asarray(dist, dtype=float).copy(),
@@ -60,7 +71,7 @@ def pose_input_diagnostics(results, estimators, joints, K, dist, regions):
             "reprojection_error_px": 3.0, "other_options": "OpenCV defaults",
             "source": "urcal.inference.my_pnp.EMPnP.fit",
         },
-        "robots": robots,
+        "robots": robots, "common_base_plane": getattr(results[0], "base_plane", None),
     }
 
 
@@ -93,13 +104,19 @@ def calibration_debug_record(frame, results, estimators, joints, K, dist, region
             "count": int(valid.sum()), "raw_mean_px": frame.raw_mean_px.get(name),
             "raw_max_px": frame.raw_max_px.get(name),
         }
+        for component in ("rvec", "tvec"):
+            raw = getattr(result, "empnp_" + component, None)
+            if raw is not None:
+                robots[name]["empnp_" + component] = np.asarray(raw).copy()
+        robots[name]["pose_ok"] = bool(result.ok)
+        robots[name]["empnp_ok"] = bool(result.ok or getattr(result, "constraint_error", ""))
     return {"schema": "urcal.calibration-debug.v1", "sequence": frame.sequence,
             "captured_at_monotonic": frame.captured_at,
             "K": np.asarray(K).copy(), "dist": np.asarray(dist).copy(),
             "frame_reason": frame.reason,
             "limits": {"mean_px": max_mean_px, "max_px": max_pixel_px, "min_points": min_points,
                        "check_reprojection": bool(check_reprojection)},
-            "robots": robots}
+            "robots": robots, "common_base_plane": getattr(results[0], "base_plane", None)}
 
 
 def diagnostic_lines(record):
@@ -125,8 +142,8 @@ def diagnostic_lines(record):
     return lines
 
 
-def draw_calibration_debug(image, record, show_keypoints=True):
-    """Draw residuals and raw pixel metrics; green metrics do not mean READY."""
+def draw_calibration_debug(image, record, show_keypoints=True, *, show_text=True):
+    """Draw residual geometry; optional saved text does not establish READY."""
     height, width = image.shape[:2]
     if show_keypoints:
         for robot in record["robots"].values():
@@ -142,13 +159,15 @@ def draw_calibration_debug(image, record, show_keypoints=True):
                     cv2.line(image, a, b_clipped, (255, 80, 255), 1, cv2.LINE_AA)
                 if 0 <= b[0] < width and 0 <= b[1] < height:
                     cv2.drawMarker(image, b, (255, 80, 255), cv2.MARKER_CROSS, 9, 1, cv2.LINE_AA)
-        cv2.putText(image, "Magenta +: pose reprojection; lines: detection residual", (8, height - 77),
-                    cv2.FONT_HERSHEY_SIMPLEX, .38, (255, 160, 255), 1, cv2.LINE_AA)
-    for index, (text, okay) in enumerate(diagnostic_lines(record)):
-        point = (8, height - 57 + index * 20)
-        cv2.putText(image, text, point, cv2.FONT_HERSHEY_SIMPLEX, .38, (0, 0, 0), 3, cv2.LINE_AA)
-        cv2.putText(image, text, point, cv2.FONT_HERSHEY_SIMPLEX, .38,
-                    (80, 230, 120) if okay else (80, 160, 255), 1, cv2.LINE_AA)
+        if show_text:
+            cv2.putText(image, "Magenta +: pose reprojection; lines: detection residual", (8, height - 77),
+                        cv2.FONT_HERSHEY_SIMPLEX, .38, (255, 160, 255), 1, cv2.LINE_AA)
+    if show_text:
+        for index, (text, okay) in enumerate(diagnostic_lines(record)):
+            point = (8, height - 57 + index * 20)
+            cv2.putText(image, text, point, cv2.FONT_HERSHEY_SIMPLEX, .38, (0, 0, 0), 3, cv2.LINE_AA)
+            cv2.putText(image, text, point, cv2.FONT_HERSHEY_SIMPLEX, .38,
+                        (80, 230, 120) if okay else (80, 160, 255), 1, cv2.LINE_AA)
     return image
 
 

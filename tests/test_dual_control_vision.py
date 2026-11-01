@@ -1,6 +1,9 @@
 """Raw-detection acceptance and capture-clock checks without any hardware."""
 
 from pathlib import Path
+from contextlib import ExitStack, redirect_stdout
+import io
+from queue import Queue
 import sys
 import threading
 from types import SimpleNamespace
@@ -261,6 +264,82 @@ class CaptureClockTests(unittest.TestCase):
         capture, _, _ = self.simulate(invalid_sensor=True)
         with self.assertRaisesRegex(RuntimeError, "invalid camera timestamp"):
             capture.read_after(None)
+
+
+class VisionDisplayTests(unittest.TestCase):
+    def run_worker(self, keys):
+        import urcal.control.vision as vision
+        import urcal.inference as inference
+        from urcal.control.runtime import parse_args
+
+        fixture = CalibrationFrameTests("test_one_failed_robot_rejects_the_pair")
+        fixture.setUp()
+        for result in fixture.results:
+            result.base_plane, result.constraint_error = None, ""
+        args = parse_args(["--ur5e_ip", "192.0.2.5", "--ur10e_ip", "192.0.2.10", "--device", "cpu", "--show_seg"])
+        source = np.zeros((480, 640, 3), np.uint8)
+        regions = ((0, 0, 320, 480), (320, 0, 640, 480))
+        stream = SimpleNamespace(K=fixture.K, dist=fixture.dist, stop=Mock())
+        fake_dual = SimpleNamespace(
+            BUNDLE=BUNDLE, MODEL_HW=(480, 640), require_weights=Mock(),
+            make_transform=Mock(), PVNetVoteConfig=Mock(), load_model=Mock(),
+            UR5E_KEY_NAMES=["ur5e_link" + str(i) for i in range(7)],
+            UR10E_KEY_NAMES=["ur10e_link" + str(i) for i in range(7)],
+            ur5e_keypoints_from_joints=fixture.estimators[0].fk,
+            ur10e_keypoints_from_joints=fixture.estimators[1].fk,
+            RobotEstimator=lambda name, model, names, fk, config: SimpleNamespace(name=name, key_names=names, fk=fk),
+            D435ColorStream=Mock(return_value=stream),
+            process_frame=Mock(return_value=(regions, fixture.results)),
+            draw_results=Mock(side_effect=lambda *a, **kw: (a[0].copy(), a[0].copy())),
+            draw_pose_axes=Mock(side_effect=lambda image, *a: image))
+        capture = Mock()
+        capture.read_after.side_effect = [(i, 99.97, source.copy(), fixture.joints, .03) for i in range(len(keys))]
+        frames, commands, statuses = Queue(), Queue(), Queue()
+        target = np.eye(4)
+        target[2, 3] = 1.
+        statuses.put({"message": "ACTIVE controller-only status", "goals": {"ur5e": target}})
+        stop, output = threading.Event(), io.StringIO()
+        fake_torch = SimpleNamespace(hub=SimpleNamespace(set_dir=Mock()), device=lambda value: value)
+        with ExitStack() as stack:
+            stack.enter_context(patch.dict(sys.modules, {
+                "torch": fake_torch,
+                "rtde_receive": SimpleNamespace(RTDEReceiveInterface=Mock(return_value=Mock())),
+                "urcal.inference.infer_live_dual": fake_dual}))
+            stack.enter_context(patch.object(inference, "infer_live_dual", fake_dual, create=True))
+            stack.enter_context(patch.object(vision, "LatestCapture", return_value=capture))
+            stack.enter_context(patch.object(vision.time, "monotonic", return_value=100.))
+            stack.enter_context(patch.object(vision.cv2, "waitKey", side_effect=keys))
+            stack.enter_context(patch.object(vision.cv2, "destroyAllWindows"))
+            shown = stack.enter_context(patch.object(vision.cv2, "imshow"))
+            text = stack.enter_context(patch.object(vision.cv2, "putText", wraps=cv2.putText))
+            save = stack.enter_context(patch.object(vision, "save_calibration_debug", return_value=Path("snapshot.json")))
+            stack.enter_context(redirect_stdout(output))
+            vision.vision_worker(args, frames, commands, statuses, stop)
+        self.assertNotIn("[vision STOP]", output.getvalue())
+        self.assertTrue(stop.is_set())
+        return fake_dual, shown, text, save, output.getvalue()
+
+    def test_live_control_has_no_text_and_reports_inference_only_to_terminal(self):
+        dual, shown, text, save, output = self.run_worker([ord("q")])
+        text.assert_not_called()
+        save.assert_not_called()
+        dual.draw_pose_axes.assert_called_once()
+        self.assertEqual(shown.call_count, 2)  # Main view and segmentation.
+        self.assertIn("a: Arm", output)
+        self.assertIn("Magenta crosses", output)
+        self.assertIn("raw mean/max=", output)
+        self.assertNotIn("ACTIVE controller-only status", output)
+        self.assertEqual(output.count("[vision] FPS"), 1)
+
+    def test_explicit_save_keeps_detailed_overlay_off_the_live_image(self):
+        _dual, shown, text, save, output = self.run_worker([ord("d"), ord("q")])
+        save.assert_called_once()
+        self.assertTrue(text.called)
+        saved_overlay = save.call_args.args[2]
+        live_image = shown.call_args_list[0].args[1]
+        self.assertFalse(np.array_equal(saved_overlay, live_image))
+        self.assertEqual(save.call_args.args[4], "ACTIVE controller-only status")
+        self.assertEqual(output.count("[vision] FPS"), 1)  # No frame-by-frame terminal spam.
 
 
 if __name__ == "__main__":

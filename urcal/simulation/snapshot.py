@@ -16,8 +16,9 @@ import time
 
 import numpy as np
 
-from urcal.control.geometry import inverse, model_from_controller_base, pose_matrix
+from urcal.control.geometry import calibration_output_mapping, inverse, pose_matrix
 from urcal.control.policy import CalibrationTracker, ControlFault
+from urcal.cooperative.base_plane import project_output_bases
 
 
 SCHEMA = "urcal.simulation.initial.v1"
@@ -74,6 +75,14 @@ def validate_initial_state(snapshot):
         calibration = snapshot["calibration"]
         if not isinstance(calibration, dict):
             raise ValueError("calibration must be an object")
+        # Older v1 snapshots always applied the dataset-to-controller mapping.
+        # Persist the convention explicitly rather than reinterpret saved poses.
+        output_correction = calibration.get("ur10e_output_correction", True)
+        if not isinstance(output_correction, bool):
+            raise ValueError("calibration ur10e_output_correction must be a boolean")
+        common_plane = calibration.get("common_base_plane", False)
+        if not isinstance(common_plane, bool):
+            raise ValueError("calibration common_base_plane must be a boolean")
         sequence = calibration["sequence"]
         if not isinstance(sequence, Integral) or isinstance(sequence, bool) or sequence < 0:
             raise ValueError("calibration sequence must be a nonnegative integer")
@@ -82,6 +91,8 @@ def validate_initial_state(snapshot):
             "captured_at_utc": stamp.isoformat().replace("+00:00", "Z"),
             "calibration": {
                 "sequence": int(sequence),
+                "ur10e_output_correction": output_correction,
+                "common_base_plane": common_plane,
                 "captured_at_monotonic": _number(calibration["captured_at_monotonic"], "capture time"),
                 "poses": {}, "raw_mean_px": {}, "raw_max_px": {}, "valid_counts": {},
             },
@@ -94,7 +105,8 @@ def validate_initial_state(snapshot):
         for name in ROBOTS:
             pose = _transform(calibration["poses"][name], name + " calibration")
             base = _transform(snapshot["bases"][name], name + " base")
-            if not np.allclose(base, pose @ model_from_controller_base(name), atol=1e-8, rtol=0):
+            mapping = calibration_output_mapping(name, ur10e_output_correction=output_correction)
+            if not np.allclose(base, pose @ mapping, atol=1e-8, rtol=0):
                 raise ValueError(name + " base disagrees with model-to-controller mapping")
             mean = _number(calibration["raw_mean_px"][name], name + " raw mean")
             maximum = _number(calibration["raw_max_px"][name], name + " raw maximum")
@@ -126,6 +138,13 @@ def validate_initial_state(snapshot):
                 "robot_timestamp": _number(state["robot_timestamp"], name + " robot timestamp"),
                 "tcp_offset_source": source,
             }
+        if common_plane:
+            mappings = {name: calibration_output_mapping(
+                name, ur10e_output_correction=output_correction) for name in ROBOTS}
+            projected = project_output_bases(result["bases"], mappings)
+            if any(not np.allclose(result["bases"][name], projected[name], atol=1e-8, rtol=0)
+                   for name in ROBOTS):
+                raise ValueError("stored bases disagree with common physical mounting plane")
         return result
     except (KeyError, TypeError, AttributeError, OverflowError) as exc:
         raise ValueError(f"invalid initial-state structure: {exc}") from exc
@@ -167,6 +186,14 @@ def capture_initial_state(args, on_status=None, stop_event=None):
     if stop_event is not None and stop_event.is_set():
         raise ControlFault("initial-state capture cancelled")
     offsets, offset_sources = {}, {}
+    output_correction = getattr(args, "ur10e_output_correction", True)
+    if not isinstance(output_correction, bool):
+        raise ValueError("ur10e_output_correction must be a boolean")
+    common_plane = getattr(args, "common_base_plane", False)
+    if not isinstance(common_plane, bool):
+        raise ValueError("common_base_plane must be a boolean")
+    mappings = {name: calibration_output_mapping(
+        name, ur10e_output_correction=output_correction) for name in ROBOTS}
     for name in ROBOTS:
         offset = getattr(args, name + "_tcp_offset", None)
         offsets[name] = pose_matrix(np.zeros(6) if offset is None else offset)
@@ -245,18 +272,26 @@ def capture_initial_state(args, on_status=None, stop_event=None):
                     if any(checked - reader.last_advance > args.max_robot_age for reader in readers.values()):
                         raise ControlFault("robot state expired during capture")
                     poses = tracker.poses
+                    bases = {name: poses[name] @ mappings[name] for name in ROBOTS}
+                    if common_plane:
+                        bases = project_output_bases(bases, mappings)
+                        # Keep saved model poses and output bases consistent
+                        # after the acquisition tracker's independent averaging.
+                        poses = {name: bases[name] @ inverse(mappings[name]) for name in ROBOTS}
                     snapshot = validate_initial_state({
                         "schema": SCHEMA,
                         "captured_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                         "calibration": {
                             "sequence": accepted.sequence,
+                            "ur10e_output_correction": output_correction,
+                            "common_base_plane": common_plane,
                             "captured_at_monotonic": accepted.captured_at,
                             "poses": poses,
                             "raw_mean_px": accepted.raw_mean_px,
                             "raw_max_px": accepted.raw_max_px,
                             "valid_counts": accepted.valid_counts,
                         },
-                        "bases": {name: poses[name] @ model_from_controller_base(name) for name in ROBOTS},
+                        "bases": bases,
                         "robots": {name: {
                             "q": states[name].joints, "qd": states[name].joint_velocity,
                             "speed": states[name].speed, "tcp": states[name].tcp,
