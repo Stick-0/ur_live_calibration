@@ -429,6 +429,26 @@ class WorkerTests(unittest.TestCase):
         panel.send_command.assert_not_called()
         self.assertFalse(panel.stop_event.is_set())
 
+    def test_recording_status_updates_without_a_new_error_sample_or_robot_request(self):
+        panel = fake_panel()
+        panel._error_plot = Mock()
+        status = {"state": "saving", "path": "/tmp/errors.csv", "request_id": "save"}
+        panel.poll({"error_recording": status})
+        panel._error_plot.set_recording_status.assert_called_once_with(status)
+        panel._error_plot.update.assert_called_once_with(None)
+        panel.poll()
+        panel._error_plot.set_recording_status.assert_called_once_with(status)
+        panel.send_command.assert_not_called()
+        self.assertFalse(panel.stop_event.is_set())
+
+    def test_graph_receives_only_the_separate_recording_callback(self):
+        panel = fake_panel()
+        panel._recording_command = Mock()
+        with patch.object(gui, "PositionErrorWindow") as factory:
+            panel._show_error_plot()
+        self.assertIs(factory.call_args.kwargs["recording_command"], panel._recording_command)
+        panel.send_command.assert_not_called()
+
     def test_position_plot_tk_failure_does_not_stop_or_send_robot_commands(self):
         panel = fake_panel()
         panel._error_plot = Mock()
@@ -477,6 +497,23 @@ class WorkerTests(unittest.TestCase):
         callback = factory.call_args.args[1]
         with self.assertRaisesRegex(RuntimeError, "queue is full"):
             callback("arm")
+        self.assertEqual(commands.get_nowait(), original)
+
+    def test_worker_recording_requests_use_separate_queue_and_preserve_motion_queue(self):
+        commands, statuses, recordings = Queue(maxsize=1), Queue(), Queue(maxsize=1)
+        original = {"type": "target", "gap": .3}
+        commands.put(original)
+        stop = threading.Event()
+        panel = Mock()
+        panel.poll.side_effect = lambda status: stop.set()
+        with patch.object(gui, "TargetPanel", return_value=panel) as factory:
+            gui.gui_worker(SimpleNamespace(), commands, statuses, stop, recordings)
+        callback = factory.call_args.kwargs["recording_command"]
+        start = {"action": "start", "request_id": "one"}
+        callback(start)
+        with self.assertRaisesRegex(RuntimeError, "Recording request queue is full"):
+            callback({"action": "stop", "request_id": "two"})
+        self.assertEqual(recordings.get_nowait(), start)
         self.assertEqual(commands.get_nowait(), original)
 
     def test_missing_display_fails_explicitly_without_constructing_widgets(self):

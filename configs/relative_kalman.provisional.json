@@ -1,0 +1,21 @@
+{
+  "measurement_std_m": 0.007,
+  "measurement_std_yaw": 0.005235987755982988,
+  "acceleration_std_m": 0.1,
+  "acceleration_std_yaw": 0.15,
+  "initial_velocity_std_m": 0.05,
+  "initial_velocity_std_yaw": 0.15,
+  "prediction_horizon": 0.35000000000000003,
+  "gap_reset": 0.35,
+  "min_velocity_samples": 4,
+  "innovation_gate": 16.27,
+  "max_step_m": 0.15,
+  "max_step_yaw": 0.2617993877991494,
+  "max_speed": 0.15,
+  "max_yaw_rate": 0.5,
+  "stationary_window": 0.25,
+  "stationary_sigma": 0.75,
+  "reversal_sigma": 3.0,
+  "velocity_snr_min": 1.5,
+  "velocity_snr_full": 3.0
+}

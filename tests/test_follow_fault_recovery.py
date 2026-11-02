@@ -67,8 +67,8 @@ class FollowFaultRecoveryTests(unittest.TestCase):
         engine.initial_tcp = robot_states[engine.follower].tcp.copy()
         engine.tracking_offset = np.eye(4)
         clock, records, order, statuses_seen, sent = Clock(), [], [], [], []
-        queues = [LocalQueue(maxsize=size) for size in (1, 8, 1, 1)]
-        frames, commands, statuses, gui_statuses = queues
+        queues = [LocalQueue(maxsize=size) for size in (1, 8, 1, 1, 8)]
+        frames, commands, statuses, gui_statuses, recording_commands = queues
         commands.put_nowait("arm")
         sequence, pending_recorded = 5, []
         if recorded:

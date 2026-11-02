@@ -90,8 +90,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 18697,
-      "sha256": "119a00f450f2c0bcba713b3941969346e13d6267bcfef081567fd64ed313fde6",
+      "bytes": 22933,
+      "sha256": "a8e43e13655f302bafefb7bde878c41fbdca496c47b901bd0ff0526768949ec6",
       "source": "Created for this bundle.",
       "change": "Full functional/module explanation, both hold modes, frame/TCP conventions, rate/progress distinction, package tree and updated execution commands.",
       "visual_gui_change": "Document the interactive current-pose/target GUI, offline demo, synthetic screenshot and updated validation.",
@@ -122,6 +122,18 @@
       "pose_follow_law_change": "Selectable transformed TCP target pose-error following with unchanged motion limits and lifecycle."
     },
     {
+      "path": "configs/relative_kalman.provisional.json",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 575,
+      "sha256": "2dae64c372805447b85954a13d8164b58ee1a47e6e13e04a51b4e4911596c68b"
+    },
+    {
+      "path": "configs/relative_kalman.segments.example.json",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 1360,
+      "sha256": "a8493bbeeda59d6b46ecc0beb1e928d102d1688fe2c05f955694b9bec551a4ff"
+    },
+    {
       "path": "configs/workspace.example.json",
       "source": "Created for this bundle.",
       "change": "Example joint limits, capsule radii and empty environment configuration; not a measured workspace.",
@@ -133,12 +145,24 @@
     {
       "path": "docs/CURRENT_IMPLEMENTATION.md",
       "source": "Current implementation reference for the repository: capabilities, frames, acquisition and control phases, settings, CLI, GUI, simulation, logs and code map; no change history.",
-      "bytes": 74879,
-      "sha256": "a49a627935a017ab9ab89533ecf3ef9b0b6018465609575bb2aec4b4464cbdae",
+      "bytes": 87038,
+      "sha256": "237fa49d10e093da46c82f1406c516638339f41818f86f8e3b074c99de4199f2",
       "follow_response_change": "Document current follow response gains/caps, units, overrides and scope.",
       "follow_tolerance_change": "Document current braking behavior, mode defaults, original travel origin and failure diagnostics.",
       "common_base_plane_change": "Shared physical mounting-plane constraint and corresponding pipeline/control/simulation diagnostics or validation.",
       "pose_follow_law_change": "Selectable transformed TCP target pose-error following with unchanged motion limits and lifecycle."
+    },
+    {
+      "path": "docs/FOLLOW_RELATIVE_KALMAN_FORMULATION.md",
+      "source": "Current mathematical formulation for the specified relative_kalman/feedforward follower command; excludes pose-estimator internals and change history.",
+      "bytes": 40968,
+      "sha256": "45fe3ff16690bc82ed118ded7e99502cd1adcc81e9bc0a11f1301121916bafc0"
+    },
+    {
+      "path": "docs/RELATIVE_KALMAN_TUNING.md",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 15835,
+      "sha256": "053efc847c62049e1c1da11ebf4335406df03f48f8738f7e333947ab4af3d7da"
     },
     {
       "path": "docs/Research_Implementation_Plan.txt",
@@ -154,6 +178,30 @@
       "source": "Actual Tk GUI screenshot using synthetic states on an isolated Xvfb display; not a hardware experiment.",
       "bytes": 112314,
       "sha256": "a5766212f70f732b69ef4aff1e2cf4c568e6e6f3c3f83c5cbaf0f3c4ba559814"
+    },
+    {
+      "path": "docs/relative_kalman_tuning.audit.json",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 22461,
+      "sha256": "e07252331f0142f1a4f25010585f354998f38279c290ebb4ea8d89b3baf1d597"
+    },
+    {
+      "path": "docs/relative_kalman_tuning.heldout.json",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 40578,
+      "sha256": "d56700b77a3ed056dde92faf7837beb6b884a9b2c6e4c646d2f6c173f41da56e"
+    },
+    {
+      "path": "docs/relative_kalman_tuning.replay.json",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 8818,
+      "sha256": "244729ada5b30ff70e9ff52cbc31f4e67364052bcd55f57234956ba1d8967a2a"
+    },
+    {
+      "path": "docs/relative_kalman_tuning.synthetic.json",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 20542,
+      "sha256": "04d1de7fcc3ac92b5ea19f21a42c6d13a610b0eb8ba8e78dfa27448ca421f404"
     },
     {
       "path": "reference/infer_live.py",
@@ -535,8 +583,8 @@
       "path": "tests/test_cooperative_runtime.py",
       "source": "Created for this bundle.",
       "change": "Mocked research RTDE, preview, send/commit ordering, failures, cleanup and command freshness tests.",
-      "bytes": 29240,
-      "sha256": "50a2ba6b122fbdd61a8d194230045ccc1ce877a7cb30f87ff57eb0903af5555a",
+      "bytes": 33466,
+      "sha256": "2902937d7a06bda6042c392dd52b023450411efb5904735c5cf8e230eda915f1",
       "visual_gui_change": "Cover research scene freshness, path metadata, calibration gating and display-only accepted-pair fallback.",
       "active_calibration_recovery_change": "Give runtime gate fixtures explicit accepted capture and rejection state.",
       "preview_calibration_recovery_change": "Verify preview/active recovery scope and explicit Arm after baseline replacement.",
@@ -584,8 +632,8 @@
       "path": "tests/test_dual_control_gui.py",
       "source": "Created for this bundle.",
       "change": "Display-free tests including relative path units, active edit locking and pause/resume commands.",
-      "bytes": 22856,
-      "sha256": "36b87ce54e1840246a11e58820db9d257692de281c84631e489c150b1b42b6d6",
+      "bytes": 24817,
+      "sha256": "54f483c3d0480765ef5889f4ed7074f61b85f385377b652973e15a9d75e5a923",
       "visual_gui_change": "Cover scene updates, target drafts, camera-space units, input preservation and command guards.",
       "native_ik_preview_recovery_change": "Check live worker timestamps Arm and preserves simulation string commands."
     },
@@ -616,8 +664,8 @@
       "path": "tests/test_dual_control_vision.py",
       "source": "Created for this bundle.",
       "change": "Mocked capture clocks, raw reprojection, geometry degeneracy and paired rejection tests.",
-      "bytes": 17807,
-      "sha256": "1f45a9b114fced107b3ef9dac78b096b0586ffa015963b8e485f21d2ae194e3a",
+      "bytes": 24807,
+      "sha256": "4783eef1da6ed52e2fe3addb329d355b2c89a0d8d785fa128bef63d8ea6cdbfd",
       "calibration_diagnostics_change": "Failed PnP retains the valid detection count for diagnostics.",
       "pnp_input_diagnostics_change": "Test failed packet diagnostics without altering acceptance, quality metrics or capture time."
     },
@@ -631,8 +679,14 @@
     {
       "path": "tests/test_error_plot.py",
       "source": "Follower position-error graph implementation and validation.",
-      "bytes": 13169,
-      "sha256": "ecb8f65acbd0336a7e4cef691343dddd959cdd7999e6a073d10557493ba8a808"
+      "bytes": 18303,
+      "sha256": "3aa14dd7f1ba3457e317ff007831aa9427d2e2d0f9f6e9e3a9f2fe7093597264"
+    },
+    {
+      "path": "tests/test_error_recording.py",
+      "source": "Created for producer-side button-selected position-error CSV intervals and non-actuating recording tests.",
+      "bytes": 12058,
+      "sha256": "d1e272279ba76aab06e865fb665913fe2360d712c81003519a7a28b1b8e67209"
     },
     {
       "path": "tests/test_follow_damping.py",
@@ -656,8 +710,8 @@
       "path": "tests/test_follow_fault_recovery.py",
       "source": "Stopped preview recovery and offline lifecycle/recorded regression; no hardware validation.",
       "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
-      "bytes": 24024,
-      "sha256": "f10f4e7ca4befbb83dcc21c07a6378df5a3ce77520e7197697b194f3347eaade"
+      "bytes": 24047,
+      "sha256": "f9e8d3556a38f7f7b4f201871c5c06677e1c80d8eab3b83ead3e4e9691e86d19"
     },
     {
       "path": "tests/test_follow_feasibility_cache.py",
@@ -745,6 +799,12 @@
       "sha256": "0c6cbccbf3d74ec8a4750da88617d597b69b938c15bd06c9674e56415f3e78a5"
     },
     {
+      "path": "tests/test_joint_history.py",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 7511,
+      "sha256": "f376ede05282fbd9591635ab84786e9bb04929aa8782a44cbc850bb100c6deed"
+    },
+    {
       "path": "tests/test_leader_rest_limits.py",
       "source": "Role-specific stationary speed tests, both leader choices, unchanged follower/hold bounds, displacement checks and recorded 2.1588 mm/s sample; no hardware IO.",
       "alignment_leader_rest_change": "Shared role-specific leader rest limits for preflight, alignment and stationary handoff; preserve commanded-arm settling and pose drift checks; corresponding tests/docs.",
@@ -779,8 +839,8 @@
       "path": "tests/test_live_alignment_runtime.py",
       "source": "Created for authorized live initial alignment.",
       "change": "Mock physical hold/follow startup, send/commit/handoff ordering and failure handling without hardware.",
-      "bytes": 52258,
-      "sha256": "d926ae9a0b5eb0658dd433ddb68eb6266d390f31ede0be2c296cf328ec143881",
+      "bytes": 52281,
+      "sha256": "17128a1e750eae2a1a48426165fafc0b3914718a7e2038843565dacda8efa74a",
       "active_calibration_recovery_change": "Exercise real calibration gate jumps and recovery in mocked hold/follow runtimes, with and without initial alignment.",
       "preview_calibration_recovery_change": "Verify strict native preflight and actual hold tracker replacement with queued Arm cancellation.",
       "alignment_governor_change": "Check Arm snapshot timestamps, proposal dt/bases/predictions and fault control-period logging.",
@@ -835,8 +895,8 @@
     {
       "path": "tests/test_live_calibration_runtime.py",
       "source": "Virtual-IO lifecycle, send-stage expiry, recovery without re-Arm and terminal physical faults.",
-      "bytes": 16544,
-      "sha256": "522806307ed05f655fde9e7380a4165aba8608687266e8f3afad6823f54e1950"
+      "bytes": 16567,
+      "sha256": "4f4e9cc0b7ce69ef4e7d6dce7a6464e270f591ccf2e17f4cd267c886f1a47acd"
     },
     {
       "path": "tests/test_live_calibration_window.py",
@@ -943,6 +1003,24 @@
       "sha256": "f31cb98c470bcf7431f70a80664f9571d0db643a738b287da9366f70a6313fd4"
     },
     {
+      "path": "tests/test_relative_kalman.py",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 19908,
+      "sha256": "36b2f2c58c9a164fecae590ba90a53c1911062b0262aa7a91d6d68f5990e2e23"
+    },
+    {
+      "path": "tests/test_relative_kalman_control.py",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 23215,
+      "sha256": "210e767bfab6590342a05bfa4e11590ae608633757c229c63a800f578b836d58"
+    },
+    {
+      "path": "tests/test_relative_kalman_tuning.py",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 11810,
+      "sha256": "59e56a06fbab3461199b83b5aaf3fdd3b1a24a804e67352bd13ad2fd4b52dc79"
+    },
+    {
       "path": "tests/test_relative_pose_smoothing.py",
       "source": "Created locally for live visual-coordinate stability and offline regression.",
       "bytes": 15926,
@@ -1001,8 +1079,8 @@
       "path": "tests/test_simulation_runtime.py",
       "source": "Created for captured-state simulation.",
       "change": "Synthetic nominal UR closed-loop hold/follow convergence, pause/reset, rejected-step commit and offline SDK isolation.",
-      "bytes": 16144,
-      "sha256": "7713fb49e907c9c36202d2f0199a5729cf2eb16f890170746c67fee8389e7085"
+      "bytes": 19158,
+      "sha256": "c26f775f64431187ccfcf7438fcbd64a8e5b616b68c070984faeae46f5b8ebcf"
     },
     {
       "path": "tests/test_simulation_snapshot.py",
@@ -1103,8 +1181,8 @@
     {
       "path": "urcal/control/acquisition.py",
       "source": "Stationary consensus acquisition downstream of PnP; no hardware IO.",
-      "bytes": 6832,
-      "sha256": "d5be30f244352fdfab9fddc07efe94e6ec174854ced7c47156c898439ec7ce2e"
+      "bytes": 6858,
+      "sha256": "8d6fbcdf52ae38afe6a873f859ec68cf5e18230153fa77c33faa56f9890066cf"
     },
     {
       "path": "urcal/control/alignment.py",
@@ -1143,8 +1221,14 @@
     {
       "path": "urcal/control/error_plot.py",
       "source": "Follower position-error graph implementation and validation.",
-      "bytes": 15278,
-      "sha256": "34b47d9411c030bdb7860aaa7ae1e0ee851a3d48a9dcf19603e4075b74c4b13c"
+      "bytes": 20115,
+      "sha256": "4a8899e641ab56dfa34c1064f869d9cbfc89574a877d29206996dd4bd3f6f903"
+    },
+    {
+      "path": "urcal/control/error_recording.py",
+      "source": "Created for producer-side button-selected position-error CSV intervals and non-actuating recording tests.",
+      "bytes": 17406,
+      "sha256": "4039f8608454630cc2650d3015e37d86916ac596821e23b735a0f727b2f47de5"
     },
     {
       "path": "urcal/control/geometry.py",
@@ -1159,8 +1243,8 @@
       "path": "urcal/control/gui.py",
       "source": "Created for this bundle.",
       "change": "Preserve fixed-center GUI; add relative paths, progress and task pause/resume controls for research follow.",
-      "bytes": 29415,
-      "sha256": "cc4d096c8b8a77398de13977b158eb9dfaadd078d45d1a25c59fde5effd00ace",
+      "bytes": 30146,
+      "sha256": "1b784578bdcc5dcae77885e0f52c6ca25effebcf6451d2708266cf4b697e5eaf",
       "previous_path": "dual_control_gui.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
       "visual_gui_change": "Integrate the interactive 3D scene, editable target preview, dirty-target Arm guard and resizable scrollable controls.",
@@ -1173,23 +1257,29 @@
     {
       "path": "urcal/control/handoff.py",
       "source": "Fresh post-endpoint calibration acquisition while live alignment remains stationary; no hardware IO.",
-      "bytes": 7281,
-      "sha256": "28790726ea8a9afc6c9cee62276c8302877f3956ea5624d780159cad1fae7d7a",
+      "bytes": 7307,
+      "sha256": "ea934c5d7baf24ae2a09e7d3cd252ddbf7144e0dc46ac519606e08c5434465e3",
       "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
       "calibration_relaxation_change": "Configurable relaxed calibration/handoff limits and fresh-frame stationary validation retries, with retained task accuracy/motion bounds; corresponding tests/docs."
     },
     {
+      "path": "urcal/control/joint_history.py",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 9275,
+      "sha256": "ddbaa2835cbc639b57c9062db38f850d25c1afe1f102f388e3b1e0e8ac1057b0"
+    },
+    {
       "path": "urcal/control/live_calibration.py",
       "source": "Fresh paired candidate collection during bounded active observation; real capture times and independent cluster/shift checks.",
-      "bytes": 11033,
-      "sha256": "6fa1503c07a847971884da1439c339e9020d84a2cb9d3af6317490560445b469"
+      "bytes": 11059,
+      "sha256": "ffa0e947b2531c1d9c47d32f39d13d18a48f1dffecddf1544a40e663ead6dc18"
     },
     {
       "path": "urcal/control/policy.py",
       "source": "Created for this bundle.",
       "change": "Preserve quality gate and allow atomic rejected-sequence consumption without overwriting accepted poses.",
-      "bytes": 26989,
-      "sha256": "51de189245604a3ea467c231419250dfbbeb853e236eba2c6daeaa41bb7ad553",
+      "bytes": 27267,
+      "sha256": "9b4a5b6c05b3c0f24c6c8937049050ada1a0d65b94720f23b6f64a8ed16e0c9a",
       "previous_path": "dual_control_policy.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
       "calibration_diagnostics_change": "Preserve the latest rejection reason until a new accepted pair; show mean/max limits and keypoint counts without changing acceptance criteria.",
@@ -1205,16 +1295,16 @@
       "path": "urcal/control/recovery.py",
       "source": "Stopped preview recovery and offline lifecycle/recorded regression; no hardware validation.",
       "recoverable_fault_change": "Separate recoverable sensor/planning failures from terminal faults, stop confirmation, post-stop fresh calibration/new Arm, or associated tests/documentation/log analysis.",
-      "bytes": 9704,
-      "sha256": "b3d50f4af635c09c7d027b4ae02dbcde0fd47fc148260d67757144b08c88e1c0",
+      "bytes": 9730,
+      "sha256": "901cbbf9653c705e36203506c220d9a6dc3b681ba3e7522ff87b29ef5ef86d7d",
       "recovery_position_window_change": "Judge TCP translation over the stationary dwell window while retaining immediate reported-velocity/joint/angular checks."
     },
     {
       "path": "urcal/control/runtime.py",
       "source": "Created for this bundle.",
       "change": "Retain camera-fixed hold; dispatch follow to research runtime, share joint-velocity reads and current/future controller checks.",
-      "bytes": 61709,
-      "sha256": "7c681d4d2889e81bb61e49595c1426216bb0fc24df34bb56563066726540db18",
+      "bytes": 64569,
+      "sha256": "a8ce97cfc3654ff03ff4edb6b4ba221e2f6823d280c0c24b228b24ee66bf055d",
       "previous_path": "control_dual.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
       "visual_gui_change": "Publish fresh paired display snapshots and intended goals independently of motion readiness.",
@@ -1281,8 +1371,8 @@
       "path": "urcal/control/vision.py",
       "source": "Created for this bundle.",
       "change": "Independent inference process and latest camera/joint capture with original-detection reprojection checks.",
-      "bytes": 14506,
-      "sha256": "2e06ca1d4a51fe89a6e4490a7e7d30c636bd1516268871b6087a838e4fa5e419",
+      "bytes": 21255,
+      "sha256": "2ff102d117818abb988f3fd3232bba59e638c30b3bd6f9bf6f2140e1ba9b317e",
       "previous_path": "dual_control_vision.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
       "calibration_diagnostics_change": "Retain keypoint counts on PnP failure, display raw reprojection diagnostics and save on d only without --execute; initialize OpenCV fonts.",
@@ -1307,6 +1397,12 @@
       "sha256": "757ac22d42bdb1d1ffda9cd74e776c58eca6fbaf6c013bb7ced256e0fe3e142a"
     },
     {
+      "path": "urcal/cooperative/base_compensation.py",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 3312,
+      "sha256": "c4be732bf1288011034752493af96f176d6f597bebdac79fb4614108df87224a"
+    },
+    {
       "path": "urcal/cooperative/base_plane.py",
       "source": "Current common-base-plane estimation, control or regression implementation.",
       "bytes": 3894,
@@ -1322,15 +1418,15 @@
     {
       "path": "urcal/cooperative/calibration_braking.py",
       "source": "Frozen accepted geometry for checked zero-tracking braking; no transport or fabricated sensor freshness.",
-      "bytes": 2930,
-      "sha256": "2d60de174721f685fb6aac8d660b63dd59b8b3c1079240fb1324bd2272b9f89f"
+      "bytes": 3389,
+      "sha256": "7bc477b8001f92a77e19856513079e0ec590f0bd445a5adbeeee83cf690373b7"
     },
     {
       "path": "urcal/cooperative/controller.py",
       "source": "Created for this bundle.",
       "change": "Pure prepare/commit planner: fixed relative goal, compensation, feedback, path progress and classified faults.",
-      "bytes": 70484,
-      "sha256": "bc78b06156ae0dfade459f8bfc19c6a9dc6c86fe77cea756a0aba821f28aff74",
+      "bytes": 76109,
+      "sha256": "62338a3a2556222af28c858b0f1a27434d22ebdfb520fab6d116d337d1dd2438",
       "previous_path": "cooperative_controller.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
       "calibration_diagnostics_change": "Pass rejected calibration reason to the shared gate for preview diagnostics.",
@@ -1390,11 +1486,17 @@
       "sha256": "67d5745ca014ede1c6d190af449c08d21ac7fedb20f0a1950bcb2f799df45d88"
     },
     {
+      "path": "urcal/cooperative/relative_kalman.py",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 21434,
+      "sha256": "17364126debece3d0f67b6f0bb562c203b6d7fb796341d767053eb0228f0dd87"
+    },
+    {
       "path": "urcal/cooperative/runtime.py",
       "source": "Created for this bundle.",
       "change": "Research runtime with unchanged pose sensor, shared RTDE interface, preview and explicit arming.",
-      "bytes": 63127,
-      "sha256": "84efe3371ebafcdcc674b57dd02486b56c984bc1f8820d70071522e656ab7dc3",
+      "bytes": 66153,
+      "sha256": "bd13115250341a88afd2521f01f7b511fc55603c0fdcc8ce6ebb5c892061305a",
       "previous_path": "control_cooperative.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
       "visual_gui_change": "Publish relative-task display snapshots and targets with task metadata; show accepted unstable calibration as invalid.",
@@ -1421,8 +1523,8 @@
       "path": "urcal/cooperative/state.py",
       "source": "Created for this bundle.",
       "change": "Capture/receipt timestamps, common-time relative SE(3) state, filtering and bounded prediction.",
-      "bytes": 16524,
-      "sha256": "8a778f3a4402d7bb2879e4cc0cd753624652b473f6559e2301fe8a2cfadb08d1",
+      "bytes": 16557,
+      "sha256": "5c3ef469b1e5c7fef9f78158fa5b671b24400209726b24fb819183cbd7197c97",
       "previous_path": "relative_state.py",
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes."
     },
@@ -1573,8 +1675,8 @@
       "path": "urcal/simulation/runtime.py",
       "source": "Created for captured-state simulation.",
       "change": "Existing hold/follow controllers coupled to virtual joints, fixed virtual clock, GUI and explicit simulation logging.",
-      "bytes": 24726,
-      "sha256": "714d0820ab4319201ff1d3d6a460585e9603e57ce96a24311eb9ee5c02b0006a",
+      "bytes": 25864,
+      "sha256": "befa1efb1438efa1ec9fc52b7b784d95e74795637da433f18eff6ea9499a8e64",
       "initial_alignment_change": "Bounded simulator IK retry, separate checked initial alignment or corresponding UI/documentation/regression update; physical control limits retained.",
       "common_base_plane_change": "Shared physical mounting-plane constraint and corresponding pipeline/control/simulation diagnostics or validation."
     },
@@ -1619,6 +1721,12 @@
       "organization_change": "Moved into the functional package or document/configuration directory; Python imports updated without algorithm changes.",
       "mean_threshold_change": "Use the same 5 pixel mean reprojection default in the synthetic shared configuration.",
       "reprojection_toggle_change": "Use check_reprojection=False consistently in synthetic runtime configuration."
+    },
+    {
+      "path": "urcal/tools/tune_relative_kalman.py",
+      "source": "Added for planar relative-base Kalman estimation, capture-aligned joints, bounded table compensation, tests and tuning evidence.",
+      "bytes": 37023,
+      "sha256": "575dca0417918314bb9928f8b62bfdf0d33fb03401e3d140fac826b67d41b9ee"
     }
   ],
   "optimized_date": "2026-10-12",
@@ -4148,7 +4256,20 @@
       "display_limit": "No reachable graphical display in this environment; window lifecycle and drawing exercised with fake Tk/Canvas.",
       "telemetry_compute_profile": "100 samples: median 0.286 ms, p95 0.295 ms; no hardware I/O.",
       "single_distance_display_tests": "test_error_plot, test_dual_control_gui and test_simulation_gui passed; only the distance norm is displayed."
-    }
+    },
+    "y_axis": {
+      "minimum_mm": 0,
+      "maximum_mm": 50,
+      "tick_mm": 10,
+      "autoscale": false,
+      "overflow": "Drawing saturates at upper boundary; numeric readout and recorded error retain actual values."
+    },
+    "fixed_axis_verification": {
+      "date": "2026-11-02",
+      "existing_graph_tests_passed": 17,
+      "hardware_commands_sent": false
+    },
+    "recording": "Start recording / Stop & save; full producer samples to runs/error_segments CSV independent of plot window and redraw rate."
   },
   "clean_live_display": {
     "date": "2026-11-01",
@@ -4168,5 +4289,148 @@
       "single_robot_equivalence": "Additional agent run: dual inference + live equivalence, 17 passed and 1 CUDA-only skipped.",
       "hardware_commands_sent": false
     }
+  },
+  "relative_base_kalman": {
+    "date": "2026-11-02",
+    "option": "--base_motion_mode relative_kalman",
+    "default_unchanged": "pose",
+    "requires": {
+      "method": "separated",
+      "follow_law": "feedforward",
+      "leader_response": "bounded",
+      "common_base_plane": true
+    },
+    "measurement": "Same-capture G = inverse(follower_base) @ leader_base, mapped to the physical mounting plane; no independent A/B differencing.",
+    "state": [
+      "x",
+      "y",
+      "yaw",
+      "vx",
+      "vy",
+      "yaw_rate"
+    ],
+    "capture_alignment": "Receive-only timestamped RTDE histories, bounded capture-time interpolation, no latest-q/extrapolation fallback; software clock mapping and uncertainty logged.",
+    "prediction": "Capture-time CV Kalman updates, read-only current-time prediction limited to 0.35s; directional posterior gains jointly scale pose and derivative; residual lambda weights uncertainty and age once.",
+    "control": "One Gc for goal and current relative pose. G-only motion transported to the current follower flange and TCP; independent speed/rate limits; identical effective base request removed from relative-velocity damping.",
+    "limits": "Estimated base compensation is attenuable within the existing whole-command governor. Existing TCP/joint speed, acceleration, geometry and RTDE limits are unchanged.",
+    "lifecycle": "Outlier rejection, stationary/reversal suppression, warmup after gaps/reacquisition, suppressed compensation during recovery blending, successful-send-only compensation history.",
+    "config": "configs/relative_kalman.provisional.json",
+    "report": "docs/RELATIVE_KALMAN_TUNING.md",
+    "tuning": {
+      "labels_available": false,
+      "real_logs_detailed": 4,
+      "measurement_std_m": 0.007,
+      "measurement_std_yaw_deg": 0.3,
+      "acceleration_std_m_s2": 0.1,
+      "acceleration_std_rad_s2": 0.15,
+      "prediction_horizon_s": 0.35,
+      "status": "Provisional from unlabelled protocol-proxy spreads and historical delays; separate held-out synthetic validation. Actual table-motion tracking improvement not validated."
+    },
+    "verification": {
+      "full_suite_tests": 1178,
+      "full_suite_passed": 1175,
+      "full_suite_skipped": 3,
+      "skip_reason": "CUDA-only cases unavailable in this environment",
+      "full_suite_seconds": 169.101,
+      "final_related_tests_passed": 90,
+      "final_related_seconds": 6.074,
+      "hardware_motion_tested": false,
+      "camera_connected": false,
+      "weights_changed": false
+    },
+    "files": [
+      "README.md",
+      "configs/relative_kalman.provisional.json",
+      "configs/relative_kalman.segments.example.json",
+      "docs/CURRENT_IMPLEMENTATION.md",
+      "docs/RELATIVE_KALMAN_TUNING.md",
+      "docs/relative_kalman_tuning.audit.json",
+      "docs/relative_kalman_tuning.heldout.json",
+      "docs/relative_kalman_tuning.replay.json",
+      "docs/relative_kalman_tuning.synthetic.json",
+      "tests/test_dual_control_vision.py",
+      "tests/test_joint_history.py",
+      "tests/test_relative_kalman.py",
+      "tests/test_relative_kalman_control.py",
+      "tests/test_relative_kalman_tuning.py",
+      "urcal/control/acquisition.py",
+      "urcal/control/handoff.py",
+      "urcal/control/joint_history.py",
+      "urcal/control/live_calibration.py",
+      "urcal/control/policy.py",
+      "urcal/control/recovery.py",
+      "urcal/control/runtime.py",
+      "urcal/control/vision.py",
+      "urcal/cooperative/base_compensation.py",
+      "urcal/cooperative/calibration_braking.py",
+      "urcal/cooperative/controller.py",
+      "urcal/cooperative/relative_kalman.py",
+      "urcal/cooperative/runtime.py",
+      "urcal/cooperative/state.py",
+      "urcal/tools/tune_relative_kalman.py"
+    ]
+  },
+  "position_error_interval_recording": {
+    "date": "2026-11-02",
+    "ui": [
+      "Start recording",
+      "Stop & save"
+    ],
+    "directory": "runs/error_segments",
+    "filename": "<UTC timestamp>-error-<unique id>.csv",
+    "scope": [
+      "live preview",
+      "live following/alignment",
+      "captured-state simulation"
+    ],
+    "sampling": "Every unique position-error packet produced by the control loop before latest-only GUI queuing; independent of 10 Hz rendering and 30-second plot history.",
+    "boundaries": "Producer-processed start/stop requests; no retroactive click-time claim.",
+    "values": "Actual norm and signed XYZ mm, including values above 50 mm; invalid error values are blank with gap reasons.",
+    "timestamps": "Original sample clock/time, clock/episode/segment transitions, source phase and target identity; host emitted and recording elapsed times also retained.",
+    "transport": "Dedicated non-actuating request queue in live mode; direct independent recorder callback in simulation; never target/Arm/Stop commands.",
+    "storage": "Exclusive CSV files and bounded asynchronous writer; duplicate samples skipped, error/overflow/timeout visibly incomplete, optional recording failure does not stop motion.",
+    "shutdown": "Graph hiding keeps recording. Program shutdown auto-finalizes an active interval after robot/plant stop. Missing stop marker indicates possible interruption.",
+    "verification": {
+      "related_tests_passed": 223,
+      "related_seconds": 16.237,
+      "hardware_motion_tested": false,
+      "actual_gui_display_tested": false,
+      "gui_tests": "Headless Tk widget fixtures",
+      "full_suite_tests": 1205,
+      "full_suite_passed": 1202,
+      "full_suite_skipped": 3,
+      "full_suite_seconds": 172.764,
+      "skip_reason": "CUDA-only tests unavailable in this environment"
+    },
+    "files": [
+      "README.md",
+      "docs/CURRENT_IMPLEMENTATION.md",
+      "urcal/control/error_recording.py",
+      "urcal/control/error_plot.py",
+      "urcal/control/gui.py",
+      "urcal/cooperative/runtime.py",
+      "urcal/simulation/runtime.py",
+      "tests/test_error_recording.py",
+      "tests/test_error_plot.py",
+      "tests/test_dual_control_gui.py",
+      "tests/test_cooperative_runtime.py",
+      "tests/test_simulation_runtime.py",
+      "tests/test_live_alignment_runtime.py",
+      "tests/test_live_calibration_runtime.py",
+      "tests/test_follow_fault_recovery.py"
+    ]
+  },
+  "relative_kalman_formulation": {
+    "document": "docs/FOLLOW_RELATIVE_KALMAN_FORMULATION.md",
+    "as_of": "2026-11-02",
+    "scope": "Current specified UR10e leader / UR5e follower command: relative_kalman, feedforward, separated, bounded, initial alignment, 0.30m gap, 0.01m/s approach, 0.8m/s^2 linear acceleration; no pose-estimator internals.",
+    "coverage": [
+      "Frame mapping and capture-aligned joints",
+      "Planar CV Kalman update, bounded prediction and confidence",
+      "Fixed accepted relative target, leader/base feedforward and relative-motion damping",
+      "Command governor, transport timing, effective limits, alignment/handoff and recovery",
+      "Quintic 15cm approach, error graph and interval CSV"
+    ],
+    "verification": "Read-only source audits; 23 effective CLI settings checked against parser, 80 display equation pairs and 20 local links checked, 28.125s approach and 0.2625s maximum integrated prediction checked. Documentation-only; no hardware execution."
   }
 }

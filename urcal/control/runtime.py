@@ -850,10 +850,28 @@ def parse_args(argv=None):
                                "pose recomputes the follower TCP target each cycle and uses only pose-error velocity "
                                "with measured-motion damping. Requires separated + pose base updates + bounded response; "
                                "all existing feedback and motion limits remain unchanged")
-    research.add_argument("--base_motion_mode", choices=("pose", "velocity"), default="pose",
+    research.add_argument("--base_motion_mode", choices=("pose", "velocity", "relative_kalman"), default="pose",
                           help="Visual base updates: pose (default) updates coordinates without inferred velocity; "
                                "velocity restores research prediction and mandatory base-velocity compensation. "
+                               "relative_kalman filters the simultaneous planar relative base transform and adds "
+                               "confidence-weighted, bounded table-motion compensation. "
                                "Robot motion limits always use encoder/RTDE measurements")
+    research.add_argument("--relative_kalman_config", type=Path,
+                          help="Planar relative Kalman filter JSON parameters (relative_kalman mode only)")
+    research.add_argument("--relative_base_speed", type=float, default=.10,
+                          help="Relative-base compensation linear speed cap at the follower flange, m/s")
+    research.add_argument("--relative_base_angular_speed", type=float, default=.15,
+                          help="Relative-base compensation angular speed cap, rad/s")
+    research.add_argument("--relative_base_accel", type=float, default=.20,
+                          help="Relative-base compensation linear rate limit, m/s^2")
+    research.add_argument("--relative_base_angular_accel", type=float, default=.30,
+                          help="Relative-base compensation angular rate limit, rad/s^2")
+    research.add_argument("--joint_history_hz", type=float, default=100.,
+                          help="RTDE joint history sampling rate for relative_kalman capture alignment")
+    research.add_argument("--joint_alignment_wait", type=float, default=.03,
+                          help="Maximum wait for joint samples bracketing an exposure, seconds")
+    research.add_argument("--joint_alignment_max_gap", type=float, default=.05,
+                          help="Maximum RTDE interpolation bracket duration, seconds")
     research.add_argument("--base_pose_window", type=int, default=5,
                           help="ACTIVE pose-mode relative-base medoid window: odd 3..31 images, 0 disables")
     research.add_argument("--base_pose_smoothing_time", type=float, default=.35,
@@ -929,6 +947,22 @@ def parse_args(argv=None):
                                     or args.base_motion_mode != "pose"
                                     or args.leader_response != "bounded"):
         p.error("--follow_law pose requires --method separated --base_motion_mode pose --leader_response bounded")
+    if args.base_motion_mode == "relative_kalman":
+        if (args.method != "separated" or args.follow_law != "feedforward"
+                or args.leader_response != "bounded" or not args.common_base_plane):
+            p.error("relative_kalman requires --method separated --follow_law feedforward "
+                    "--leader_response bounded and --common_base_plane")
+        from dataclasses import asdict
+        from urcal.cooperative.relative_kalman import load_planar_kalman_config
+        try:
+            config = load_planar_kalman_config(args.relative_kalman_config)
+            if config.prediction_horizon > args.max_calibration_age:
+                raise ValueError("relative Kalman prediction_horizon must not exceed max_calibration_age")
+            args.relative_kalman_parameters = asdict(config)
+        except (ValueError, OSError, TypeError) as exc:
+            p.error(str(exc))
+    elif args.relative_kalman_config is not None:
+        p.error("--relative_kalman_config requires --base_motion_mode relative_kalman")
     if args.follow_max_speed is None:
         args.follow_max_speed = 1. if args.max_speed is None else args.max_speed
     if args.max_speed is None:
@@ -964,7 +998,9 @@ def parse_args(argv=None):
                 "feedback_speed", "feedback_angular_speed", "slow_error_m", "slow_error_deg",
                 "finish_position_m", "finish_rotation_deg", "finish_dwell", "calibration_recovery_timeout",
                 "calibration_recovery_max_shift_m", "calibration_recovery_max_shift_deg", "calibration_blend_time",
-                "base_pose_smoothing_time", "base_pose_update_speed", "base_pose_update_angular_speed")
+                "base_pose_smoothing_time", "base_pose_update_speed", "base_pose_update_angular_speed",
+                "relative_base_speed", "relative_base_angular_speed", "relative_base_accel",
+                "relative_base_angular_accel", "joint_history_hz", "joint_alignment_wait", "joint_alignment_max_gap")
     if any(not np.isfinite(getattr(args, key)) or getattr(args, key) <= 0 for key in positive):
         p.error("rates, limits, camera dimensions and gains must be finite and positive")
     if not np.isfinite(args.follow_damping_time) or args.follow_damping_time < 0:

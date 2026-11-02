@@ -5,7 +5,7 @@ import math
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from urcal.control.error_plot import PositionErrorHistory, PositionErrorWindow
 
@@ -169,6 +169,7 @@ class PositionErrorHistoryTests(unittest.TestCase):
 class FakeWidget:
     def __init__(self, parent=None, **kwargs):
         self.parent, self.calls, self.protocols = parent, [], {}
+        self.options = dict(kwargs)
         self.hidden = False
 
     def grid(self, **kwargs):
@@ -178,7 +179,11 @@ class FakeWidget:
         pass
 
     def configure(self, **kwargs):
-        pass
+        self.options.update(kwargs)
+
+    def invoke(self):
+        if self.options.get("state") != "disabled":
+            self.options["command"]()
 
     def title(self, text):
         self.title_text = text
@@ -236,7 +241,7 @@ class FakeStringVar:
 
 class PositionErrorWindowTests(unittest.TestCase):
     def setUp(self):
-        ttk = SimpleNamespace(Label=FakeWidget)
+        ttk = SimpleNamespace(Label=FakeWidget, Frame=FakeWidget, Button=FakeWidget)
         tk = SimpleNamespace(Toplevel=FakeWidget, Canvas=FakeWidget, StringVar=FakeStringVar, ttk=ttk)
         self.tk_patch = patch.dict(sys.modules, {"tkinter": tk, "tkinter.ttk": ttk})
         self.tk_patch.start()
@@ -295,6 +300,90 @@ class PositionErrorWindowTests(unittest.TestCase):
         color_lines = [call for call in window.canvas.calls if call[0] == "line"
                        and call[2].get("fill") in ("#ff657a", "#64d68e", "#68aaff", "#facc15", "#2563eb")]
         self.assertEqual(color_lines, [])
+
+    def test_recording_is_disabled_without_a_producer(self):
+        window = PositionErrorWindow(object())
+        self.assertEqual(window._record_start.options["state"], "disabled")
+        self.assertEqual(window._record_stop.options["state"], "disabled")
+        self.assertIn("unavailable", window._recording_text.value)
+        window._request_recording("start")
+        self.assertIsNone(window._recording_pending)
+
+    def test_recording_requests_require_ack_and_save_completion_before_next_start(self):
+        send = Mock()
+        window = PositionErrorWindow(object(), recording_command=send)
+        window._record_start.invoke()
+        start = send.call_args.args[0]
+        self.assertEqual(start["action"], "start")
+        self.assertTrue(start["request_id"])
+        self.assertEqual(window._record_start.options["state"], "disabled")
+        self.assertEqual(window._record_stop.options["state"], "disabled")
+        window._request_recording("start")
+        window.set_recording_status({"state": "idle", "request_id": "old"})
+        window._request_recording("stop")
+        send.assert_called_once_with(start)
+        window.set_recording_status({"state": "recording", "request_id": start["request_id"],
+                                     "path": "/tmp/segment.csv", "rows": 1200, "elapsed_s": 60.5})
+        self.assertEqual(window._record_stop.options["state"], "normal")
+        self.assertIn("1200 rows", window._recording_text.value)
+        self.assertIn("60.50 s", window._recording_text.value)
+        window._record_stop.invoke()
+        stop = send.call_args.args[0]
+        self.assertEqual(stop["action"], "stop")
+        self.assertNotEqual(stop["request_id"], start["request_id"])
+        window.set_recording_status({"state": "saving", "request_id": stop["request_id"]})
+        self.assertEqual(window._record_start.options["state"], "disabled")
+        self.assertEqual(window._record_stop.options["state"], "disabled")
+        window.set_recording_status({"state": "saved", "request_id": stop["request_id"],
+                                     "path": "/tmp/segment.csv", "rows": 1200, "elapsed_s": 60.5})
+        self.assertEqual(window._record_start.options["state"], "normal")
+        self.assertIn("CSV saved", window._recording_text.value)
+        self.assertIn("/tmp/segment.csv", window._recording_text.value)
+
+    def test_hiding_and_redrawing_never_stops_or_feeds_the_recorder(self):
+        send = Mock()
+        window = PositionErrorWindow(object(), recording_command=send)
+        window._record_start.invoke()
+        command = send.call_args.args[0]
+        window.set_recording_status({"state": "recording", "request_id": command["request_id"]})
+        window.close()
+        for at in (10.1, 10.2, 45.):
+            self.clock.return_value = at
+            window.update(sample(at, error_m=[.1, 0., 0.]))
+        window.set_recording_status({"state": "recording", "request_id": command["request_id"], "rows": 875})
+        self.assertIn("875 rows", window._recording_text.value)
+        window.show()
+        self.assertIn("100.00 mm", window._values.value)
+        send.assert_called_once_with(command)
+        self.assertEqual(window._record_stop.options["state"], "normal")
+
+    def test_queue_error_can_retry_without_changing_recording_or_propagating(self):
+        send = Mock(side_effect=RuntimeError("queue full"))
+        window = PositionErrorWindow(object(), recording_command=send)
+        window._record_start.invoke()
+        self.assertIsNone(window._recording_pending)
+        self.assertIn("queue full", window._recording_text.value)
+        self.assertEqual(window._record_start.options["state"], "normal")
+        send.side_effect = None
+        window._record_start.invoke()
+        command = send.call_args.args[0]
+        window.set_recording_status({"state": "recording", "request_id": command["request_id"]})
+        send.side_effect = RuntimeError("queue full")
+        window._record_stop.invoke()
+        self.assertEqual(window._record_stop.options["state"], "normal")
+        self.assertEqual(window._record_start.options["state"], "disabled")
+        self.assertIn("RECORDING", window._recording_text.value)
+
+    def test_writer_error_displays_incomplete_file_and_respects_busy_retry_flag(self):
+        window = PositionErrorWindow(object(), recording_command=Mock())
+        error = {"state": "error", "can_start": False, "can_stop": False,
+                 "error": "write failed", "incomplete": True, "path": "/tmp/partial.csv"}
+        window.set_recording_status(error)
+        self.assertEqual(window._record_start.options["state"], "disabled")
+        self.assertIn("INCOMPLETE", window._recording_text.value)
+        self.assertIn("write failed", window._recording_text.value)
+        window.set_recording_status({**error, "can_start": True})
+        self.assertEqual(window._record_start.options["state"], "normal")
 
 
 if __name__ == "__main__":

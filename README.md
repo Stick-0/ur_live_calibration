@@ -8,6 +8,8 @@ RealSense D435 RGB 영상 한 장과 양팔의 RTDE 관절값으로 카메라 �
 
 전체 동작·좌표계·설정·제약·코드 위치는 [현재 구현 문서](docs/CURRENT_IMPLEMENTATION.md)에 정리했습니다.
 
+`relative_kalman + feedforward` 실행의 좌표변환·KF·속도 합성·초기 정렬·접근·오차 기록은 [수식 기반 제어 문서](docs/FOLLOW_RELATIVE_KALMAN_FORMULATION.md)에 정리했습니다. 포즈 추정기 내부 설명은 제외하고 실제 적용 옵션과 제한값을 함께 다룹니다.
+
 ## 실행할 수 있는 것
 
 | 작업 | 진입점 | 실제 로봇 구동 |
@@ -98,7 +100,11 @@ git lfs pull
 
 프로그램이 리더 자체를 구동하지는 않습니다. 기본 리더는 UR10e이며 `--leader ur5e`로 역할을 바꿀 수 있습니다. 기본 간격은 20 cm이므로, 위 예시처럼 `--gap 0.30`을 지정하면 30 cm를 사용합니다.
 
-실행하면 **Follower TCP position error** 그래프 창도 자동으로 열립니다. 팔로워 베이스 좌표에서 `목표 TCP 위치 − 현재 TCP 위치`를 계산하고, 전체 거리 오차 `sqrt(ex² + ey² + ez²)` 하나를 **mm**, 최근 **30초**의 선으로 표시합니다. 그래프는 흰 배경에 진한 파란 선을 사용하고 세로축은 0부터 시작합니다. 초기 정렬은 선택한 정렬 끝점, 추종은 허용 보정을 포함해 제어기가 채택한 목표를 사용합니다. 현재 위치는 RTDE 값이며, 목표는 캘리브레이션 기반 추정값입니다. 그래프만 닫아도 제어는 계속되며 **Position error graph** 버튼으로 다시 열 수 있습니다. 미리보기와 시뮬레이션에서도 표시됩니다.
+실행하면 **Follower TCP position error** 그래프 창도 자동으로 열립니다. 팔로워 베이스 좌표에서 `목표 TCP 위치 − 현재 TCP 위치`를 계산하고, 전체 거리 오차 `sqrt(ex² + ey² + ez²)` 하나를 **mm**, 최근 **30초**의 선으로 표시합니다. 그래프는 흰 배경에 진한 파란 선을 사용하고 세로축을 **0~50 mm로 고정**합니다. 오차 크기에 따라 축 범위를 자동으로 바꾸지 않습니다. 초기 정렬은 선택한 정렬 끝점, 추종은 허용 보정을 포함해 제어기가 채택한 목표를 사용합니다. 현재 위치는 RTDE 값이며, 목표는 캘리브레이션 기반 추정값입니다. 그래프만 닫아도 제어는 계속되며 **Position error graph** 버튼으로 다시 열 수 있습니다. 미리보기와 시뮬레이션에서도 표시됩니다.
+
+그래프 창에서 **Start recording**을 누르면 선택 구간의 오차 기록을 시작하고, **Stop & save**를 누르면 CSV를 마감합니다. 파일은 `runs/error_segments/<UTC시각>-error-<고유값>.csv`에 생성되며 저장 경로와 기록 상태가 창에 표시됩니다. 실제 제어·미리보기·시뮬레이션에서 사용할 수 있습니다.
+
+기록은 그래프의 최근 30초 표시나 10 Hz 화면 갱신과 독립적입니다. 제어 루프가 생성한 고유 시각의 오차 샘플을 기록하며, 기본 제어 주기는 25 Hz입니다. CSV의 `position_error_mm`가 전체 거리 오차이고 50 mm를 넘는 값도 그대로 저장합니다. 관측 불가 구간은 `valid=0`과 사유를 남기고 숫자를 비워 둡니다. 그래프만 닫으면 기록은 계속되며, 프로그램이 정상 종료되면 진행 중인 CSV도 자동 마감됩니다. 기록·파일 저장 버튼은 로봇을 Arm하거나 정지시키지 않습니다.
 
 ### 좌표변환 목표만으로 추종
 
@@ -134,7 +140,7 @@ GUI의 **Pause task**는 상대 경로 진행만 멈춥니다. 리더 추종까�
 
 ### 추종 중 15 cm까지 접근
 
-기본 `separated + pose + bounded`, `--path hold`의 ACTIVE 상태에서 첫 추종 명령이 완료되면 **Approach to 15 cm** 버튼을 사용할 수 있습니다. 초기 정렬을 사용한다면 정렬과 캘리브레이션 전환을 먼저 마쳐야 합니다.
+`separated + bounded`, `--base_motion_mode pose` 또는 `relative_kalman`, `--path hold`의 ACTIVE 상태에서 첫 추종 명령이 완료되면 **Approach to 15 cm** 버튼을 사용할 수 있습니다. 초기 정렬을 사용한다면 정렬과 캘리브레이션 전환을 먼저 마쳐야 합니다.
 
 1. **Approach to 15 cm**: 리더를 따라가면서 플랜지 간격 목표를 15 cm까지 서서히 줄입니다.
 2. **Pause approach**: 접근 목표의 진행과 목표 간격을 고정하고 리더 추종은 계속합니다.
@@ -150,11 +156,32 @@ GUI는 명령 간격·추정 간격·진행률을 따로 표시합니다. **15 c
 
 ## 추종 반응과 제약
 
-기본 `--base_motion_mode pose`에서는 영상으로 베이스 좌표 관계를 갱신하고, 실제 운동 속도는 관절·RTDE 측정값으로 계산합니다. 영상에서 추정한 베이스 위치의 차분을 필수 보상 속도로 사용하지 않습니다. 속도 추정·예측을 포함한 연구 비교는 `--base_motion_mode velocity`를 명시합니다.
+기본 `--base_motion_mode pose`에서는 영상으로 베이스 좌표 관계를 갱신하고, 실제 운동 속도는 관절·RTDE 측정값으로 계산합니다. 영상에서 추정한 베이스 위치의 차분을 필수 보상 속도로 사용하지 않습니다. 기존 독립 베이스 속도 추정·예측 비교는 `--base_motion_mode velocity`, 같은 영상의 상대 베이스 칼만 추정은 `--base_motion_mode relative_kalman`으로 선택합니다.
+
+### 상대 베이스 칼만 추정과 정반 속도 보상
+
+`relative_kalman`은 마커리스 검출·EMPnP·공면 최적화를 그대로 사용하고, 그 뒤에서 **동일 촬영 시점의 `G = inverse(B_follower) @ A_leader`**를 평면 상태 `[x, y, yaw, vx, vy, yaw_rate]`로 추정합니다. 영상용 관절값은 RTDE 이력에서 촬영 시각에 맞춰 보간하고, 제어에서는 관측 이후 최대 0.35초 범위에서 예측합니다. 하드웨어 동기화는 아니며 시간 매핑의 불확실성을 로그에 남깁니다.
+
+기존 실행 명령에 다음을 추가하면 됩니다. `feedforward`, `separated`, `bounded`, 공면 조건이 필요합니다.
+
+```text
+--base_motion_mode relative_kalman --follow_law feedforward \
+--relative_kalman_config configs/relative_kalman.provisional.json
+```
+
+새 모드의 필터는 JSON의 잡음·예측 설정을 사용합니다. `--filter_alpha`, `--velocity_alpha`, `--prediction_horizon`, `--base_pose_*`는 이 칼만 필터의 반응성을 조절하지 않습니다. 기존 `pose` 모드와 초기 정렬 절차는 유지됩니다.
+
+정반 보상은 신뢰도 `lambda`, 별도 속도·가속도 상한을 통과한 뒤 리더 운동·오차 보정·접근 속도에 합산합니다. 같은 보상값을 상대속도 감쇠에서도 빼므로 정상적인 정반 추종을 감쇠 항이 다시 제동하지 않습니다. 최종 TCP·관절·공간 제한은 그대로 적용되며, 정반 보상만 반드시 실행해야 하는 명령으로 취급하지 않습니다.
+
+별도 정반 보상 상한은 기본 **100 mm/s, 0.15 rad/s, 0.20 m/s², 0.30 rad/s²**이고 `--relative_base_speed`, `--relative_base_angular_speed`, `--relative_base_accel`, `--relative_base_angular_accel`로 조절합니다. 관측 소실·급정지·반전·재확보 시 오래된 속도를 줄이거나 초기화합니다.
+
+현재 JSON은 **라벨 없는 기존 로그의 잡음·지연과 합성 시험으로 정한 잠정값**입니다. 실제 정반 이동의 정답 궤적에 맞춘 검증 결과는 아닙니다. 수식·설정은 [현재 구현 문서](docs/CURRENT_IMPLEMENTATION.md), 분석과 재현 명령은 [튜닝 기록](docs/RELATIVE_KALMAN_TUNING.md)을 참조하세요.
+
+### 출력 좌표와 기본 pose 모드
 
 UR10e PnP 출력의 **Z축 180° / 로컬 Z +5 mm 변환은 기본 ON**입니다. 기존 실행 명령에 추가 옵션 없이 적용되며, 시작 로그의 `UR10e PnP output correction: ON`으로 확인할 수 있습니다. `--no_ur10e_output_correction`을 지정하면 이 출력 변환을 끕니다. 이 설정은 명목 FK·Jacobian의 좌표 정의와 별개이며, 보정 ON/OFF에 따라 GUI 축과 제어 목표 방향도 달라집니다.
 
-ACTIVE 추종에서는 최근 5개 영상의 **상대 베이스 좌표**를 모아 대표값을 선택하고, 5 mm / 0.5° 안의 작은 변화는 따라가지 않습니다. 그 밖의 변화는 0.35초 시정수와 20 mm/s·0.05 rad/s의 좌표 갱신 상한으로 부드럽게 반영합니다. 이 상한은 베이스 추정 좌표에만 적용하며, 기본 `feedforward`의 리더 관절값으로 계산한 추종 속도는 그대로 사용합니다. 실제 베이스를 빠르게 옮기면 좌표 반영은 지연될 수 있습니다. 설정은 `--base_pose_*` 옵션이며, 필터는 실제 베이스가 고정됐다고 판정하거나 캘리브레이션 정확도를 보장하지 않습니다.
+기본 `pose` 모드의 ACTIVE 추종에서는 최근 5개 영상의 **상대 베이스 좌표**를 모아 대표값을 선택하고, 5 mm / 0.5° 안의 작은 변화는 따라가지 않습니다. 그 밖의 변화는 0.35초 시정수와 20 mm/s·0.05 rad/s의 좌표 갱신 상한으로 부드럽게 반영합니다. 이 상한은 베이스 추정 좌표에만 적용하며, 기본 `feedforward`의 리더 관절값으로 계산한 추종 속도는 그대로 사용합니다. 실제 베이스를 빠르게 옮기면 좌표 반영은 지연될 수 있습니다. 설정은 `--base_pose_*` 옵션이며, 필터는 실제 베이스가 고정됐다고 판정하거나 캘리브레이션 정확도를 보장하지 않습니다.
 
 | 설정 | 기본값 | 의미 |
 | --- | --- | --- |
@@ -228,3 +255,4 @@ python3 -m urcal.tools.simulate --output_dir runs/synthetic-comparison --scenari
 ```bash
 PYTHONPATH=tests:. python3 -B -m unittest discover -s tests -p 'test_*.py'
 ```
+./run_dual_control.sh --mode follow   --ur5e_ip 169.254.186.10   --ur10e_ip 169.254.186.6   --ur5e_tcp_offset 0 0 0 0 0 0   --ur10e_tcp_offset 0 0 0 0 0 0   --gap 0.30 --show_seg   --filter_alpha 1.0   --base_pose_window 0   --initial_align --execute   --approach_speed 0.01 --max_accel 0.5 --base_motion_mode relative_kalman --follow_law feedforward --relative_kalman_config configs/relative_kalman.provisional.json

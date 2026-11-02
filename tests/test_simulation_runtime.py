@@ -262,6 +262,69 @@ class SimulationSessionTests(unittest.TestCase):
 
 
 class OfflineSimulationEntryTests(unittest.TestCase):
+    def test_graph_recording_callback_uses_each_simulation_loop_sample_and_finalizes(self):
+        initial, _ = synthetic_snapshot()
+
+        class Recorder:
+            instances = []
+
+            def __init__(self, directory):
+                self.directory = directory
+                self.requests, self.produced, self.selected = [], [], []
+                self.active, self.closed = False, False
+                self.instances.append(self)
+
+            def request(self, command):
+                self.requests.append(command.copy())
+                self.active = command["action"] == "start"
+
+            def record(self, sample, **kwargs):
+                self.produced.append(copy.deepcopy(sample))
+                if self.active:
+                    self.selected.append(copy.deepcopy(sample))
+
+            def status(self):
+                return {"state": "recording" if self.active else "saved", "rows": len(self.selected)}
+
+            def close(self, *args, **kwargs):
+                self.closed = True
+
+        class Panel:
+            def __init__(self, args, command, stop, *, recording_command=None):
+                self.root, self.stop = object(), stop
+                self._view = mock.Mock()
+                self.recording_command, self.polls = recording_command, 0
+                self.recording_command({"action": "start", "request_id": "sim-start"})
+
+            def poll(self, status):
+                self.polls += 1
+                self.status = status
+                if self.polls == 2:
+                    self.recording_command({"action": "stop", "request_id": "sim-stop"})
+                elif self.polls == 3:
+                    self.stop.set()
+
+            def close(self):
+                pass
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = save_initial_state(root / "captured.json", initial)
+            args = parse_args(["--simulate", "--initial_state", str(path), "--gap", ".30"])
+            with mock.patch("urcal.simulation.runtime.BUNDLE", root), \
+                    mock.patch("urcal.simulation.runtime.capture_initial_state", side_effect=AssertionError("capture reached")), \
+                    mock.patch("urcal.simulation.runtime.PositionErrorRecorder", Recorder), \
+                    mock.patch("urcal.control.gui.TargetPanel", Panel), \
+                    mock.patch("tkinter.ttk.Label"), mock.patch("builtins.print"):
+                run(args)
+        recorder, = Recorder.instances
+        self.assertEqual([command["action"] for command in recorder.requests], ["start", "stop"])
+        self.assertEqual(len(recorder.produced), 3)
+        self.assertEqual(len(recorder.selected), 2)
+        self.assertTrue(all(sample["clock"] == "simulation" for sample in recorder.produced))
+        self.assertTrue(all("episode" in sample for sample in recorder.produced))
+        self.assertTrue(recorder.closed)
+
     def test_saved_state_run_skips_capture_and_sdk_imports_and_closes_gui(self):
         initial, _ = synthetic_snapshot()
         original_import = builtins.__import__
@@ -275,10 +338,11 @@ class OfflineSimulationEntryTests(unittest.TestCase):
         class Panel:
             instances = []
 
-            def __init__(self, args, command, stop):
+            def __init__(self, args, command, stop, *, recording_command=None):
                 self.root, self.stop, self.closed = object(), stop, False
                 self._view = mock.Mock()
                 self.command = command
+                self.recording_command = recording_command
                 self.instances.append(self)
 
             def poll(self, status):

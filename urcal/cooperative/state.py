@@ -48,6 +48,7 @@ class RelativeSnapshot:
     measurement_times: dict
     received_times: dict
     prediction_dt: dict
+    relative_filter: dict = None
 
 
 @dataclass(frozen=True)

@@ -128,7 +128,7 @@ def draft_geometry(scene, request, mode, leader="ur10e"):
 class TargetPanel:
     """Pump with poll(status); requests remain subject to controller validation."""
 
-    def __init__(self, args, send_command, stop_event):
+    def __init__(self, args, send_command, stop_event, *, recording_command=None):
         if getattr(args, "mode", "follow") != "follow":
             raise ValueError("only follower mode is supported")
         try:
@@ -142,6 +142,7 @@ class TargetPanel:
             raise RuntimeError("Target GUI needs an available graphical display (check DISPLAY)") from exc
         self._tk = tk
         self.args, self.send_command, self.stop_event = args, send_command, stop_event
+        self._recording_command = recording_command
         self.mode = args.mode
         self._simulation = bool(getattr(args, "simulate", False))
         self._research = getattr(args, "method", None) is not None
@@ -341,9 +342,11 @@ class TargetPanel:
         try:
             if getattr(self, "_error_plot", None) is None:
                 leader = getattr(self.args, "leader", "ur10e")
+                recording = getattr(self, "_recording_command", None)
+                options = {"recording_command": recording} if recording is not None else {}
                 self._error_plot = PositionErrorWindow(
                     self.root, follower="ur5e" if leader == "ur10e" else "ur10e",
-                    simulation=getattr(self, "_simulation", False))
+                    simulation=getattr(self, "_simulation", False), **options)
             else:
                 self._error_plot.show()
         except self._tk.TclError as exc:
@@ -517,6 +520,8 @@ class TargetPanel:
         if plot is not None:
             try:
                 if status is not None:
+                    if "error_recording" in status:
+                        plot.set_recording_status(status["error_recording"])
                     # Do not revive an old sample from the merged UI status.
                     plot.update(status.get("position_error"))
                 plot.refresh()
@@ -541,7 +546,7 @@ class TargetPanel:
                 pass
 
 
-def gui_worker(args, commands, statuses, stop):
+def gui_worker(args, commands, statuses, stop, recording_commands=None):
     """Run Tk in its own process so inference cannot block Stop or target entry."""
     panel = None
 
@@ -553,8 +558,15 @@ def gui_worker(args, commands, statuses, stop):
         except Full as exc:
             raise RuntimeError("Controller command queue is full; retry when it has caught up") from exc
 
+    def send_recording(command):
+        try:
+            recording_commands.put_nowait(command)
+        except Full as exc:
+            raise RuntimeError("Recording request queue is full; retry shortly") from exc
+
     try:
-        panel = TargetPanel(args, send_command, stop)
+        options = {"recording_command": send_recording} if recording_commands is not None else {}
+        panel = TargetPanel(args, send_command, stop, **options)
         while not stop.is_set():
             latest = None
             while True:

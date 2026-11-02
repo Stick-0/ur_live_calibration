@@ -92,12 +92,15 @@ class ResearchRuntimeTests(unittest.TestCase):
                    send_hook=None, state_error=None, prepare_error=None, expected=None,
                    stop_after=2, step=.04, packet=None, logger_error_kind=None, frozen_joints=False,
                    later_packets=None, reacquire_on_packet=False, ingest_accepted=True,
-                   cleanup_delay=0.):
+                   cleanup_delay=0., initial_recording_commands=(), later_recording_commands=None,
+                   recorder_status=None):
         args, clock, order, records = config(execute), Clock(), [], []
-        queues = [LocalQueue(maxsize=n) for n in (1, 8, 1, 1)]
-        frames, commands, statuses, gui_statuses = queues
+        queues = [LocalQueue(maxsize=n) for n in (1, 8, 1, 1, 8)]
+        frames, commands, statuses, gui_statuses, recording_commands = queues
         for command in initial_commands:
             commands.put_nowait(command)
+        for command in initial_recording_commands:
+            recording_commands.put_nowait(command)
         if packet is not None:
             frames.put_nowait(packet)
 
@@ -106,6 +109,8 @@ class ResearchRuntimeTests(unittest.TestCase):
                 frames.put_nowait(later_packets[wait_count])
             for command in (later_commands or {}).get(wait_count, ()):
                 commands.put_nowait(command)
+            for command in (later_recording_commands or {}).get(wait_count, ()):
+                recording_commands.put_nowait(command)
 
         event = Event(clock, stop_after, later, step)
         processes = [Mock(pid=101), Mock(pid=102)]
@@ -211,6 +216,12 @@ class ResearchRuntimeTests(unittest.TestCase):
             records.append(deepcopy(record))
 
         logger.log.side_effect = log
+        recorder, error_samples = Mock(), []
+        recorder.status.return_value = (recorder_status if recorder_status is not None else
+                                       {"state": "idle", "path": None, "rows": 0,
+                                        "valid_samples": 0, "elapsed_s": 0., "error": ""})
+        recorder.record.side_effect = lambda sample, **kwargs: error_samples.append((deepcopy(sample), kwargs))
+        recorder.close.side_effect = lambda *args, **kwargs: order.append("recording_close")
         caught = None
         with ExitStack() as stack:
             stack.enter_context(patch.dict(sys.modules, {
@@ -225,6 +236,7 @@ class ResearchRuntimeTests(unittest.TestCase):
             stack.enter_context(patch.object(runtime, "StateReader", reader_factory))
             stack.enter_context(patch.object(runtime, "MotionSession", motion_factory))
             stack.enter_context(patch.object(runtime, "ExperimentLogger", return_value=logger))
+            stack.enter_context(patch.object(runtime, "PositionErrorRecorder", return_value=recorder))
             stack.enter_context(redirect_stdout(io.StringIO()))
             if expected is None:
                 runtime.run(args)
@@ -235,6 +247,7 @@ class ResearchRuntimeTests(unittest.TestCase):
 
         self.assertTrue(event.is_set())
         logger.close.assert_called_once()
+        recorder.close.assert_called_once()
         for receiver in receivers:
             receiver.disconnect.assert_called_once()
         for queue in queues:
@@ -245,7 +258,9 @@ class ResearchRuntimeTests(unittest.TestCase):
         return SimpleNamespace(engine=engine, session=session, motion_factory=motion_factory,
                                records=records, order=order, preparations=preparations,
                                event=event, sent=sent, statuses=statuses, gui_statuses=gui_statuses,
-                               caught=caught, clock=clock, processes=processes)
+                               caught=caught, clock=clock, processes=processes,
+                               recorder=recorder, error_samples=error_samples,
+                               recording_commands=recording_commands)
 
     def test_preview_arm_never_constructs_controller_or_commits_task_progress(self):
         result = self.mocked_run(stop_after=1)
@@ -504,6 +519,54 @@ class ResearchRuntimeTests(unittest.TestCase):
         result = runtime.finite_record({"raw": np.array([np.nan, np.inf, -np.inf, .2]),
                                         "sequence": np.int64(7), "flag": np.bool_(False)})
         self.assertEqual(result, {"raw": [None, None, None, .2], "sequence": 7, "flag": False})
+
+    def test_recording_receives_each_produced_sample_before_latest_gui_queue_overwrite(self):
+        result = self.mocked_run(initial_commands=(), stop_after=8)
+        self.assertEqual(len(result.error_samples), 8)
+        values = [sample for sample, _ in result.error_samples]
+        self.assertTrue(all(sample["valid"] for sample in values))
+        self.assertEqual(len({sample["at"] for sample in values}), 8)
+        # This fixture's target is 300mm away. The graph range must not clamp
+        # the producer data, and its one-slot queue retains only the last tick.
+        self.assertTrue(all(np.linalg.norm(sample["error_m"]) > .05 for sample in values))
+        latest = runtime.take_latest(result.gui_statuses)
+        self.assertEqual(latest["position_error"], values[-1])
+        self.assertIsNone(runtime.take_latest(result.gui_statuses))
+        self.assertEqual(latest["error_recording"], result.recorder.status.return_value)
+
+    def test_recording_buttons_use_separate_queue_and_cannot_arm_or_change_target(self):
+        start = {"action": "start", "request_id": "record-1"}
+        stop = {"action": "stop", "request_id": "record-2"}
+        result = self.mocked_run(execute=True, initial_commands=(), stop_after=4,
+            initial_recording_commands=(start,), later_recording_commands={2: [stop]})
+        self.assertEqual([call.args[0] for call in result.recorder.request.call_args_list], [start, stop])
+        result.motion_factory.assert_not_called()
+        result.engine.apply_target.assert_not_called()
+        result.engine.commit.assert_not_called()
+        self.assertEqual(len(result.error_samples), 4)
+
+    def test_recording_retains_unavailable_error_as_invalid_instead_of_fabricating_value(self):
+        result = self.mocked_run(initial_commands=(), frozen_joints=True, stop_after=3)
+        values = [sample for sample, _ in result.error_samples]
+        self.assertEqual(len(values), 3)
+        self.assertTrue(values[0]["valid"])
+        self.assertFalse(values[-1]["valid"])
+        self.assertNotIn("error_m", values[-1])
+        self.assertTrue(values[-1]["reason"])
+
+    def test_recording_shutdown_drains_only_after_motion_is_closed_on_transport_fault(self):
+        def failure(clock, event):
+            raise ControlFault("injected transport failure")
+        result = self.mocked_run(execute=True, send_hook=failure, expected=ControlFault)
+        self.assertLess(result.order.index("motion_close"), result.order.index("recording_close"))
+
+    def test_recording_error_is_displayed_without_interrupting_an_existing_motion_session(self):
+        failed = {"state": "error", "path": "failed.csv", "rows": 2,
+                  "valid_samples": 2, "elapsed_s": .04, "error": "disk write failed"}
+        result = self.mocked_run(execute=True, stop_after=4, recorder_status=failed)
+        self.assertGreater(len(result.sent), 0)
+        self.assertEqual(len(result.sent), result.engine.commit.call_count)
+        self.assertEqual(runtime.take_latest(result.gui_statuses)["error_recording"], failed)
 
 
 class DispatchTests(unittest.TestCase):

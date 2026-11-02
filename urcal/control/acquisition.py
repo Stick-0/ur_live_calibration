@@ -22,7 +22,7 @@ class StationaryCalibrationAcquisition:
             raise ValueError("invalid stationary acquisition window/quorum")
         self.settings = {key: getattr(template, key) for key in (
             "max_age", "stable_frames", "alpha", "max_jump_m", "max_jump_rad",
-            "max_mean_px", "max_pixel_px", "min_points", "check_reprojection")}
+            "max_mean_px", "max_pixel_px", "min_points", "check_reprojection", "check_individual_jumps")}
         self.window, self.fraction = float(window), float(fraction)
         self.reset()
 

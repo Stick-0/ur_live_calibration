@@ -1,0 +1,1087 @@
+{
+  "kind": "heldout_synthetic_known_truth_not_hardware_validation",
+  "age_s": 0.18,
+  "exploratory_seed": 2718,
+  "validation_seeds": [
+    31415,
+    57721,
+    16180
+  ],
+  "config_retuned_by_validation": false,
+  "comparisons": {
+    "candidate": {
+      "config": {
+        "measurement_std_m": 0.007,
+        "measurement_std_yaw": 0.005235987755982988,
+        "acceleration_std_m": 0.1,
+        "acceleration_std_yaw": 0.15,
+        "initial_velocity_std_m": 0.05,
+        "initial_velocity_std_yaw": 0.15,
+        "prediction_horizon": 0.35000000000000003,
+        "gap_reset": 0.35,
+        "min_velocity_samples": 4,
+        "innovation_gate": 16.27,
+        "max_step_m": 0.15,
+        "max_step_yaw": 0.2617993877991494,
+        "max_speed": 0.15,
+        "max_yaw_rate": 0.5,
+        "stationary_window": 0.25,
+        "stationary_sigma": 0.75,
+        "reversal_sigma": 3.0,
+        "velocity_snr_min": 1.5,
+        "velocity_snr_full": 3.0
+      },
+      "trajectory_errors": {
+        "stationary": {
+          "valid_samples": 71,
+          "position_rmse_m": 0.006426559069639747,
+          "yaw_rmse_rad": 0.003274650415012496
+        },
+        "moving": {
+          "valid_samples": 149,
+          "position_rmse_m": 0.008913829477032044,
+          "yaw_rmse_rad": 0.007573620693882521
+        },
+        "stopped": {
+          "valid_samples": 75,
+          "position_rmse_m": 0.004343574706051249,
+          "yaw_rmse_rad": 0.0034314257083196366
+        },
+        "reversal": {
+          "valid_samples": 151,
+          "position_rmse_m": 0.007472205906256057,
+          "yaw_rmse_rad": 0.006805432531143421
+        },
+        "final_stop": {
+          "valid_samples": 153,
+          "position_rmse_m": 0.005963900186581032,
+          "yaw_rmse_rad": 0.003521371203569263
+        }
+      },
+      "stationary_tests": {
+        "white_noise": {
+          "raw": {
+            "position_rmse_m": 0.009687010802244461,
+            "yaw_rmse_rad": 0.005248274890457964
+          },
+          "filtered": {
+            "position_rmse_m": 0.005143994475469014,
+            "yaw_rmse_rad": 0.003288652617910044
+          },
+          "false_linear_compensation_rms_m_s": 0.00022761167909414714,
+          "false_yaw_compensation_rms_rad_s": 3.530886506578486e-05,
+          "nonzero_compensation_fraction": 0.014666666666666666
+        },
+        "slow_correlated_bias": {
+          "raw": {
+            "position_rmse_m": 0.016807793272971692,
+            "yaw_rmse_rad": 0.008160927957030365
+          },
+          "filtered": {
+            "position_rmse_m": 0.014718463207689334,
+            "yaw_rmse_rad": 0.007099658307469938
+          },
+          "false_linear_compensation_rms_m_s": 0.000493779538710656,
+          "false_yaw_compensation_rms_rad_s": 7.556818152879371e-05,
+          "nonzero_compensation_fraction": 0.03333333333333333
+        }
+      },
+      "rejected": 0,
+      "runs": [
+        {
+          "seed": 31415,
+          "capture_samples": 198,
+          "trajectory": {
+            "config": {
+              "measurement_std_m": 0.007,
+              "measurement_std_yaw": 0.005235987755982988,
+              "acceleration_std_m": 0.1,
+              "acceleration_std_yaw": 0.15,
+              "initial_velocity_std_m": 0.05,
+              "initial_velocity_std_yaw": 0.15,
+              "prediction_horizon": 0.35000000000000003,
+              "gap_reset": 0.35,
+              "min_velocity_samples": 4,
+              "innovation_gate": 16.27,
+              "max_step_m": 0.15,
+              "max_step_yaw": 0.2617993877991494,
+              "max_speed": 0.15,
+              "max_yaw_rate": 0.5,
+              "stationary_window": 0.25,
+              "stationary_sigma": 0.75,
+              "reversal_sigma": 3.0,
+              "velocity_snr_min": 1.5,
+              "velocity_snr_full": 3.0
+            },
+            "errors": {
+              "stationary": {
+                "valid_samples": 23,
+                "position_rmse_m": 0.006061759599507205,
+                "yaw_rmse_rad": 0.003535680945883896
+              },
+              "moving": {
+                "valid_samples": 51,
+                "position_rmse_m": 0.009740363313081616,
+                "yaw_rmse_rad": 0.007045898266328455
+              },
+              "stopped": {
+                "valid_samples": 25,
+                "position_rmse_m": 0.004587754486826479,
+                "yaw_rmse_rad": 0.0026388295655544714
+              },
+              "reversal": {
+                "valid_samples": 49,
+                "position_rmse_m": 0.006818143516309485,
+                "yaw_rmse_rad": 0.0070516218095913845
+              },
+              "final_stop": {
+                "valid_samples": 50,
+                "position_rmse_m": 0.005513247705486114,
+                "yaw_rmse_rad": 0.0035442393764031992
+              }
+            },
+            "rejected": 0,
+            "compensation": {
+              "stationary": {
+                "nonzero_fraction": 0.0,
+                "mean_lambda": 0.0,
+                "mean_prediction_gain": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": 0.0,
+                "mean_linear_m_s": 0.0,
+                "max_linear_m_s": 0.0
+              },
+              "moving": {
+                "nonzero_fraction": 0.7843137254901961,
+                "mean_lambda": 0.3904761904761908,
+                "mean_prediction_gain": [
+                  0.5883955900031395,
+                  0.5883955900031395,
+                  0.24768232873176818
+                ],
+                "mean_x_velocity_m_s": 0.012279581963984954,
+                "mean_linear_m_s": 0.013024141318700017,
+                "max_linear_m_s": 0.027789905238959085
+              },
+              "stopped": {
+                "nonzero_fraction": 0.16,
+                "mean_lambda": 0.07771428571428585,
+                "mean_prediction_gain": [
+                  0.0950115331952852,
+                  0.0950115331952852,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": 0.0017738654978497314,
+                "mean_linear_m_s": 0.0018126067576912236,
+                "max_linear_m_s": 0.021741169175395304
+              },
+              "reversal": {
+                "nonzero_fraction": 0.8775510204081632,
+                "mean_lambda": 0.44606413994169175,
+                "mean_prediction_gain": [
+                  0.5593321579778538,
+                  0.5593321579778538,
+                  0.1760015221254927
+                ],
+                "mean_x_velocity_m_s": -0.010944603189052746,
+                "mean_linear_m_s": 0.011531512615193256,
+                "max_linear_m_s": 0.027360077331052772
+              },
+              "final_stop": {
+                "nonzero_fraction": 0.2,
+                "mean_lambda": 0.09714285714285731,
+                "mean_prediction_gain": [
+                  0.05599429729399883,
+                  0.05599429729399883,
+                  0.0030375276925468805
+                ],
+                "mean_x_velocity_m_s": -0.0008012714421900824,
+                "mean_linear_m_s": 0.0008763462891739327,
+                "max_linear_m_s": 0.0067943316703148226
+              }
+            },
+            "nonzero_compensation_fraction": 0.4898989898989899
+          },
+          "stationary_tests": {
+            "white_noise": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.009628198414233227,
+                "yaw_rmse_rad": 0.004951579203112946
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.005173554964779147,
+                "yaw_rmse_rad": 0.0029697159799781368
+              },
+              "false_linear_compensation_rms_m_s": 0.0003546245251337147,
+              "false_yaw_compensation_rms_rad_s": 6.069033240037379e-05,
+              "nonzero_compensation_fraction": 0.024,
+              "rejected": 0
+            },
+            "slow_correlated_bias": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.016671716322006352,
+                "yaw_rmse_rad": 0.008004142940366717
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.014691239208279173,
+                "yaw_rmse_rad": 0.0069892036755321045
+              },
+              "false_linear_compensation_rms_m_s": 0.000681787357526363,
+              "false_yaw_compensation_rms_rad_s": 0.00013088792984345865,
+              "nonzero_compensation_fraction": 0.036,
+              "rejected": 0
+            }
+          }
+        },
+        {
+          "seed": 57721,
+          "capture_samples": 200,
+          "trajectory": {
+            "config": {
+              "measurement_std_m": 0.007,
+              "measurement_std_yaw": 0.005235987755982988,
+              "acceleration_std_m": 0.1,
+              "acceleration_std_yaw": 0.15,
+              "initial_velocity_std_m": 0.05,
+              "initial_velocity_std_yaw": 0.15,
+              "prediction_horizon": 0.35000000000000003,
+              "gap_reset": 0.35,
+              "min_velocity_samples": 4,
+              "innovation_gate": 16.27,
+              "max_step_m": 0.15,
+              "max_step_yaw": 0.2617993877991494,
+              "max_speed": 0.15,
+              "max_yaw_rate": 0.5,
+              "stationary_window": 0.25,
+              "stationary_sigma": 0.75,
+              "reversal_sigma": 3.0,
+              "velocity_snr_min": 1.5,
+              "velocity_snr_full": 3.0
+            },
+            "errors": {
+              "stationary": {
+                "valid_samples": 24,
+                "position_rmse_m": 0.007460525046589552,
+                "yaw_rmse_rad": 0.0026400061116067554
+              },
+              "moving": {
+                "valid_samples": 49,
+                "position_rmse_m": 0.008376143625419757,
+                "yaw_rmse_rad": 0.008264335336055032
+              },
+              "stopped": {
+                "valid_samples": 25,
+                "position_rmse_m": 0.004300238475955206,
+                "yaw_rmse_rad": 0.002882566058093849
+              },
+              "reversal": {
+                "valid_samples": 50,
+                "position_rmse_m": 0.008018062168097327,
+                "yaw_rmse_rad": 0.0068297703178009685
+              },
+              "final_stop": {
+                "valid_samples": 52,
+                "position_rmse_m": 0.0059523097237238875,
+                "yaw_rmse_rad": 0.003120204678828389
+              }
+            },
+            "rejected": 0,
+            "compensation": {
+              "stationary": {
+                "nonzero_fraction": 0.041666666666666664,
+                "mean_lambda": 0.020238095238095236,
+                "mean_prediction_gain": [
+                  0.005681300488967373,
+                  0.005681300488967373,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": -6.0979555921479024e-05,
+                "mean_linear_m_s": 9.281550165471309e-05,
+                "max_linear_m_s": 0.002227572039713114
+              },
+              "moving": {
+                "nonzero_fraction": 0.7959183673469388,
+                "mean_lambda": 0.39650145772594786,
+                "mean_prediction_gain": [
+                  0.5520523046443084,
+                  0.5520523046443084,
+                  0.21714132716774906
+                ],
+                "mean_x_velocity_m_s": 0.011143268648017778,
+                "mean_linear_m_s": 0.011823163710710377,
+                "max_linear_m_s": 0.02748068531935385
+              },
+              "stopped": {
+                "nonzero_fraction": 0.24,
+                "mean_lambda": 0.11657142857142876,
+                "mean_prediction_gain": [
+                  0.11385834792400754,
+                  0.11385834792400754,
+                  0.03837282179699234
+                ],
+                "mean_x_velocity_m_s": 0.001971498425216433,
+                "mean_linear_m_s": 0.002096751675535357,
+                "max_linear_m_s": 0.018498343365639235
+              },
+              "reversal": {
+                "nonzero_fraction": 0.88,
+                "mean_lambda": 0.43714285714285794,
+                "mean_prediction_gain": [
+                  0.6081041470284567,
+                  0.6081041470284567,
+                  0.19548547493468235
+                ],
+                "mean_x_velocity_m_s": -0.012407764324943046,
+                "mean_linear_m_s": 0.013041780383351308,
+                "max_linear_m_s": 0.029543638579313535
+              },
+              "final_stop": {
+                "nonzero_fraction": 0.17307692307692307,
+                "mean_lambda": 0.09340659340659355,
+                "mean_prediction_gain": [
+                  0.039892323849617044,
+                  0.039892323849617044,
+                  0.01006730017246336
+                ],
+                "mean_x_velocity_m_s": -0.000680081607128192,
+                "mean_linear_m_s": 0.000685745528820421,
+                "max_linear_m_s": 0.01450194338049578
+              }
+            },
+            "nonzero_compensation_fraction": 0.495
+          },
+          "stationary_tests": {
+            "white_noise": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.009522331836637282,
+                "yaw_rmse_rad": 0.005305877869395687
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.005029617243844441,
+                "yaw_rmse_rad": 0.003561799620427636
+              },
+              "false_linear_compensation_rms_m_s": 1.1238889879803962e-05,
+              "false_yaw_compensation_rms_rad_s": 0.0,
+              "nonzero_compensation_fraction": 0.004,
+              "rejected": 1
+            },
+            "slow_correlated_bias": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.016922782854733098,
+                "yaw_rmse_rad": 0.008387671231430638
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.014833156972854011,
+                "yaw_rmse_rad": 0.0074322454918549765
+              },
+              "false_linear_compensation_rms_m_s": 0.00036299771651223707,
+              "false_yaw_compensation_rms_rad_s": 0.0,
+              "nonzero_compensation_fraction": 0.036,
+              "rejected": 1
+            }
+          }
+        },
+        {
+          "seed": 16180,
+          "capture_samples": 201,
+          "trajectory": {
+            "config": {
+              "measurement_std_m": 0.007,
+              "measurement_std_yaw": 0.005235987755982988,
+              "acceleration_std_m": 0.1,
+              "acceleration_std_yaw": 0.15,
+              "initial_velocity_std_m": 0.05,
+              "initial_velocity_std_yaw": 0.15,
+              "prediction_horizon": 0.35000000000000003,
+              "gap_reset": 0.35,
+              "min_velocity_samples": 4,
+              "innovation_gate": 16.27,
+              "max_step_m": 0.15,
+              "max_step_yaw": 0.2617993877991494,
+              "max_speed": 0.15,
+              "max_yaw_rate": 0.5,
+              "stationary_window": 0.25,
+              "stationary_sigma": 0.75,
+              "reversal_sigma": 3.0,
+              "velocity_snr_min": 1.5,
+              "velocity_snr_full": 3.0
+            },
+            "errors": {
+              "stationary": {
+                "valid_samples": 24,
+                "position_rmse_m": 0.005595337241457622,
+                "yaw_rmse_rad": 0.0035739900697012456
+              },
+              "moving": {
+                "valid_samples": 49,
+                "position_rmse_m": 0.008526739651613763,
+                "yaw_rmse_rad": 0.007379035861005754
+              },
+              "stopped": {
+                "valid_samples": 25,
+                "position_rmse_m": 0.0041304214675578245,
+                "yaw_rmse_rad": 0.004477883274475971
+              },
+              "reversal": {
+                "valid_samples": 52,
+                "position_rmse_m": 0.007517390109342793,
+                "yaw_rmse_rad": 0.006540656041404852
+              },
+              "final_stop": {
+                "valid_samples": 51,
+                "position_rmse_m": 0.006385899884500636,
+                "yaw_rmse_rad": 0.003867591803369318
+              }
+            },
+            "rejected": 0,
+            "compensation": {
+              "stationary": {
+                "nonzero_fraction": 0.0,
+                "mean_lambda": 0.0,
+                "mean_prediction_gain": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": 0.0,
+                "mean_linear_m_s": 0.0,
+                "max_linear_m_s": 0.0
+              },
+              "moving": {
+                "nonzero_fraction": 0.8571428571428571,
+                "mean_lambda": 0.4163265306122452,
+                "mean_prediction_gain": [
+                  0.5432021453807933,
+                  0.5432021453807933,
+                  0.14063051907346835
+                ],
+                "mean_x_velocity_m_s": 0.010653743125084368,
+                "mean_linear_m_s": 0.011409759620988896,
+                "max_linear_m_s": 0.02655499004361626
+              },
+              "stopped": {
+                "nonzero_fraction": 0.24,
+                "mean_lambda": 0.13600000000000023,
+                "mean_prediction_gain": [
+                  0.13169420691495692,
+                  0.13169420691495692,
+                  0.04971975383532504
+                ],
+                "mean_x_velocity_m_s": 0.002745179589652731,
+                "mean_linear_m_s": 0.002764823330958774,
+                "max_linear_m_s": 0.022262290502696062
+              },
+              "reversal": {
+                "nonzero_fraction": 0.75,
+                "mean_lambda": 0.3829670329670337,
+                "mean_prediction_gain": [
+                  0.4759410554534937,
+                  0.4759410554534937,
+                  0.18111849164910168
+                ],
+                "mean_x_velocity_m_s": -0.00930643965509159,
+                "mean_linear_m_s": 0.009792040114304968,
+                "max_linear_m_s": 0.027755328883542617
+              },
+              "final_stop": {
+                "nonzero_fraction": 0.11764705882352941,
+                "mean_lambda": 0.05714285714285715,
+                "mean_prediction_gain": [
+                  0.06893813742019297,
+                  0.06893813742019297,
+                  0.01877364636783915
+                ],
+                "mean_x_velocity_m_s": -0.0015609980632863053,
+                "mean_linear_m_s": 0.0015633221434487698,
+                "max_linear_m_s": 0.024375801913525032
+              }
+            },
+            "nonzero_compensation_fraction": 0.4626865671641791
+          },
+          "stationary_tests": {
+            "white_noise": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.009906438640476375,
+                "yaw_rmse_rad": 0.005473818722591306
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.00522678839229205,
+                "yaw_rmse_rad": 0.0033075789614223565
+              },
+              "false_linear_compensation_rms_m_s": 0.00017186146429065485,
+              "false_yaw_compensation_rms_rad_s": 7.538661010653559e-06,
+              "nonzero_compensation_fraction": 0.016,
+              "rejected": 0
+            },
+            "slow_correlated_bias": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.016827924395211552,
+                "yaw_rmse_rad": 0.008085969481956253
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.014630257083595865,
+                "yaw_rmse_rad": 0.006864998410721639
+              },
+              "false_linear_compensation_rms_m_s": 0.00036722384926914174,
+              "false_yaw_compensation_rms_rad_s": 0.0,
+              "nonzero_compensation_fraction": 0.028,
+              "rejected": 0
+            }
+          }
+        }
+      ]
+    },
+    "wider_yaw_prior": {
+      "config": {
+        "measurement_std_m": 0.007,
+        "measurement_std_yaw": 0.005235987755982988,
+        "acceleration_std_m": 0.1,
+        "acceleration_std_yaw": 0.3,
+        "initial_velocity_std_m": 0.05,
+        "initial_velocity_std_yaw": 0.15,
+        "prediction_horizon": 0.35000000000000003,
+        "gap_reset": 0.35,
+        "min_velocity_samples": 4,
+        "innovation_gate": 16.27,
+        "max_step_m": 0.15,
+        "max_step_yaw": 0.2617993877991494,
+        "max_speed": 0.15,
+        "max_yaw_rate": 0.5,
+        "stationary_window": 0.25,
+        "stationary_sigma": 0.75,
+        "reversal_sigma": 3.0,
+        "velocity_snr_min": 1.5,
+        "velocity_snr_full": 3.0
+      },
+      "trajectory_errors": {
+        "stationary": {
+          "valid_samples": 71,
+          "position_rmse_m": 0.006426559069639745,
+          "yaw_rmse_rad": 0.003489132279946118
+        },
+        "moving": {
+          "valid_samples": 149,
+          "position_rmse_m": 0.00919670346299309,
+          "yaw_rmse_rad": 0.00792604498217543
+        },
+        "stopped": {
+          "valid_samples": 75,
+          "position_rmse_m": 0.00434320602896413,
+          "yaw_rmse_rad": 0.0035264363651788594
+        },
+        "reversal": {
+          "valid_samples": 151,
+          "position_rmse_m": 0.007472205988469685,
+          "yaw_rmse_rad": 0.007289281096348217
+        },
+        "final_stop": {
+          "valid_samples": 153,
+          "position_rmse_m": 0.005963900186574086,
+          "yaw_rmse_rad": 0.003929434804161823
+        }
+      },
+      "stationary_tests": {
+        "white_noise": {
+          "raw": {
+            "position_rmse_m": 0.009687010802244461,
+            "yaw_rmse_rad": 0.005248274890457964
+          },
+          "filtered": {
+            "position_rmse_m": 0.0051439944754690155,
+            "yaw_rmse_rad": 0.003686813949366261
+          },
+          "false_linear_compensation_rms_m_s": 0.00022761167909413207,
+          "false_yaw_compensation_rms_rad_s": 0.00015137696413923928,
+          "nonzero_compensation_fraction": 0.014666666666666666
+        },
+        "slow_correlated_bias": {
+          "raw": {
+            "position_rmse_m": 0.016807793272971692,
+            "yaw_rmse_rad": 0.008160927957030365
+          },
+          "filtered": {
+            "position_rmse_m": 0.014718463207689334,
+            "yaw_rmse_rad": 0.007277085063650475
+          },
+          "false_linear_compensation_rms_m_s": 0.0004937795387106464,
+          "false_yaw_compensation_rms_rad_s": 0.0001432233106612308,
+          "nonzero_compensation_fraction": 0.03333333333333333
+        }
+      },
+      "rejected": 0,
+      "runs": [
+        {
+          "seed": 31415,
+          "capture_samples": 198,
+          "trajectory": {
+            "config": {
+              "measurement_std_m": 0.007,
+              "measurement_std_yaw": 0.005235987755982988,
+              "acceleration_std_m": 0.1,
+              "acceleration_std_yaw": 0.3,
+              "initial_velocity_std_m": 0.05,
+              "initial_velocity_std_yaw": 0.15,
+              "prediction_horizon": 0.35000000000000003,
+              "gap_reset": 0.35,
+              "min_velocity_samples": 4,
+              "innovation_gate": 16.27,
+              "max_step_m": 0.15,
+              "max_step_yaw": 0.2617993877991494,
+              "max_speed": 0.15,
+              "max_yaw_rate": 0.5,
+              "stationary_window": 0.25,
+              "stationary_sigma": 0.75,
+              "reversal_sigma": 3.0,
+              "velocity_snr_min": 1.5,
+              "velocity_snr_full": 3.0
+            },
+            "errors": {
+              "stationary": {
+                "valid_samples": 23,
+                "position_rmse_m": 0.0060617595995072215,
+                "yaw_rmse_rad": 0.0037450075443086392
+              },
+              "moving": {
+                "valid_samples": 51,
+                "position_rmse_m": 0.010480547198393203,
+                "yaw_rmse_rad": 0.00742109060765533
+              },
+              "stopped": {
+                "valid_samples": 25,
+                "position_rmse_m": 0.004586707248162086,
+                "yaw_rmse_rad": 0.002829392214703723
+              },
+              "reversal": {
+                "valid_samples": 49,
+                "position_rmse_m": 0.006818143793965701,
+                "yaw_rmse_rad": 0.007578598471160316
+              },
+              "final_stop": {
+                "valid_samples": 50,
+                "position_rmse_m": 0.00551324770546309,
+                "yaw_rmse_rad": 0.003916547397205743
+              }
+            },
+            "rejected": 0,
+            "compensation": {
+              "stationary": {
+                "nonzero_fraction": 0.0,
+                "mean_lambda": 0.0,
+                "mean_prediction_gain": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": 0.0,
+                "mean_linear_m_s": 0.0,
+                "max_linear_m_s": 0.0
+              },
+              "moving": {
+                "nonzero_fraction": 0.6862745098039216,
+                "mean_lambda": 0.36190476190476223,
+                "mean_prediction_gain": [
+                  0.49878027857768853,
+                  0.49878027857768853,
+                  0.05382850298745621
+                ],
+                "mean_x_velocity_m_s": 0.010373882821990916,
+                "mean_linear_m_s": 0.011076121136004893,
+                "max_linear_m_s": 0.028115484739486368
+              },
+              "stopped": {
+                "nonzero_fraction": 0.16,
+                "mean_lambda": 0.07771428571428585,
+                "mean_prediction_gain": [
+                  0.09482770433020886,
+                  0.09482770433020886,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": 0.00176933429019069,
+                "mean_linear_m_s": 0.0018080215817830325,
+                "max_linear_m_s": 0.021702606408749256
+              },
+              "reversal": {
+                "nonzero_fraction": 0.8775510204081632,
+                "mean_lambda": 0.43615160349854304,
+                "mean_prediction_gain": [
+                  0.5593323703650006,
+                  0.5593323703650006,
+                  0.02458534459504225
+                ],
+                "mean_x_velocity_m_s": -0.010944606495718505,
+                "mean_linear_m_s": 0.011531516179950069,
+                "max_linear_m_s": 0.02736007730415969
+              },
+              "final_stop": {
+                "nonzero_fraction": 0.2,
+                "mean_lambda": 0.09714285714285731,
+                "mean_prediction_gain": [
+                  0.05599429728395821,
+                  0.05599429728395821,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": -0.0008012714419911831,
+                "mean_linear_m_s": 0.0008763462889662379,
+                "max_linear_m_s": 0.0067943316669867295
+              }
+            },
+            "nonzero_compensation_fraction": 0.46464646464646464
+          },
+          "stationary_tests": {
+            "white_noise": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.009628198414233227,
+                "yaw_rmse_rad": 0.004951579203112946
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.005173554964779151,
+                "yaw_rmse_rad": 0.0034486531030352595
+              },
+              "false_linear_compensation_rms_m_s": 0.00035462452513368637,
+              "false_yaw_compensation_rms_rad_s": 0.00026076716734960186,
+              "nonzero_compensation_fraction": 0.024,
+              "rejected": 0
+            },
+            "slow_correlated_bias": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.016671716322006352,
+                "yaw_rmse_rad": 0.008004142940366717
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.014691239208279172,
+                "yaw_rmse_rad": 0.00718400055966074
+              },
+              "false_linear_compensation_rms_m_s": 0.000681787357526328,
+              "false_yaw_compensation_rms_rad_s": 0.000219508315976568,
+              "nonzero_compensation_fraction": 0.036,
+              "rejected": 0
+            }
+          }
+        },
+        {
+          "seed": 57721,
+          "capture_samples": 200,
+          "trajectory": {
+            "config": {
+              "measurement_std_m": 0.007,
+              "measurement_std_yaw": 0.005235987755982988,
+              "acceleration_std_m": 0.1,
+              "acceleration_std_yaw": 0.3,
+              "initial_velocity_std_m": 0.05,
+              "initial_velocity_std_yaw": 0.15,
+              "prediction_horizon": 0.35000000000000003,
+              "gap_reset": 0.35,
+              "min_velocity_samples": 4,
+              "innovation_gate": 16.27,
+              "max_step_m": 0.15,
+              "max_step_yaw": 0.2617993877991494,
+              "max_speed": 0.15,
+              "max_yaw_rate": 0.5,
+              "stationary_window": 0.25,
+              "stationary_sigma": 0.75,
+              "reversal_sigma": 3.0,
+              "velocity_snr_min": 1.5,
+              "velocity_snr_full": 3.0
+            },
+            "errors": {
+              "stationary": {
+                "valid_samples": 24,
+                "position_rmse_m": 0.00746052504658951,
+                "yaw_rmse_rad": 0.0029991008000403736
+              },
+              "moving": {
+                "valid_samples": 49,
+                "position_rmse_m": 0.008376143625419729,
+                "yaw_rmse_rad": 0.008470074639868545
+              },
+              "stopped": {
+                "valid_samples": 25,
+                "position_rmse_m": 0.004300238475955227,
+                "yaw_rmse_rad": 0.0030538726619089777
+              },
+              "reversal": {
+                "valid_samples": 50,
+                "position_rmse_m": 0.00801806216809731,
+                "yaw_rmse_rad": 0.007156966550625755
+              },
+              "final_stop": {
+                "valid_samples": 52,
+                "position_rmse_m": 0.005952309723723911,
+                "yaw_rmse_rad": 0.003612390496611891
+              }
+            },
+            "rejected": 0,
+            "compensation": {
+              "stationary": {
+                "nonzero_fraction": 0.041666666666666664,
+                "mean_lambda": 0.020238095238095236,
+                "mean_prediction_gain": [
+                  0.005681300488967243,
+                  0.005681300488967243,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": -6.097955592147669e-05,
+                "mean_linear_m_s": 9.281550165471076e-05,
+                "max_linear_m_s": 0.002227572039713058
+              },
+              "moving": {
+                "nonzero_fraction": 0.7959183673469388,
+                "mean_lambda": 0.38658892128279915,
+                "mean_prediction_gain": [
+                  0.5520523046443065,
+                  0.5520523046443065,
+                  0.050851841425343526
+                ],
+                "mean_x_velocity_m_s": 0.011143268648017741,
+                "mean_linear_m_s": 0.01182316371071034,
+                "max_linear_m_s": 0.027480685319353618
+              },
+              "stopped": {
+                "nonzero_fraction": 0.24,
+                "mean_lambda": 0.11657142857142876,
+                "mean_prediction_gain": [
+                  0.11385834792401082,
+                  0.11385834792401082,
+                  0.016804126594975072
+                ],
+                "mean_x_velocity_m_s": 0.001971498425216513,
+                "mean_linear_m_s": 0.0020967516755354375,
+                "max_linear_m_s": 0.01849834336563966
+              },
+              "reversal": {
+                "nonzero_fraction": 0.88,
+                "mean_lambda": 0.43714285714285794,
+                "mean_prediction_gain": [
+                  0.6081041470284547,
+                  0.6081041470284547,
+                  0.03718511231327373
+                ],
+                "mean_x_velocity_m_s": -0.012407764324942974,
+                "mean_linear_m_s": 0.013041780383351236,
+                "max_linear_m_s": 0.029543638579313674
+              },
+              "final_stop": {
+                "nonzero_fraction": 0.17307692307692307,
+                "mean_lambda": 0.09340659340659355,
+                "mean_prediction_gain": [
+                  0.03989232384961578,
+                  0.03989232384961578,
+                  0.0007975101924338664
+                ],
+                "mean_x_velocity_m_s": -0.0006800816071281726,
+                "mean_linear_m_s": 0.0006857455288203974,
+                "max_linear_m_s": 0.014501943380495132
+              }
+            },
+            "nonzero_compensation_fraction": 0.495
+          },
+          "stationary_tests": {
+            "white_noise": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.009522331836637282,
+                "yaw_rmse_rad": 0.005305877869395687
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.005029617243844446,
+                "yaw_rmse_rad": 0.003863893048440842
+              },
+              "false_linear_compensation_rms_m_s": 1.1238889879814959e-05,
+              "false_yaw_compensation_rms_rad_s": 0.0,
+              "nonzero_compensation_fraction": 0.004,
+              "rejected": 1
+            },
+            "slow_correlated_bias": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.016922782854733098,
+                "yaw_rmse_rad": 0.008387671231430638
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.014833156972854004,
+                "yaw_rmse_rad": 0.00757546136381719
+              },
+              "false_linear_compensation_rms_m_s": 0.00036299771651225604,
+              "false_yaw_compensation_rms_rad_s": 0.0,
+              "nonzero_compensation_fraction": 0.036,
+              "rejected": 1
+            }
+          }
+        },
+        {
+          "seed": 16180,
+          "capture_samples": 201,
+          "trajectory": {
+            "config": {
+              "measurement_std_m": 0.007,
+              "measurement_std_yaw": 0.005235987755982988,
+              "acceleration_std_m": 0.1,
+              "acceleration_std_yaw": 0.3,
+              "initial_velocity_std_m": 0.05,
+              "initial_velocity_std_yaw": 0.15,
+              "prediction_horizon": 0.35000000000000003,
+              "gap_reset": 0.35,
+              "min_velocity_samples": 4,
+              "innovation_gate": 16.27,
+              "max_step_m": 0.15,
+              "max_step_yaw": 0.2617993877991494,
+              "max_speed": 0.15,
+              "max_yaw_rate": 0.5,
+              "stationary_window": 0.25,
+              "stationary_sigma": 0.75,
+              "reversal_sigma": 3.0,
+              "velocity_snr_min": 1.5,
+              "velocity_snr_full": 3.0
+            },
+            "errors": {
+              "stationary": {
+                "valid_samples": 24,
+                "position_rmse_m": 0.0055953372414576505,
+                "yaw_rmse_rad": 0.003685047034320344
+              },
+              "moving": {
+                "valid_samples": 49,
+                "position_rmse_m": 0.008526739651613734,
+                "yaw_rmse_rad": 0.007871983695566494
+              },
+              "stopped": {
+                "valid_samples": 25,
+                "position_rmse_m": 0.0041304214675578505,
+                "yaw_rmse_rad": 0.004469414030181875
+              },
+              "reversal": {
+                "valid_samples": 52,
+                "position_rmse_m": 0.007517390109342792,
+                "yaw_rmse_rad": 0.007135697582244637
+              },
+              "final_stop": {
+                "valid_samples": 51,
+                "position_rmse_m": 0.006385899884500641,
+                "yaw_rmse_rad": 0.004239996057008066
+              }
+            },
+            "rejected": 0,
+            "compensation": {
+              "stationary": {
+                "nonzero_fraction": 0.0,
+                "mean_lambda": 0.0,
+                "mean_prediction_gain": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": 0.0,
+                "mean_linear_m_s": 0.0,
+                "max_linear_m_s": 0.0
+              },
+              "moving": {
+                "nonzero_fraction": 0.8571428571428571,
+                "mean_lambda": 0.4163265306122452,
+                "mean_prediction_gain": [
+                  0.5432021453807929,
+                  0.5432021453807929,
+                  0.018260203980126687
+                ],
+                "mean_x_velocity_m_s": 0.010653743125084323,
+                "mean_linear_m_s": 0.011409759620988849,
+                "max_linear_m_s": 0.026554990043616125
+              },
+              "stopped": {
+                "nonzero_fraction": 0.24,
+                "mean_lambda": 0.11657142857142876,
+                "mean_prediction_gain": [
+                  0.1316942069149587,
+                  0.1316942069149587,
+                  0.0
+                ],
+                "mean_x_velocity_m_s": 0.002745179589652771,
+                "mean_linear_m_s": 0.002764823330958815,
+                "max_linear_m_s": 0.02226229050269647
+              },
+              "reversal": {
+                "nonzero_fraction": 0.75,
+                "mean_lambda": 0.3829670329670337,
+                "mean_prediction_gain": [
+                  0.4759410554534933,
+                  0.4759410554534933,
+                  0.03833980135269001
+                ],
+                "mean_x_velocity_m_s": -0.009306439655091562,
+                "mean_linear_m_s": 0.009792040114304948,
+                "max_linear_m_s": 0.02775532888354262
+              },
+              "final_stop": {
+                "nonzero_fraction": 0.11764705882352941,
+                "mean_lambda": 0.05714285714285715,
+                "mean_prediction_gain": [
+                  0.068938137420194,
+                  0.068938137420194,
+                  0.00506651490797544
+                ],
+                "mean_x_velocity_m_s": -0.0015609980632863383,
+                "mean_linear_m_s": 0.0015633221434488026,
+                "max_linear_m_s": 0.0243758019135253
+              }
+            },
+            "nonzero_compensation_fraction": 0.4626865671641791
+          },
+          "stationary_tests": {
+            "white_noise": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.009906438640476375,
+                "yaw_rmse_rad": 0.005473818722591306
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.005226788392292046,
+                "yaw_rmse_rad": 0.003735627601469499
+              },
+              "false_linear_compensation_rms_m_s": 0.00017186146429065273,
+              "false_yaw_compensation_rms_rad_s": 2.7302751665396935e-05,
+              "nonzero_compensation_fraction": 0.016,
+              "rejected": 0
+            },
+            "slow_correlated_bias": {
+              "raw": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.016827924395211552,
+                "yaw_rmse_rad": 0.008085969481956253
+              },
+              "filtered": {
+                "valid_samples": 250,
+                "position_rmse_m": 0.014630257083595874,
+                "yaw_rmse_rad": 0.007061899330557019
+              },
+              "false_linear_compensation_rms_m_s": 0.0003672238492691493,
+              "false_yaw_compensation_rms_rad_s": 0.00011556318344274474,
+              "nonzero_compensation_fraction": 0.028,
+              "rejected": 0
+            }
+          }
+        }
+      ]
+    }
+  }
+}

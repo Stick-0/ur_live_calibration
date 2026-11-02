@@ -6,6 +6,7 @@ Saved snapshots require neither camera, inference checkpoints nor robot SDKs.
 """
 
 import copy
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
@@ -20,6 +21,7 @@ from urcal.control.geometry import (calibration_output_mapping, flange_from_tcp,
 from urcal.control.policy import CalibrationFrame, ControlFault
 from urcal.control.runtime import parse_args
 from urcal.control.tracking_error import position_error_sample
+from urcal.control.error_recording import PositionErrorRecorder
 from urcal.cooperative.controller import CooperativeController
 from urcal.cooperative.logging import ExperimentLogger
 from urcal.paths import BUNDLE
@@ -400,7 +402,8 @@ def run(args):
         print("[sim] Assumed zero TCP offsets: " + ", ".join(assumed) + "; recapture with actual offsets if tools are installed.", flush=True)
     print("[sim] Initial velocities set to zero. Virtual base sensor has no camera noise or latency.", flush=True)
     log_path = args.log if args.log is not None else output / "simulation.jsonl"
-    with ExperimentLogger(log_path) as logger:
+    with ExperimentLogger(log_path) as logger, closing(
+            PositionErrorRecorder(BUNDLE / "runs" / "error_segments")) as error_recorder:
         session = SimulationSession(args, initial, logger)
         logger.log({"kind": "simulation_settings", "simulation": True, "hardware_commands": False,
                     "initial_state": str(snapshot_path), "captured_at_utc": initial["captured_at_utc"],
@@ -409,16 +412,24 @@ def run(args):
         from tkinter import ttk
         from urcal.control.gui import TargetPanel
         stop = threading.Event()
-        panel = TargetPanel(session.args, session.command, stop)
+        panel = TargetPanel(session.args, session.command, stop, recording_command=error_recorder.request)
         panel._view._models = session.plant.models
         ttk.Label(panel.root, text=NOTICE, foreground="#8a4100", padding=8,
                   font=("TkDefaultFont", 11, "bold"), wraplength=950).grid(row=1, column=0, sticky="ew")
         print(f"[sim] Log: {Path(log_path)}", flush=True)
         previous_message = None
+        recording_notice = None
         try:
             while not stop.is_set():
                 started = time.monotonic()
                 status = session.status(started)
+                error_recorder.record(status["position_error"], emitted_at=started)
+                recording_status = error_recorder.status()
+                status["error_recording"] = recording_status
+                notice = (recording_status.get("state"), recording_status.get("path"), recording_status.get("error"))
+                if notice != recording_notice and notice[0] != "idle":
+                    print(f"[error CSV] {notice[0]}: {notice[2] or notice[1] or ''}", flush=True)
+                recording_notice = notice
                 if session.message != previous_message:
                     print("[sim] " + status["message"], flush=True)
                     previous_message = session.message
@@ -429,6 +440,11 @@ def run(args):
                 stop.wait(max(0., session.dt - (time.monotonic() - started)))
         finally:
             session.plant.stop()
+            error_recorder.close()
+            recording_status = error_recorder.status()
+            if recording_status.get("state") not in (None, "idle"):
+                print(f"[error CSV] {recording_status.get('state')}: "
+                      f"{recording_status.get('error') or recording_status.get('path') or ''}", flush=True)
             panel.close()
 
 

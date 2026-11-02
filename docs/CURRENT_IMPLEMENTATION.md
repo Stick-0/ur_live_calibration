@@ -1,12 +1,14 @@
 # UR5e와 UR10e 실시간 캘리브레이션 및 양팔 제어 구현 문서
 
-기준일: 2026-11-01 · 대상: `ur_live_calibration` 작업 폴더의 현재 코드
+기준일: 2026-11-02 · 대상: `ur_live_calibration` 작업 폴더의 현재 코드
 
 이 시스템은 RealSense D435의 RGB 영상 한 장에서 UR5e와 UR10e의 베이스 자세를 추정하고, 관절 상태와 결합해 두 플랜지가 마주보도록 제어한다. 리더에 대한 상대 자세와 경로를 유지하는 **팔로워 제어**, 실제 초기 상태를 가져와 가상 관절로 실행하는 **시뮬레이션**을 제공한다. 제어 모드는 follow 하나이며 `--mode`를 생략해도 follow로 실행한다.
 
 기본 배치는 **영상 왼쪽 UR5e, 오른쪽 UR10e**이며, 제어 역할은 **UR10e 리더, UR5e 팔로워**다. 현재 코드의 기본 플랜지 간격은 **20 cm**이며, 아래 실행 예시는 `--gap 0.30`으로 **30 cm**를 지정한다. 프로그램 실행만으로 로봇이 움직이지는 않는다. 실제 구동에는 `--execute`, 양팔의 실제 TCP 오프셋 지정, 사용자의 Arm 조작이 필요하다.
 
 빠른 이동: [제어 순서](#5-초기-확보부터-실시간-추종까지) · [기본 설정](#7-주요-기본-설정) · [실행 방법](#8-실행-방법) · [GUI](#9-gui와-영상-조작) · [대기와 정지](#10-대기와-정지-상태-해석) · [코드 위치](#12-코드-위치)
+
+`relative_kalman + feedforward`와 사용자가 지정한 실행 옵션에 대한 유도식·좌표계·적용 순서는 [수식 기반 제어 문서](FOLLOW_RELATIVE_KALMAN_FORMULATION.md)에 모았다. 포즈 추정기 내부를 제외한 제어 입력부터 명령·오차 기록까지 다룬다.
 
 ## 1. 제공 기능
 
@@ -20,6 +22,7 @@
 | 상대 작업 경로·제어 방식 비교 | `run_cooperative.sh --mode follow` | hold·line·circle 경로, direct·predict·separated 방식 |
 | 실제 초기 상태 기반 시뮬레이션 | `run_simulation.sh` | 초기 상태 취득 후 하드웨어 연결을 닫고 가상 제어 |
 | 합성 조건 비교 | `python3 -m urcal.tools.simulate` | 동일한 합성 조건에서 세 제어 방식 비교·기록 |
+| 상대 베이스 상태 추정 | `--base_motion_mode relative_kalman` | 촬영 시각 관절 보간·평면 상대 KF·정반 속도 보상 |
 | 로그 분석 | `python3 -m urcal.tools.analyze_log` | 추정 오차, 진행률, 완료·정지·복구 기록 분석 |
 
 `run_dual_control.sh --mode follow`와 `run_cooperative.sh --mode follow`는 같은 협업 제어 구현을 사용한다. `--path hold`는 리더 플랜지 기준 상대 자세를 유지하므로 리더가 움직이면 팔로워 목표도 함께 움직인다.
@@ -88,7 +91,7 @@ flowchart TD
 | EMPnP 이전 포즈 사용 | 영상 포즈 추정 | 추론 전용은 ON, 제어 실행은 OFF |
 | `--ur5e_empnp_lambda` | 양팔 추론·제어의 UR5e 추정기 | `0.5`; 이전 포즈 사용 시 보정 강도 |
 | `--ur10e_empnp_lambda` | 양팔 추론·제어의 UR10e 추정기 | `0.2`; 이전 포즈 사용 시 보정 강도 |
-| `--filter_alpha` | 제어 상태 처리 | `0.2`; 큰 값일수록 새 측정에 강하게 반응 |
+| `--filter_alpha` | 기존 pose/velocity 제어 상태 처리 | `0.2`; 큰 값일수록 새 측정에 강하게 반응 |
 | `--base_motion_mode` | follow의 영상 상태 처리 | `pose`; 좌표만 갱신하고 영상 차분 속도를 제어에 사용하지 않음 |
 | `--velocity_alpha` | `velocity` 모드의 베이스 속도 추정 | `0.3`; 속도 추정의 갱신 비율 |
 | `--prediction_horizon` | `velocity` 모드의 predict·separated | 최대 `0.5 s`의 단기 예측 |
@@ -312,6 +315,46 @@ Pause는 목표 진행을 동결한다. 실제 팔의 속도를 순간적으로 
 
 GUI의 **Commanded gap**, **Estimated gap**, **Approach progress**는 각각 명령의 축 방향 간격, 캘리브레이션·엔코더로 계산한 축 방향 간격, 명령 경로 진행률이다. 15 cm는 **플랜지 간격**이며 핀·홀 공구 끝의 접촉 거리나 삽입 깊이를 의미하지 않는다. 공구가 있으면 실제 활성 TCP 오프셋을 지정해야 한다. 현재 힘 제어·접촉/삽입 완료 감지·자동 후퇴는 제공하지 않는다.
 
+### 6.6 상대 베이스 칼만 추정과 정반 보상
+
+`--base_motion_mode relative_kalman`은 **마커리스 추정기를 변경하지 않고** 같은 영상에서 나온 공면 베이스 쌍과 협조제어 사이에 상태 추정기를 추가한다. 지원 조합은 `--method separated --follow_law feedforward --leader_response bounded --common_base_plane`이다. 기존 `pose`, `velocity` 모드와 기본값은 유지된다.
+
+카메라 기준 리더 베이스를 A, 팔로워 베이스를 B라 하면 매 영상에서 먼저 `G = inverse(B) · A`를 만든다. UR10e 출력 보정과 물리 베이스 원점 변환을 고려해 **물리 팔로워 베이스 기준의 평면 XY/yaw**를 추정하고, 제어에 전달할 때 출력 좌표로 되돌린다. A와 B를 각각 차분하지 않으므로 같은 시점의 공통 카메라 강체 운동은 G에서 상쇄된다. 두 베이스의 실제 상대 운동만 이 채널에 들어간다.
+
+상태와 정속 모델은 다음과 같다. 위치는 m, 각도는 rad, 시간은 s다.
+
+```text
+z = [x, y, yaw, vx, vy, yaw_rate]
+z(k|k-1) = F(dt) z(k-1|k-1),   F(dt) = [[I, dt I], [0, I]]
+P(k|k-1) = F P Fᵀ + Q(dt)
+measurement = H z + noise,      H = [I, 0]
+Q = [[dt⁴/4 Qa, dt³/2 Qa], [dt³/2 Qa, dt² Qa]]
+```
+
+Yaw 잔차는 ±π로 감싸며, 측정 공분산 R과 가속도 공분산 Qa는 JSON에서 지정한다. Joseph 형태의 공분산 갱신을 사용하고, 혁신 거리와 측정 급변을 검사한다. 실패한 관측은 마지막 정상 시각을 갱신하지 않는다. 새 모드에서는 A/B 개별 카메라 좌표 급변 검사를 생략하지만 **상대 변환 급변·유효성·신선도 검사와 복구 절차는 유지**한다.
+
+영상용 FK에 사용하는 q는 별도 RTDE 수신 이력에서 촬영 시각 앞뒤 샘플을 보간한다. 반복된 로봇 타임스탬프를 새 샘플로 취급하지 않으며, 시간표와 q를 읽는 중 타임스탬프가 바뀐 샘플도 버린다. 보간 구간이 없거나 너무 넓으면 최신 q로 대체하지 않고 해당 영상을 거절한다. 기본 이력 수집은 100 Hz, 보간 대기는 최대 30 ms, 샘플 간격 상한은 50 ms다. 카메라·로봇 시계는 호스트 시간으로 근사 매핑하며 **하드웨어 동기화나 일정한 전송 지연의 제거를 보장하지 않는다**. 시간 매핑·보간 구간·불확실성은 `pose_diagnostics.joint_alignment`에 기록한다.
+
+필터는 촬영 시각에만 갱신한다. 제어 호출은 상태를 변경하지 않고 현재까지 제한적으로 예측한다. 기본 예측 지평은 촬영 이후 0.35초이며 오래된 속도를 무한 외삽하지 않는다. 예측에 쓰는 운동 성분은 신호 대 불확실성, 누적 유효 관측 수에 따라 줄이고, 경과 시간에 따라 속도를 0으로 줄인다. 정지 잡음·급반전·관측 거절·재획득은 속도 억제 또는 초기화로 처리한다. 재확보 좌표를 보간하는 동안에도 이전 속도 보상을 재사용하지 않는다.
+
+동일한 제어용 상대 변환 Gc로 목표와 현재 상대 자세를 모두 계산한다. L은 리더 베이스 기준 플랜지, F는 팔로워 베이스 기준 현재 플랜지다.
+
+```text
+T* = Gc · L · D*                    # 팔로워 플랜지 목표
+S  = inverse(Gc · L) · F             # 현재 상대 플랜지 자세
+Vbase_raw = [ pG_dot + omegaG × (pF - pG) ; omegaG ]
+Vbase_bar = rate_limit(speed_limit(lambda · Vbase_raw))
+Vreq = Vleader + Vbase_bar + Vfeedback + rho Vtask
+```
+
+여기서 G의 원점 속도와 각속도는 같은 예측 시점의 미분이다. **레버 암에는 목표 위치가 아닌 현재 pF를 사용**한다. TCP 오프셋이 있으면 `omega × (pTCP - pF)`를 더해 모든 항을 동일한 팔로워 베이스 TCP 속도로 옮긴다. 전체 T*를 차분하지 않으므로 리더 관절 운동과 15 cm 접근 운동이 정반 보상에 중복 포함되지 않는다.
+
+`lambda`는 0~1의 관측 유효성·공분산·나이 신뢰도이며, 예측 단계에 이미 적용한 방향별 운동 신뢰도를 다시 곱하지 않는다. 실제 보상은 별도 속도·변화율 상한을 거친다. 감쇠에는 `Vmeasured - Vleader - Vbase_bar - rho_previous Vtask`를 사용하여 **동일하게 제한된 정반 보상값**을 뺀다. 보상 이력은 성공한 명령 전송 후에만 갱신되며 미리보기나 거절된 명령으로 진행되지 않는다.
+
+정반 보상은 최종 명령의 조절 가능한 성분이다. 기존 `velocity` 모드의 필수 베이스 보상 경로와 달리, 정반 항 단독의 실행을 강제하지 않는다. 기존 최종 TCP·관절 속도와 가속도, 공간·형상, 실제 RTDE 상태 검사는 그대로 남는다. 따라서 로그의 `effective_tcp`는 별도 제한을 통과한 **요구 성분**이며 실제 전송 속도는 전체 제한 결과인 `twist`를 확인해야 한다.
+
+새 모드에서는 `--filter_alpha`, `--velocity_alpha`, `--prediction_horizon`, `--base_pose_*`가 KF 반응성을 바꾸지 않는다. `--relative_kalman_config configs/relative_kalman.provisional.json`으로 지정한다. 현재 라벨 없는 로그에서는 정반 정지·이동의 실제 정답을 분리할 수 없어 관절 정지/운동 구간의 잡음·지연을 기준으로 **잠정 설정**을 제공한다. 실제 정반 움직임의 성능 보장이 아니며 분석·합성 시험·향후 라벨 지정 절차는 [튜닝 기록](RELATIVE_KALMAN_TUNING.md)에 있다.
+
 ## 7. 주요 기본 설정
 
 ### 7.1 측정과 실행 주기
@@ -331,10 +374,14 @@ GUI의 **Commanded gap**, **Estimated gap**, **Approach progress**는 각각 명
 | `--calibration_recovery_timeout` | 2 s | 이상 감지부터 후보 확보까지 기한; 반복 거절로 연장하지 않음 |
 | `--calibration_recovery_max_shift_m`, `--calibration_recovery_max_shift_deg` | 0.15 m, 15° | 관측 시작 기준에 대한 새 후보의 교체 범위 |
 | `--calibration_blend_time` | 0.5 s | 확보한 새 좌표의 최소 전환 시간; 변화율 제한으로 더 길어질 수 있음 |
-| `--base_motion_mode` | `pose` | 기본은 비전 좌표 보정; `velocity`는 속도 추정·예측 연구 모드 |
+| `--base_motion_mode` | `pose` | `pose`: 좌표 보정, `velocity`: 기존 독립 속도 추정, `relative_kalman`: 공면 상대 상태 KF |
+| `--relative_kalman_config` | 내장 잠정값 | 새 모드의 R/Q·예측 지평·신뢰도 설정 JSON; 경로를 지정하면 엄격하게 검증 |
+| `--relative_base_speed`, `--relative_base_angular_speed` | 0.10 m/s, 0.15 rad/s | 새 모드의 플랜지 정반 보상 성분 상한; 전체 로봇 상한과 별도 |
+| `--relative_base_accel`, `--relative_base_angular_accel` | 0.20 m/s², 0.30 rad/s² | 새 모드의 정반 보상 변화율 상한 |
+| `--joint_history_hz`, `--joint_alignment_wait`, `--joint_alignment_max_gap` | 100 Hz, 0.03 s, 0.05 s | 새 모드의 영상 촬영 시각에 맞춘 관절 이력 보간 |
 | `--ur10e_output_correction` | ON | UR10e PnP 출력에 로컬 Z 180° / +5 mm 변환; `--no_ur10e_output_correction`으로 해제 |
 | `--common_base_plane` | ON | 물리 베이스의 공통 법선·바닥면 높이; `--no_common_base_plane`으로 해제 |
-| `--base_pose_window` | 5 | ACTIVE 상대 좌표 대표값을 구할 영상 수; 홀수 3~31, 0은 추가 안정화 해제 |
+| `--base_pose_window` | 5 | pose 모드 ACTIVE 상대 좌표 대표값을 구할 영상 수; 홀수 3~31, 0은 추가 안정화 해제 |
 | `--base_pose_smoothing_time` | 0.35 s | 상대 베이스 좌표 반영 시정수 |
 | `--base_pose_deadband_m`, `--base_pose_deadband_deg` | 0.005 m, 0.5° | 작은 상대 좌표 흔들림을 따라가지 않는 범위; 목표 오차 deadband와 별도 |
 | `--base_pose_update_speed`, `--base_pose_update_angular_speed` | 0.02 m/s, 0.05 rad/s | 추정 상대 좌표 적용 상한; 초과 측정을 속도 오류로 거절하지 않음 |
@@ -460,6 +507,21 @@ python3 -m pip install -r requirements.txt
   --follow_law pose
 ```
 
+공면 상대 베이스 칼만 추정과 정반 속도 보상은 다음과 같이 실행한다. `--execute`를 빼면 미리보기다. 초기 정렬 후 새 관측으로 속도 추정이 준비되며, 자동으로 동작을 시작하지 않고 기존 Arm 절차를 사용한다.
+
+```bash
+./run_dual_control.sh --mode follow \
+  --ur5e_ip 169.254.186.10 --ur10e_ip 169.254.186.6 \
+  --ur5e_tcp_offset 0 0 0 0 0 0 \
+  --ur10e_tcp_offset 0 0 0 0 0 0 \
+  --gap 0.30 --show_seg \
+  --base_motion_mode relative_kalman --follow_law feedforward \
+  --relative_kalman_config configs/relative_kalman.provisional.json \
+  --initial_align --execute --approach_speed 0.01
+```
+
+기존 저장 상태로 시뮬레이션할 때도 해당 파일의 `common_base_plane` 설정을 따른다. 공면 조건이 OFF인 저장본은 이 모드에서 거절되므로 공면 조건으로 취득한 초기 상태가 필요하다.
+
 ### 8.5 상대 경로와 비교 옵션
 
 follow 실행 명령에 아래 옵션을 추가한다. GUI에서도 경로를 설정할 수 있다.
@@ -474,6 +536,7 @@ follow 실행 명령에 아래 옵션을 추가한다. GUI에서도 경로를 �
 | 영상 좌표 보정 + 엔코더 기반 추종 | `--method separated --base_motion_mode pose` (기본) |
 | 변환 TCP 목표 오차만으로 추종 | `--follow_law pose` (기본 separated/pose/bounded 조합 필요) |
 | 기존 리더 속도 보상 + 오차 보정 | `--follow_law feedforward` (기본) |
+| 평면 상대 KF·정반 속도 보상 | `--method separated --follow_law feedforward --base_motion_mode relative_kalman` |
 | 베이스 속도 보상·작업 분리 연구 비교 | `--method separated --base_motion_mode velocity` |
 | 팔로워 선속도 상한 500 mm/s | `--follow_max_speed 0.5` |
 | 목표 접근 감쇠 시간 | `--follow_damping_time 0.12` (기본), `0`은 기존 보정 방식 |
@@ -578,9 +641,27 @@ GUI에서는 간격과 상대 경로를 편집한다. 간격과 경로의 위치
 
 `[ex, ey, ez] = 1000 × (p_target_TCP − p_actual_TCP)`, `e_distance = sqrt(ex² + ey² + ez²)` [mm]
 
-전체 거리 오차 하나의 현재 값과 최근 30초를 표시한다. 그래프는 흰 배경에 진한 파란 선 하나를 사용하고 세로축은 0부터 시작한다. 초기 정렬에서는 실제 선택된 IK 정렬 끝점, ACTIVE에서는 허용 보정(`tracking_offset`)을 포함한 채택 목표를 사용한다. 미리보기의 명목 목표는 별도 출처로 표시한다. 다음 주기의 예상 이동점과 비교하는 값이 아니며, 3D 화면의 명목 플랜지 목표 오차와 다를 수 있다. 현재 TCP는 RTDE에서 받고, 목표는 캘리브레이션 좌표로 변환하므로 외부 계측으로 확인한 절대 오차는 아니다. `feedforward`와 `pose` 모두 같은 위치 오차 정의를 사용한다.
+전체 거리 오차 하나의 현재 값과 최근 30초를 표시한다. 그래프는 흰 배경에 진한 파란 선 하나를 사용하고 세로축을 **0~50 mm로 고정**한다. 오차 크기에 따른 축 범위 자동 조절은 하지 않는다. 초기 정렬에서는 실제 선택된 IK 정렬 끝점, ACTIVE에서는 허용 보정(`tracking_offset`)을 포함한 채택 목표를 사용한다. 미리보기의 명목 목표는 별도 출처로 표시한다. 다음 주기의 예상 이동점과 비교하는 값이 아니며, 3D 화면의 명목 플랜지 목표 오차와 다를 수 있다. 현재 TCP는 RTDE에서 받고, 목표는 캘리브레이션 좌표로 변환하므로 외부 계측으로 확인한 절대 오차는 아니다. `feedforward`와 `pose` 모두 같은 위치 오차 정의를 사용한다.
 
 데이터가 유효하지 않거나 상태·목표 출처가 바뀌는 구간은 선을 끊는다. 그래프만 닫으면 표시만 숨겨지며 제어는 계속된다. 메인 GUI의 **Position error graph**로 다시 열 수 있다. 그래프는 GUI 프로세스에서 최대 10 Hz로 그리며 제어 명령을 보내지 않는다. 시뮬레이션에서는 가상 시간을 사용하므로 Pause 중 시간축이 진행하지 않고 Reset 시 이력을 초기화한다.
+
+오차 그래프의 **Start recording / Stop & save** 버튼으로 구간을 기록한다. 실시간 제어와 시뮬레이션의 데이터 생성 위치에서 CSV 기록기로 전달하므로 최신값만 남기는 GUI 큐나 화면의 10 Hz 그리기 때문에 표본을 버리지 않는다. 30초 화면 이력 제한과 별개로 종료 요청까지 스트리밍 저장한다. 시작·종료 경계는 생산자가 버튼 요청을 처리한 시점이며, GUI 클릭 시각을 소급해 만들지 않는다. 기록 요청은 Arm·목표 변경과 분리된 전용 경로로 전달된다.
+
+파일은 `runs/error_segments/<UTC시각>-error-<고유값>.csv`에 배타적으로 생성하고 기존 파일을 덮어쓰지 않는다. 그래프에 저장 경로·경과 시간·행 수·저장 완료·실패 상태를 표시한다. 주요 열은 다음과 같다.
+
+| 열 | 의미 |
+| --- | --- |
+| `record_type` | `start`, `sample`, `gap`, `event`, `stop`, `incomplete` 등 기록 종류 |
+| `sample_at_s`, `sample_elapsed_s` | 원래 표본 시각과 해당 시계/에피소드 내 첫 표본 이후 시간 |
+| `emitted_at_monotonic_s`, `recording_elapsed_wall_s` | 호스트 전달 시각과 기록 시작 이후 실제 경과 시간 |
+| `position_error_mm` | 목표 TCP와 현재 TCP의 거리 오차; 화면의 50 mm 상한을 적용하지 않음 |
+| `error_x_mm`, `error_y_mm`, `error_z_mm` | 팔로워 베이스 좌표의 부호 있는 목표−현재 성분 |
+| `valid`, `reason` | 유효 여부와 관측 공백 사유; 무효 행의 오차 숫자는 빈 칸 |
+| `clock`, `episode`, `segment`, `phase`, `target_source` | 실제/가상 시간, Reset 구분, 연속 구간, 제어 단계와 목표 출처 |
+
+수치 분석에서는 `record_type=sample`, `valid=1` 행을 사용하고 `gap`·`event`를 가로질러 오차 선을 잇지 않는다. 반복된 표본 시각을 새 오차로 저장하지 않으며, 시뮬레이션 Pause는 가상 시간을 늘리지 않는다. Reset·시계·팔로워가 바뀌면 구간을 구분한다. 제어 정지 상태나 관측 실패를 0 mm 오차로 저장하지 않는다.
+
+그래프를 숨겨도 기록은 계속되고, 프로그램 종료 시 진행 중인 구간을 마감한다. 파일 작업은 별도 스레드에서 처리한다. 기록 큐 초과나 쓰기 실패는 `error / INCOMPLETE`로 표시하고 로봇 동작을 중단시키지 않는다. 완료 `stop` 행이 없는 파일은 중단된 기록일 수 있으며, 정상 flush/close가 전원 차단까지의 내구성을 보장하는 것은 아니다.
 
 ### 9.2 영상 창 단축키
 
@@ -633,6 +714,7 @@ GUI의 **STOP / Exit**, 메인 창 닫기, Ctrl+C도 종료 절차로 연결된�
 - 공동 평면 추정 전 EMPnP 포즈·최종 출력 포즈, 공면 보정 전후 높이·법선 차이, 원 검출 재투영 오차, 보정량·최적화 상태·처리 시간. `pose_diagnostics.common_base_plane`에 기록한다.
 - Arm 시 베이스·관절·TCP·목표, IK 후보와 정렬 진행, 정렬 후 좌표 전환.
 - 관절·TCP 상태, 상대 목표·추정 오차, 보상·피드백·작업 성분.
+- `relative_kalman` 모드의 Gc·평면 상태·공분산·혁신·신뢰도·예측 시간, 원시/요구/제한된 정반 보상, 촬영 시각 관절 보간 진단. 설정 JSON의 최종 수치도 시작 로그에 저장한다.
 - 목표 접근 감쇠 시간, 측정 상대 TCP 속도, 선형·회전 감속 예산.
 - 영상 관측 시작·후보 수·재확보·좌표 전환, 보관 좌표와 실제 촬영 나이, 전송 직전 만료로 폐기한 명령.
 - 15 cm 접근 요청·거절, 시작·일시정지·재개 상태, 명령 간격·추정 간격과 진행률.
@@ -671,6 +753,8 @@ PYTHONPATH=tests:. python3 -B -m unittest discover -s tests -p 'test_*.py'
 sha256sum --check SHA256SUMS
 ```
 
+2026-11-02 CSV 구간 기록까지 포함한 전체 1,205개 중 1,202개 통과, CUDA 환경이 필요한 3개는 제외했다. CSV 기록·GUI·런타임 관련 223개도 통과했다. 최종 변경 후 KF·관절 보간·영상·제어 통합·튜닝의 관련 90개를 다시 검사해 모두 통과했다. 제어 통합은 같은 Gc의 목표/현재 자세, 회전 좌표와 TCP 오프셋, 제한 후 감쇠, 정반·리더·접근 성분 분리, 관측 실패·재획득·정렬 전환·15 cm 접근과 기존 전체 운동 상한을 모의 장비로 확인한다. 합성 정지/이동/반전 성능과 실제 로그 재생의 범위는 튜닝 기록에 따로 명시했다.
+
 이 검사는 수학·코드 경로·모의 장비 동작을 확인한다. 현재 시스템은 비접촉 상대 자세·경로 제어를 위한 구현이며, 힘 제어, 물체 인계의 접촉 제어, 자동 로봇 식별, 가림 복원, 실제 바닥 인식, 완전한 충돌 회피를 제공하지 않는다. 캘리브레이션 정확도와 실제 추종 성능은 장비 배치·영상·공구·속도 조건에서 별도로 측정해야 한다.
 
 ## 12. 코드 위치
@@ -682,6 +766,8 @@ sha256sum --check SHA256SUMS
 | [cooperative/base_plane.py](../urcal/cooperative/base_plane.py) | 필터·보간 뒤 공면 유지, 출력 좌표와 상대 상태 갱신 |
 | [control/runtime.py](../urcal/control/runtime.py) | 공통 CLI, RTDE 수신·명령 세션, follow 진입점 |
 | [control/vision.py](../urcal/control/vision.py) | 제어용 별도 영상 프로세스, 시간·품질 기록 |
+| [control/error_recording.py](../urcal/control/error_recording.py) | 구간 선택 오차 CSV·전체 생산 표본·비동기 파일 저장 |
+| [control/joint_history.py](../urcal/control/joint_history.py) | 촬영 시각 관절 이력·시계 매핑·보간과 거절 진단 |
 | [control/acquisition.py](../urcal/control/acquisition.py) | 정지 단계의 최근 프레임 합의와 초기 상태 구성 |
 | [control/startup.py](../urcal/control/startup.py), [alignment.py](../urcal/control/alignment.py) | native IK/FK·경로 검사와 실제 초기 정렬 |
 | [control/approximation.py](../urcal/control/approximation.py) | 허용 범위 안의 정렬 목표 후보 탐색 |
@@ -694,12 +780,16 @@ sha256sum --check SHA256SUMS
 | [control/gui.py](../urcal/control/gui.py), [scene_view.py](../urcal/control/scene_view.py) | 목표 편집·버튼, 현재 자세와 목표의 3D 표시 |
 | [cooperative/runtime.py](../urcal/cooperative/runtime.py) | follow 실행 상태와 기록, 명령 전송 후 진행 확정 |
 | [cooperative/state.py](../urcal/cooperative/state.py) | 시간 정합, SE(3) 필터·속도·예측 |
+| [cooperative/relative_kalman.py](../urcal/cooperative/relative_kalman.py) | 같은 촬영 쌍의 평면 상대 KF·신뢰도·제한된 예측 |
+| [cooperative/base_compensation.py](../urcal/cooperative/base_compensation.py) | 현재 플랜지에서의 정반 보상과 독립 속도·변화율 제한 |
 | [cooperative/controller.py](../urcal/cooperative/controller.py), [follow.py](../urcal/cooperative/follow.py) | 상대 목표, 베이스 보상, bounded 추종과 명령 검사 |
 | [cooperative/feedback.py](../urcal/cooperative/feedback.py) | 측정 상대 속도와 감속 여유를 사용한 목표 접근 감쇠 |
 | [cooperative/approach.py](../urcal/cooperative/approach.py) | 현재 명령에서 15 cm까지의 축 방향 접근 경로·일시정지·재개 상태 |
 | [cooperative/task.py](../urcal/cooperative/task.py), [kinematics.py](../urcal/cooperative/kinematics.py) | 상대 경로·진행률, nominal 기구학·작업공간 검사 |
 | [simulation](../urcal/simulation/) | 초기 상태 취득·저장, 가상 관절 모델·초기 정렬·GUI 실행 |
 | [tools](../urcal/tools/) | 합성 비교, 로그 분석, GUI 데모 |
+| [tools/tune_relative_kalman.py](../urcal/tools/tune_relative_kalman.py) | 라벨 구간·잠정 잡음 설정·실제 로그 재생·합성 검증 |
+| [relative_kalman.provisional.json](../configs/relative_kalman.provisional.json), [튜닝 기록](RELATIVE_KALMAN_TUNING.md) | 새 모드의 잠정 수치와 선정 근거·재현 방법 |
 | [tests](../tests/) | 단위·회귀·모의 실행 검사와 기록 fixture |
 | [Research_Implementation_Plan.txt](Research_Implementation_Plan.txt) | 연구 목표와 평가 기준 |
 | [MANIFEST.json](../MANIFEST.json), [SHA256SUMS](../SHA256SUMS) | 파일 출처·메타데이터와 무결성 목록 |

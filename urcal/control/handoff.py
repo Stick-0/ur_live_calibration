@@ -23,7 +23,7 @@ class CalibrationHandoff:
         self.started_at, self.timeout = float(started_at), float(timeout)
         self._settings = {key: getattr(tracker_template, key) for key in (
             "max_age", "stable_frames", "alpha", "max_jump_m", "max_jump_rad",
-            "max_mean_px", "max_pixel_px", "min_points", "check_reprojection")}
+            "max_mean_px", "max_pixel_px", "min_points", "check_reprojection", "check_individual_jumps")}
         self._estimator_factory, self._mappings, self._leader = estimator_factory, mappings, leader
         self._sequence = None
         self._capture = None

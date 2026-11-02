@@ -67,7 +67,7 @@ class LiveCalibrationCandidate:
     def _settings(template):
         return {name: getattr(template, name) for name in (
             "max_age", "stable_frames", "alpha", "max_jump_m", "max_jump_rad",
-            "max_mean_px", "max_pixel_px", "min_points", "check_reprojection")}
+            "max_mean_px", "max_pixel_px", "min_points", "check_reprojection", "check_individual_jumps")}
 
     @staticmethod
     def _check_poses(reference, candidate, translation_limit, rotation_limit, label):

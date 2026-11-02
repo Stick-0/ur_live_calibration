@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import hashlib
 import multiprocessing as mp
 from pathlib import Path
+from queue import Empty
 import sys
 import time
 import uuid
@@ -31,6 +32,7 @@ from urcal.control.startup import (
 from urcal.cooperative.diagnostics import WaitDiagnostics, fault_diagnostics
 from urcal.control.transport_diagnostics import capture_runtime_fault, fault_transport_summary, transport_record
 from urcal.control.tracking_error import position_error_sample
+from urcal.control.error_recording import PositionErrorRecorder
 
 
 def finite_record(value):
@@ -118,6 +120,8 @@ def run(args):
     log_path = args.log or BUNDLE / "runs" / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
                                             + "-" + args.method + "-" + uuid.uuid4().hex[:8] + ".jsonl")
     logger = ExperimentLogger(log_path)
+    error_recorder = PositionErrorRecorder(BUNDLE / "runs" / "error_segments")
+    recording_notice = None
     session = None
     arm_error = None
     arm_error_category = ""
@@ -137,11 +141,12 @@ def run(args):
     gap_error = ""
     waits = WaitDiagnostics()
     ctx = mp.get_context("spawn")
-    frames, commands, statuses, gui_statuses = (ctx.Queue(maxsize=size) for size in (1, 8, 1, 1))
+    frames, commands, statuses, gui_statuses, recording_commands = (
+        ctx.Queue(maxsize=size) for size in (1, 8, 1, 1, 8))
     inbox = CommandInbox(commands)
     stop = ctx.Event()
     vision = ctx.Process(target=vision_worker, args=(args, frames, commands, statuses, stop), daemon=True)
-    gui = ctx.Process(target=gui_worker, args=(args, commands, gui_statuses, stop), daemon=True)
+    gui = ctx.Process(target=gui_worker, args=(args, commands, gui_statuses, stop, recording_commands), daemon=True)
     engine = None
     states = None
     control_at = control_dt = None
@@ -215,6 +220,18 @@ def run(args):
                           f"{np.rad2deg(smoother.deadband_rad):g}deg, "
                           f"update cap {smoother.linear_rate * 1000:g}mm/s / "
                           f"{smoother.angular_rate:g}rad/s. Robot motion limits are unchanged.", flush=True)
+            elif engine.base_motion_mode == "relative_kalman":
+                config = engine.estimator.config
+                print("[info] Base updates: RELATIVE KALMAN; same-exposure planar B^-1 A, "
+                      "capture-time joint interpolation and confidence-weighted table feedforward.", flush=True)
+                print(f"[info] Relative Kalman noise: {config.measurement_std_m * 1000:g}mm / "
+                      f"{np.rad2deg(config.measurement_std_yaw):g}deg; prediction horizon "
+                      f"{config.prediction_horizon:g}s; config="
+                      f"{getattr(args, 'relative_kalman_config', None) or 'built-in provisional values'}.", flush=True)
+                print(f"[info] Table compensation limits: {args.relative_base_speed * 1000:g}mm/s / "
+                      f"{args.relative_base_angular_speed:g}rad/s; rate limits "
+                      f"{args.relative_base_accel:g}m/s^2 / {args.relative_base_angular_accel:g}rad/s^2. "
+                      "Complete robot motion limits still apply.", flush=True)
             else:
                 print("[info] Base updates: VELOCITY; visual speed checks and mandatory base compensation enabled.",
                       flush=True)
@@ -313,8 +330,14 @@ def run(args):
             def alignment_report(message):
                 print("[research] " + message, flush=True)
                 logger.log({"kind": "alignment_preflight", "at": time.monotonic(), "message": message})
+                error_sample = position_error_sample(
+                    None, now=time.monotonic(), leader=engine.leader, follower=engine.follower,
+                    phase="alignment_preflight", reason="Preflight: no current TCP error sample")
+                error_recorder.record(error_sample, emitted_at=time.monotonic())
                 put_latest(gui_statuses, {"message": message, "active": True, "ready": False,
-                                          "phase": "alignment_preflight", "progress": 0.})
+                                          "phase": "alignment_preflight", "progress": 0.,
+                                          "position_error": error_sample,
+                                          "error_recording": error_recorder.status()})
 
             def require_new_recovery_arm(requested):
                 nonlocal recovery_ready
@@ -332,6 +355,13 @@ def run(args):
 
             while not stop.is_set():
                 now = time.monotonic()
+                # Recording has its own non-actuating command channel. It
+                # never enters target/Arm handling or the latest-only GUI queue.
+                for _ in range(8):
+                    try:
+                        error_recorder.request(recording_commands.get_nowait())
+                    except Empty:
+                        break
                 dt, last_tick = now - last_tick, now
                 control_at, control_dt = now, dt
                 ready, goals, proposal = False, {}, None
@@ -834,7 +864,14 @@ def run(args):
                     phase=error_phase, target_tcp=error_target, relative_target=error_relative,
                     target_source=error_source, max_robot_age=args.max_robot_age,
                     max_calibration_age=args.max_calibration_age)
-                put_latest(gui_statuses, {**status, "scene": scene, "position_error": error_sample})
+                error_recorder.record(error_sample, emitted_at=now)
+                recording_status = error_recorder.status()
+                notice = (recording_status.get("state"), recording_status.get("path"), recording_status.get("error"))
+                if notice != recording_notice and notice[0] != "idle":
+                    print(f"[error CSV] {notice[0]}: {notice[2] or notice[1] or ''}", flush=True)
+                recording_notice = notice
+                put_latest(gui_statuses, {**status, "scene": scene, "position_error": error_sample,
+                                          "error_recording": recording_status})
                 if now - last_report >= 1.:
                     print("[research] " + message, flush=True)
                     last_report = now
@@ -855,13 +892,18 @@ def run(args):
         if session is not None:
             session.close()
         stop.set()
+        error_recorder.close()
+        recording_status = error_recorder.status()
+        if recording_status.get("state") not in (None, "idle"):
+            print(f"[error CSV] {recording_status.get('state')}: "
+                  f"{recording_status.get('error') or recording_status.get('path') or ''}", flush=True)
         for child in (vision, gui):
             if child.pid is not None:
                 child.join(timeout=3.)
                 if child.is_alive():
                     child.terminate()
                     child.join(timeout=1.)
-        for queue in (frames, commands, statuses, gui_statuses):
+        for queue in (frames, commands, statuses, gui_statuses, recording_commands):
             queue.cancel_join_thread()
             queue.close()
         try:

@@ -18,6 +18,7 @@ sys.path.insert(0, str(BUNDLE))
 
 from urcal.control.policy import CalibrationTracker, ControlFault
 from urcal.control.vision import LatestCapture, calibration_frame
+from urcal.control.joint_history import JointAlignmentUnavailable
 
 
 class CalibrationFrameTests(unittest.TestCase):
@@ -154,11 +155,22 @@ class CalibrationFrameTests(unittest.TestCase):
                 with self.assertRaises(ControlFault):
                     CalibrationTracker(stable_frames=1).update(frame, 100.1)
 
+    def test_interpolation_metadata_and_capture_joints_reach_logged_pose_diagnostics(self):
+        for name, estimator in zip(("ur5e", "ur10e"), self.estimators):
+            estimator.key_names = [name + f"_link{i}" for i in range(7)]
+        alignment = {"aligned": True, "captured_at": 100., "robots": {"ur5e": {"fraction": .4}}}
+        packet = calibration_frame(17, 100., self.results, self.estimators, self.joints,
+                                   self.K, self.dist, .08, .04,
+                                   regions=((0, 0, 320, 480), (320, 0, 640, 480)),
+                                   joint_alignment=alignment)
+        self.assertEqual(packet.pose_diagnostics["joint_alignment"], alignment)
+        np.testing.assert_array_equal(packet.pose_diagnostics["robots"]["ur10e"]["q_rad"], self.joints[1])
+
 
 class CaptureClockTests(unittest.TestCase):
     def simulate(self, *, domain="hardware", frame_count=12, sensor_age=.05,
                  last_delay=0., frozen_robot=False, repeated_frame=False,
-                 repeated_sensor=False, invalid_sensor=False):
+                 repeated_sensor=False, invalid_sensor=False, align_joints=False, alignment_failure=False):
         """Run the real capture loop with a deterministic fake SDK and clock."""
         clock = {"mono": 100., "wall": 1700000000., "index": 0}
         stop = threading.Event()
@@ -201,12 +213,26 @@ class CaptureClockTests(unittest.TestCase):
             else:
                 receiver.getTimestamp.side_effect = lambda: 25. + clock["index"] / 30.
             receivers[name] = receiver
+        sampler = Mock()
+        sampler.error = None
+
+        def interpolate(captured, **_kwargs):
+            if alignment_failure:
+                raise JointAlignmentUnavailable("exposure has no bracketing joint samples")
+            return ([[captured] * 6, [captured + 1.] * 6],
+                    {name: {"max_bracket_distance_s": .005, "sdk_read_half_interval_s": .001}
+                     for name in receivers})
+
+        sampler.interpolate.side_effect = interpolate
         with patch("urcal.control.vision.time.monotonic", side_effect=lambda: clock["mono"]), \
                 patch("urcal.control.vision.time.time", side_effect=lambda: clock["wall"]), \
+                patch("urcal.control.vision.JointSampler", return_value=sampler) as sampler_factory, \
                 patch("urcal.control.vision.threading.Thread") as thread:
-            capture = LatestCapture(stream, receivers, stop, 30)
+            capture = LatestCapture(stream, receivers, stop, 30, align_joints=align_joints)
             thread.return_value.start.assert_called_once_with()
             capture._run()
+        if not align_joints:
+            sampler_factory.assert_not_called()
         return capture, clock, data
 
     def test_hardware_clock_maps_to_monotonic_and_publishes_copied_latest_frame(self):
@@ -265,9 +291,64 @@ class CaptureClockTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid camera timestamp"):
             capture.read_after(None)
 
+    def test_new_mode_interpolates_at_exposure_and_keeps_metadata_with_that_frame(self):
+        capture, clock, data = self.simulate(align_joints=True)
+        sequence, captured, image, joints, skew, metadata = capture.read_after(None)
+        self.assertEqual(sequence, 12)
+        np.testing.assert_allclose(joints, [[captured] * 6, [captured + 1.] * 6])
+        self.assertTrue(metadata["aligned"])
+        self.assertFalse(metadata["hardware_synchronized"])
+        self.assertEqual(metadata["captured_at"], captured)
+        self.assertAlmostEqual(captured, clock["mono"])
+        self.assertAlmostEqual(metadata["camera"]["exposure_time_uncertainty_s"], 1. / 30.)
+        self.assertAlmostEqual(skew, 1. / 30. + .006)
+        self.assertEqual(capture.joint_sampler.interpolate.call_args.args, (captured,))
+        for receiver in capture.receivers.values():
+            receiver.getActualQ.assert_not_called()  # Single RTDE owner is the sampler.
+        data[:] = 0
+        self.assertTrue(np.all(image == 12))
+        capture.close()
+        capture.joint_sampler.close.assert_called_once()
+
+    def test_new_mode_uses_mapped_sensor_time_without_subtracting_uncertainty(self):
+        for domain in ("system", "global"):
+            with self.subTest(domain=domain):
+                capture, clock, _ = self.simulate(domain=domain, sensor_age=.01, align_joints=True)
+                _, captured, _, joints, _, metadata = capture.read_after(None)
+                self.assertAlmostEqual(captured, clock["mono"] - .01, places=6)
+                np.testing.assert_allclose(joints[0], np.full(6, clock["mono"] - .01), atol=3e-7)
+                self.assertEqual(capture.joint_sampler.interpolate.call_args.args, (captured,))
+                self.assertAlmostEqual(metadata["camera"]["exposure_time_uncertainty_s"], 1. / 30.)
+
+    def test_new_mode_transport_delay_preserves_old_capture_and_never_becomes_q_fallback(self):
+        capture, clock, _ = self.simulate(last_delay=.2, align_joints=True)
+        _, captured, _, joints, _, metadata = capture.read_after(None)
+        self.assertAlmostEqual(captured, clock["mono"] - .2)
+        np.testing.assert_allclose(joints[0], captured)
+        self.assertIn("transport-biased", metadata["camera"]["mapping"])
+        failed, _, _ = self.simulate(last_delay=.2, align_joints=True, alignment_failure=True)
+        self.assertIsNone(failed.read_after(None))
+        self.assertIn("bracketing", failed.read_rejection_after(None)[2]["reason"])
+
+    def test_new_mode_invalid_future_camera_timestamp_is_rejected_before_interpolation(self):
+        capture, _, _ = self.simulate(domain="global", sensor_age=-.1, align_joints=True)
+        with self.assertRaisesRegex(RuntimeError, "ahead of host"):
+            capture.read_after(None)
+        capture.joint_sampler.interpolate.assert_not_called()
+
+    def test_missing_joint_bracket_skips_image_and_exposes_rejection_metadata(self):
+        capture, _, _ = self.simulate(align_joints=True, alignment_failure=True)
+        self.assertIsNone(capture.read_after(None))
+        sequence, captured, metadata = capture.read_rejection_after(None)
+        self.assertEqual(sequence, 12)
+        self.assertEqual(metadata["captured_at"], captured)
+        self.assertFalse(metadata["aligned"])
+        self.assertIn("bracketing", metadata["reason"])
+        self.assertIsNone(capture.read_rejection_after(sequence))
+
 
 class VisionDisplayTests(unittest.TestCase):
-    def run_worker(self, keys):
+    def run_worker(self, keys, *, align_joints=False, alignment_rejected=False):
         import urcal.control.vision as vision
         import urcal.inference as inference
         from urcal.control.runtime import parse_args
@@ -277,6 +358,8 @@ class VisionDisplayTests(unittest.TestCase):
         for result in fixture.results:
             result.base_plane, result.constraint_error = None, ""
         args = parse_args(["--ur5e_ip", "192.0.2.5", "--ur10e_ip", "192.0.2.10", "--device", "cpu", "--show_seg"])
+        if align_joints:
+            args.base_motion_mode = "relative_kalman"
         source = np.zeros((480, 640, 3), np.uint8)
         regions = ((0, 0, 320, 480), (320, 0, 640, 480))
         stream = SimpleNamespace(K=fixture.K, dist=fixture.dist, stop=Mock())
@@ -293,7 +376,16 @@ class VisionDisplayTests(unittest.TestCase):
             draw_results=Mock(side_effect=lambda *a, **kw: (a[0].copy(), a[0].copy())),
             draw_pose_axes=Mock(side_effect=lambda image, *a: image))
         capture = Mock()
-        capture.read_after.side_effect = [(i, 99.97, source.copy(), fixture.joints, .03) for i in range(len(keys))]
+        metadata = {"aligned": True, "captured_at": 99.97, "test_capture": "timestamped interpolation"}
+        capture.read_after.side_effect = [
+            (i, 99.97, source.copy(), fixture.joints, .03) + ((metadata,) if align_joints else ())
+            for i in range(len(keys))]
+        capture.read_rejection_after.return_value = None
+        if alignment_rejected:
+            capture.read_after.side_effect = None
+            capture.read_after.return_value = None
+            capture.read_rejection_after.return_value = (7, 99.97, {**metadata, "aligned": False,
+                                                                     "reason": "no bracketing joint samples"})
         frames, commands, statuses = Queue(), Queue(), Queue()
         target = np.eye(4)
         target[2, 3] = 1.
@@ -307,6 +399,8 @@ class VisionDisplayTests(unittest.TestCase):
                 "urcal.inference.infer_live_dual": fake_dual}))
             stack.enter_context(patch.object(inference, "infer_live_dual", fake_dual, create=True))
             stack.enter_context(patch.object(vision, "LatestCapture", return_value=capture))
+            if alignment_rejected:
+                stack.enter_context(patch.object(stop, "wait", side_effect=lambda *_: stop.set()))
             stack.enter_context(patch.object(vision.time, "monotonic", return_value=100.))
             stack.enter_context(patch.object(vision.cv2, "waitKey", side_effect=keys))
             stack.enter_context(patch.object(vision.cv2, "destroyAllWindows"))
@@ -317,6 +411,7 @@ class VisionDisplayTests(unittest.TestCase):
             vision.vision_worker(args, frames, commands, statuses, stop)
         self.assertNotIn("[vision STOP]", output.getvalue())
         self.assertTrue(stop.is_set())
+        fake_dual.frames = frames
         return fake_dual, shown, text, save, output.getvalue()
 
     def test_live_control_has_no_text_and_reports_inference_only_to_terminal(self):
@@ -340,6 +435,24 @@ class VisionDisplayTests(unittest.TestCase):
         self.assertFalse(np.array_equal(saved_overlay, live_image))
         self.assertEqual(save.call_args.args[4], "ACTIVE controller-only status")
         self.assertEqual(output.count("[vision] FPS"), 1)  # No frame-by-frame terminal spam.
+
+    def test_aligned_capture_metadata_survives_inference_and_calibration_packet(self):
+        dual, _shown, _text, _save, output = self.run_worker([ord("q")], align_joints=True)
+        packet = dual.frames.get_nowait()
+        self.assertTrue(packet.pose_diagnostics["joint_alignment"]["aligned"])
+        self.assertEqual(packet.pose_diagnostics["joint_alignment"]["test_capture"], "timestamped interpolation")
+        self.assertEqual(dual.process_frame.call_args.args[1], [[0.] * 6, [.2] * 6])
+        self.assertIn("not hardware synchronized", output)
+
+    def test_unbracketed_frame_is_logged_as_rejected_without_model_inference(self):
+        dual, _shown, _text, _save, output = self.run_worker([], align_joints=True, alignment_rejected=True)
+        dual.process_frame.assert_not_called()
+        packet = dual.frames.get_nowait()
+        self.assertEqual(packet.sequence, 7)
+        self.assertEqual(packet.poses, {})
+        self.assertFalse(packet.pose_diagnostics["joint_alignment"]["aligned"])
+        self.assertIn("no bracketing", packet.reason)
+        self.assertIn("[vision] WAIT:", output)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,762 @@
+{
+  "status": "provisional_unlabelled_protocol_proxy",
+  "labels_available": false,
+  "assumption": "PREVIEW/ALIGNMENT bases were fixed per operating protocol; not independently verified",
+  "measurement_noise_validated": false,
+  "process_noise_fitted": false,
+  "motion_tracking_improvement_validated": false,
+  "R_basis": "rounded-up marginal spreads in preview/alignment, minimum 7mm/0.3deg",
+  "horizon_basis": "observed control capture-age p95 plus at least 50ms, rounded to 50ms; capped .45s",
+  "Q_basis": "explicit constant-acceleration prior; synthetic comparisons only",
+  "logs": [
+    {
+      "log": "runs/20261101T130112Z-separated-2479f01f.jsonl",
+      "samples": 1184,
+      "excluded": {},
+      "base_motion_label": "unknown",
+      "ground_truth_available": false,
+      "warning": "Joint motion and PnP changes do not establish whether a base/table moved.",
+      "timing": {
+        "receipt_age_median_p95_s": [
+          0.14445847424212843,
+          0.17681261484976857
+        ],
+        "control_age_median_p95_s": [
+          0.1662766783265397,
+          0.2217431300261523
+        ]
+      },
+      "settings": {
+        "common_base_plane": true,
+        "empnp_use_prev": false,
+        "filter_alpha": 1.0,
+        "base_pose_window": 0,
+        "follow_law": "feedforward"
+      },
+      "capture_start": 783362.3683767316,
+      "duration_s": 100.73773655109107,
+      "median_period_s": 0.06673073500860482,
+      "accepted_fraction": 0.9636824324324325,
+      "raw_spread_m_m_rad": [
+        0.047976311271951136,
+        0.05567161922044307,
+        0.04560925954877637
+      ],
+      "raw_spread_is_noise_estimate": false,
+      "arm_moving_fraction": 0.31101694915254235,
+      "joint_motion_known_samples": 1180,
+      "phases": [
+        {
+          "phase": "preview",
+          "start_s": 0.0,
+          "end_s": 18.045786055037752,
+          "samples": 233,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0008417893740083557,
+            0.0016530454057897869,
+            0.0012248249622915529
+          ],
+          "lag1_correlation": [
+            -0.11989674426294902,
+            0.2363275569689853,
+            -0.01251229037072198
+          ],
+          "covariance_m_rad": [
+            [
+              7.086093501933791e-07,
+              -8.411638087582617e-07,
+              -6.851088047450381e-07
+            ],
+            [
+              -8.411638087582617e-07,
+              2.732559113602722e-06,
+              1.0850494300015968e-06
+            ],
+            [
+              -6.851088047450381e-07,
+              1.0850494300015968e-06,
+              1.5001961882525041e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "alignment",
+          "start_s": 23.716421785997227,
+          "end_s": 26.151450074044988,
+          "samples": 34,
+          "arm_moving_samples": 1,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0011284933561741643,
+            0.0027411740764511747,
+            0.0012424071858365424
+          ],
+          "lag1_correlation": [
+            0.3137514905250747,
+            0.6444844578060184,
+            0.3298125279015623
+          ],
+          "covariance_m_rad": [
+            [
+              1.2734972549292294e-06,
+              -2.0873369231741073e-06,
+              -9.66987009285127e-07
+            ],
+            [
+              -2.0873369231741073e-06,
+              7.514035317407949e-06,
+              2.52458507039988e-06
+            ],
+            [
+              -9.66987009285127e-07,
+              2.5245850703998802e-06,
+              1.5435756154182768e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "handoff",
+          "start_s": 26.21816688508261,
+          "end_s": 26.518389216042124,
+          "samples": 5,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown"
+        },
+        {
+          "phase": "tracking",
+          "start_s": 26.5850872839801,
+          "end_s": 98.06860138801858,
+          "samples": 898,
+          "arm_moving_samples": 366,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.02049256767525462,
+            0.0151303719849747,
+            0.04095237927550133
+          ],
+          "lag1_correlation": [
+            0.9986924891806941,
+            0.9973536413539676,
+            0.9958786962189713
+          ],
+          "covariance_m_rad": [
+            [
+              0.0004199453299248905,
+              -0.0001769580864992305,
+              -0.0003175169229679237
+            ],
+            [
+              -0.00017695808649923048,
+              0.00022892815640370727,
+              0.00043350886325991866
+            ],
+            [
+              -0.0003175169229679237,
+              0.0004335088632599186,
+              0.0016770973683245107
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "recovery",
+          "start_s": 99.536222196999,
+          "end_s": 100.73773655109107,
+          "samples": 14,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0008943375191038067,
+            0.0024457597006318334,
+            0.002074170656442872
+          ],
+          "lag1_correlation": [
+            0.06254600904184596,
+            0.15244007160749112,
+            0.25733843236520876
+          ],
+          "covariance_m_rad": [
+            [
+              7.998395980767521e-07,
+              -1.615748113264518e-06,
+              -1.458878311792052e-06
+            ],
+            [
+              -1.6157481132645182e-06,
+              5.981740513234714e-06,
+              3.994916916543473e-06
+            ],
+            [
+              -1.458878311792052e-06,
+              3.994916916543472e-06,
+              4.3021839120486554e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        }
+      ]
+    },
+    {
+      "log": "runs/20261101T130341Z-separated-3206b63c.jsonl",
+      "samples": 826,
+      "excluded": {},
+      "base_motion_label": "unknown",
+      "ground_truth_available": false,
+      "warning": "Joint motion and PnP changes do not establish whether a base/table moved.",
+      "timing": {
+        "receipt_age_median_p95_s": [
+          0.15288836281979457,
+          0.1895017180358991
+        ],
+        "control_age_median_p95_s": [
+          0.19425449427217245,
+          0.26003309909719974
+        ]
+      },
+      "settings": {
+        "common_base_plane": true,
+        "empnp_use_prev": false,
+        "filter_alpha": 1.0,
+        "base_pose_window": 0,
+        "follow_law": "feedforward"
+      },
+      "capture_start": 783510.9401086157,
+      "duration_s": 89.06273073097691,
+      "median_period_s": 0.10006503900513053,
+      "accepted_fraction": 0.9152542372881356,
+      "raw_spread_m_m_rad": [
+        0.004282591618285062,
+        0.015431112593305903,
+        0.010102034320598509
+      ],
+      "raw_spread_is_noise_estimate": false,
+      "arm_moving_fraction": 0.291970802919708,
+      "joint_motion_known_samples": 822,
+      "phases": [
+        {
+          "phase": "preview",
+          "start_s": 0.0,
+          "end_s": 27.25246921996586,
+          "samples": 305,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0007373740305040805,
+            0.0013320879384055933,
+            0.0010549759822071412
+          ],
+          "lag1_correlation": [
+            -0.07009846529788799,
+            0.029902062473945883,
+            0.09539253658797257
+          ],
+          "covariance_m_rad": [
+            [
+              5.437204608618329e-07,
+              -5.48357091579268e-07,
+              -4.956310533208562e-07
+            ],
+            [
+              -5.483570915792682e-07,
+              1.7744582756456636e-06,
+              8.815382170045241e-07
+            ],
+            [
+              -4.956310533208562e-07,
+              8.815382170045241e-07,
+              1.1129743230339225e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "alignment",
+          "start_s": 33.22334595001303,
+          "end_s": 39.461214347044006,
+          "samples": 61,
+          "arm_moving_samples": 46,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.001948891370852046,
+            0.004335712707085728,
+            0.0022605580176826585
+          ],
+          "lag1_correlation": [
+            0.7281704711937375,
+            0.9123149656628105,
+            0.8794998469414382
+          ],
+          "covariance_m_rad": [
+            [
+              3.798177575381568e-06,
+              -6.440183314773342e-06,
+              -3.3061161045541548e-06
+            ],
+            [
+              -6.440183314773342e-06,
+              1.879840467838465e-05,
+              8.267369321958428e-06
+            ],
+            [
+              -3.3061161045541548e-06,
+              8.267369321958428e-06,
+              5.110122551309351e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "handoff",
+          "start_s": 39.56116826098878,
+          "end_s": 39.994768886012025,
+          "samples": 5,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown"
+        },
+        {
+          "phase": "tracking",
+          "start_s": 40.128196832025424,
+          "end_s": 83.892379431054,
+          "samples": 415,
+          "arm_moving_samples": 194,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0038218193081387053,
+            0.005568087063701557,
+            0.0038809955179164167
+          ],
+          "lag1_correlation": [
+            0.9955627123910494,
+            0.9976150753007068,
+            0.9969532803354441
+          ],
+          "covariance_m_rad": [
+            [
+              1.4606302824061815e-05,
+              1.8349872208034397e-05,
+              1.2452672294108325e-05
+            ],
+            [
+              1.8349872208034397e-05,
+              3.100359354896063e-05,
+              1.8753093425021996e-05
+            ],
+            [
+              1.2452672294108325e-05,
+              1.8753093425021996e-05,
+              1.5062126210087312e-05
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "recovery",
+          "start_s": 85.42680110305082,
+          "end_s": 89.06273073097691,
+          "samples": 40,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0004698079476596005,
+            0.0010154609087335803,
+            0.0015058532501360355
+          ],
+          "lag1_correlation": [
+            -0.15341502345033098,
+            -0.38857557995850983,
+            -0.012539686149604974
+          ],
+          "covariance_m_rad": [
+            [
+              2.207195076841259e-07,
+              -3.2356105349349265e-07,
+              -4.407670252893211e-07
+            ],
+            [
+              -3.2356105349349265e-07,
+              1.0311608571660286e-06,
+              1.1406152285864338e-06
+            ],
+            [
+              -4.407670252893211e-07,
+              1.1406152285864338e-06,
+              2.2675940109452614e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        }
+      ]
+    },
+    {
+      "log": "runs/20261101T130549Z-separated-2cac12f2.jsonl",
+      "samples": 860,
+      "excluded": {},
+      "base_motion_label": "unknown",
+      "ground_truth_available": false,
+      "warning": "Joint motion and PnP changes do not establish whether a base/table moved.",
+      "timing": {
+        "receipt_age_median_p95_s": [
+          0.15778250130824745,
+          0.2007197646948043
+        ],
+        "control_age_median_p95_s": [
+          0.19441560038831085,
+          0.2596307883504778
+        ]
+      },
+      "settings": {
+        "common_base_plane": true,
+        "empnp_use_prev": false,
+        "filter_alpha": 1.0,
+        "base_pose_window": 0,
+        "follow_law": "feedforward"
+      },
+      "capture_start": 783640.2047080507,
+      "duration_s": 97.7690079989843,
+      "median_period_s": 0.10007739695720375,
+      "accepted_fraction": 0.8872093023255814,
+      "raw_spread_m_m_rad": [
+        0.006454215357039817,
+        0.012739558623745506,
+        0.011574335707014908
+      ],
+      "raw_spread_is_noise_estimate": false,
+      "arm_moving_fraction": 0.8691588785046729,
+      "joint_motion_known_samples": 856,
+      "phases": [
+        {
+          "phase": "preview",
+          "start_s": 0.0,
+          "end_s": 2.9686180729186162,
+          "samples": 29,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0006093821789869056,
+            0.0021829672365710415,
+            0.0017484577608070772
+          ],
+          "lag1_correlation": [
+            0.33349556407762576,
+            0.2812324000719508,
+            0.4793783706613981
+          ],
+          "covariance_m_rad": [
+            [
+              3.71346640066829e-07,
+              -8.733353652849767e-07,
+              -6.272371685371902e-07
+            ],
+            [
+              -8.733353652849767e-07,
+              4.76534595594261e-06,
+              2.7696211579204124e-06
+            ],
+            [
+              -6.272371685371902e-07,
+              2.7696211579204124e-06,
+              3.0571045413264984e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "alignment",
+          "start_s": 9.27306342299562,
+          "end_s": 17.178679322008975,
+          "samples": 89,
+          "arm_moving_samples": 75,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0012249715437938958,
+            0.004031871217353011,
+            0.002775057080644482
+          ],
+          "lag1_correlation": [
+            0.7204473633417458,
+            0.8510302319595305,
+            0.6995926590019812
+          ],
+          "covariance_m_rad": [
+            [
+              1.5005552831048006e-06,
+              -2.060393915241798e-06,
+              -1.0099323335221034e-07
+            ],
+            [
+              -2.060393915241798e-06,
+              1.6255985513319653e-05,
+              6.404409282796087e-06
+            ],
+            [
+              -1.0099323335221032e-07,
+              6.404409282796087e-06,
+              7.700941800835076e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "handoff",
+          "start_s": 17.345443202997558,
+          "end_s": 17.645812714938074,
+          "samples": 4,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown"
+        },
+        {
+          "phase": "tracking",
+          "start_s": 17.78015487093944,
+          "end_s": 91.36448636592831,
+          "samples": 695,
+          "arm_moving_samples": 669,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.006858643094853443,
+            0.013381787268850798,
+            0.011745962648151063
+          ],
+          "lag1_correlation": [
+            0.975428118561063,
+            0.9945090162027861,
+            0.9983334591214117
+          ],
+          "covariance_m_rad": [
+            [
+              4.7040985102580804e-05,
+              -4.933192488845972e-05,
+              -4.571731637061977e-05
+            ],
+            [
+              -4.9331924888459716e-05,
+              0.00017907223050877728,
+              0.00013761478805379148
+            ],
+            [
+              -4.571731637061977e-05,
+              0.00013761478805379148,
+              0.00013796763853175993
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "recovery",
+          "start_s": 93.59935951093212,
+          "end_s": 97.7690079989843,
+          "samples": 43,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0007740192009283597,
+            0.0012721880182726864,
+            0.001231041106248404
+          ],
+          "lag1_correlation": [
+            -0.0834047393038236,
+            -0.12086852603594929,
+            -0.035652554074034434
+          ],
+          "covariance_m_rad": [
+            [
+              5.991057234057764e-07,
+              -6.831505145880428e-07,
+              -6.970977048251083e-07
+            ],
+            [
+              -6.831505145880428e-07,
+              1.618462353836585e-06,
+              1.1407746813031466e-06
+            ],
+            [
+              -6.970977048251083e-07,
+              1.1407746813031466e-06,
+              1.5154622052732939e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        }
+      ]
+    },
+    {
+      "log": "runs/20261101T130805Z-separated-3af9fd05.jsonl",
+      "samples": 863,
+      "excluded": {},
+      "base_motion_label": "unknown",
+      "ground_truth_available": false,
+      "warning": "Joint motion and PnP changes do not establish whether a base/table moved.",
+      "timing": {
+        "receipt_age_median_p95_s": [
+          0.15416373533662409,
+          0.19606802155030892
+        ],
+        "control_age_median_p95_s": [
+          0.18368247977923602,
+          0.24224950827192515
+        ]
+      },
+      "settings": {
+        "common_base_plane": true,
+        "empnp_use_prev": false,
+        "filter_alpha": 1.0,
+        "base_pose_window": 0,
+        "follow_law": "pose"
+      },
+      "capture_start": 783775.9696848067,
+      "duration_s": 84.35985531506594,
+      "median_period_s": 0.10001530643785372,
+      "accepted_fraction": 0.8899188876013905,
+      "raw_spread_m_m_rad": [
+        0.007219800265280669,
+        0.011416806107963452,
+        0.009072235540709534
+      ],
+      "raw_spread_is_noise_estimate": false,
+      "arm_moving_fraction": 0.6965116279069767,
+      "joint_motion_known_samples": 860,
+      "phases": [
+        {
+          "phase": "preview",
+          "start_s": 0.0,
+          "end_s": 14.310147501062602,
+          "samples": 173,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.0008560555548285749,
+            0.0013847028442471375,
+            0.0012096085316307419
+          ],
+          "lag1_correlation": [
+            -0.022651608669696434,
+            -0.045253249643332216,
+            0.015085254872127092
+          ],
+          "covariance_m_rad": [
+            [
+              7.328311129528592e-07,
+              -8.609603736633834e-07,
+              -7.192417156383309e-07
+            ],
+            [
+              -8.609603736633834e-07,
+              1.917401966866112e-06,
+              1.1950833565786647e-06
+            ],
+            [
+              -7.192417156383309e-07,
+              1.1950833565786647e-06,
+              1.4631527997938793e-06
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "alignment",
+          "start_s": 20.547935707028955,
+          "end_s": 28.688190762884915,
+          "samples": 88,
+          "arm_moving_samples": 67,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.003610450375602069,
+            0.006274613366502047,
+            0.0039785700875387435
+          ],
+          "lag1_correlation": [
+            0.9272876485620971,
+            0.8929803548995503,
+            0.767489238733868
+          ],
+          "covariance_m_rad": [
+            [
+              1.303535191468512e-05,
+              -1.9054592707984402e-05,
+              -8.754605655296863e-06
+            ],
+            [
+              -1.9054592707984402e-05,
+              3.937077289908615e-05,
+              1.721502064245452e-05
+            ],
+            [
+              -8.754605655296865e-06,
+              1.7215020642454523e-05,
+              1.5829019941458045e-05
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        },
+        {
+          "phase": "handoff",
+          "start_s": 28.75373631704133,
+          "end_s": 29.087290960014798,
+          "samples": 5,
+          "arm_moving_samples": 0,
+          "base_motion_label": "unknown"
+        },
+        {
+          "phase": "tracking",
+          "start_s": 29.187352178967558,
+          "end_s": 84.35985531506594,
+          "samples": 597,
+          "arm_moving_samples": 532,
+          "base_motion_label": "unknown",
+          "raw_spread_m_m_rad": [
+            0.006830859539282667,
+            0.017764063420382163,
+            0.027843967710089474
+          ],
+          "lag1_correlation": [
+            0.9129680407623766,
+            0.9882894793244346,
+            0.9885198127980548
+          ],
+          "covariance_m_rad": [
+            [
+              4.6660642045409e-05,
+              4.12288953666401e-05,
+              3.879519506449597e-05
+            ],
+            [
+              4.1228895366640096e-05,
+              0.00031556194920335964,
+              0.0002785147166100058
+            ],
+            [
+              3.8795195064495966e-05,
+              0.0002785147166100058,
+              0.0007752865378405051
+            ]
+          ],
+          "raw_spread_is_noise_estimate": false
+        }
+      ]
+    }
+  ],
+  "config": {
+    "measurement_std_m": 0.007,
+    "measurement_std_yaw": 0.005235987755982988,
+    "acceleration_std_m": 0.1,
+    "acceleration_std_yaw": 0.15,
+    "initial_velocity_std_m": 0.05,
+    "initial_velocity_std_yaw": 0.15,
+    "prediction_horizon": 0.35000000000000003,
+    "gap_reset": 0.35,
+    "min_velocity_samples": 4,
+    "innovation_gate": 16.27,
+    "max_step_m": 0.15,
+    "max_step_yaw": 0.2617993877991494,
+    "max_speed": 0.15,
+    "max_yaw_rate": 0.5,
+    "stationary_window": 0.25,
+    "stationary_sigma": 0.75,
+    "reversal_sigma": 3.0,
+    "velocity_snr_min": 1.5,
+    "velocity_snr_full": 3.0
+  }
+}

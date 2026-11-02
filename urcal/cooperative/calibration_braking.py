@@ -32,6 +32,12 @@ def frozen_braking_snapshot(snapshot, now, *, leader):
             raise ValueError("braking snapshot timestamps must be finite and not in the future")
         ages[name] = now - captured
     follower = next(name for name in names if name != leader)
+    relative_filter = copy.deepcopy(getattr(snapshot, "relative_filter", None))
+    if relative_filter is not None:
+        relative_filter.update(G_control=inverse(bases[follower]) @ bases[leader],
+                               raw_origin_velocity=np.zeros(6), origin_velocity=np.zeros(6),
+                               reason="calibration braking; frozen geometry without velocity")
+        relative_filter["lambda"] = 0.
     return RelativeSnapshot(
         at=float(snapshot.at), base_poses=bases,
         base_twists={name: np.zeros(6) for name in names},
@@ -39,7 +45,7 @@ def frozen_braking_snapshot(snapshot, now, *, leader):
         relative_twist=np.zeros(6), measurement_age=ages,
         measurement_times=copy.deepcopy(snapshot.measurement_times),
         received_times=copy.deepcopy(snapshot.received_times),
-        prediction_dt={name: 0. for name in names})
+        prediction_dt={name: 0. for name in names}, relative_filter=relative_filter)
 
 
 def prepare_calibration_braking(controller, now, states, dt, snapshot):

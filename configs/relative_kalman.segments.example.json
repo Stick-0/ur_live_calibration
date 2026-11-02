@@ -1,0 +1,39 @@
+{
+  "schema": "relative-kalman-segments-v1",
+  "leader": "ur10e",
+  "notes": "These historical intervals have NO independent base-motion labels. They are intentionally unknown and cannot fit measurement noise. If independent operator/reference evidence becomes available, condition may be base_stationary_arm_stationary, base_stationary_arm_moving or base_moving, with evidence recorded explicitly. Times are seconds from the log's first valid paired planar capture. Training and validation intervals must not overlap.",
+  "segments": [
+    {
+      "log": "../runs/20261101T130805Z-separated-3af9fd05.jsonl",
+      "start_s": 0.0,
+      "end_s": 10.0,
+      "condition": "unknown",
+      "partition": "train",
+      "evidence": ""
+    },
+    {
+      "log": "../runs/20261101T130805Z-separated-3af9fd05.jsonl",
+      "start_s": 10.0,
+      "end_s": 14.0,
+      "condition": "unknown",
+      "partition": "validation",
+      "evidence": ""
+    },
+    {
+      "log": "../runs/20261101T130805Z-separated-3af9fd05.jsonl",
+      "start_s": 20.55,
+      "end_s": 28.7,
+      "condition": "unknown",
+      "partition": "train",
+      "evidence": ""
+    },
+    {
+      "log": "../runs/20261101T130805Z-separated-3af9fd05.jsonl",
+      "start_s": 29.2,
+      "end_s": 84.3,
+      "condition": "unknown",
+      "partition": "validation",
+      "evidence": ""
+    }
+  ]
+}

@@ -95,7 +95,7 @@ class CalibrationTracker:
     def __init__(self, max_age=0.5, stable_frames=5, alpha=0.2,
                  max_jump_m=0.015, max_jump_rad=np.deg2rad(2.0),
                  max_mean_px=5.0, max_pixel_px=8.0, min_points=5,
-                 check_reprojection=True):
+                 check_reprojection=True, check_individual_jumps=True):
         for name, value in (("max_age", max_age), ("alpha", alpha),
                             ("max_jump_m", max_jump_m), ("max_jump_rad", max_jump_rad),
                             ("max_mean_px", max_mean_px), ("max_pixel_px", max_pixel_px)):
@@ -112,6 +112,9 @@ class CalibrationTracker:
         if not isinstance(check_reprojection, bool):
             raise ValueError("check_reprojection must be a boolean")
         self.check_reprojection = check_reprojection
+        if not isinstance(check_individual_jumps, bool):
+            raise ValueError("check_individual_jumps must be a boolean")
+        self.check_individual_jumps = check_individual_jumps
         self.stable_frames = int(stable_frames)
         self.min_points = int(min_points)
         self.stable_count = 0
@@ -220,7 +223,7 @@ class CalibrationTracker:
                                        f"max={maximum:.2f}px limit={self.max_pixel_px:.2f}px; "
                                        f"points={count}/7 min={self.min_points})")
                 candidate[name] = _transform(frame.poses[name], f"{name} calibration")
-                if self._raw_poses:
+                if self._raw_poses and self.check_individual_jumps:
                     self._check_jump(self._raw_poses[name], candidate[name], name)
             if self._raw_poses:
                 old_relative = inverse(self._raw_poses[ROBOTS[0]]) @ self._raw_poses[ROBOTS[1]]
@@ -285,7 +288,7 @@ class PreviewCalibrationRecovery:
         # Copy configuration explicitly; never copy the old rejected baseline.
         return {name: getattr(template, name) for name in (
             "max_age", "stable_frames", "alpha", "max_jump_m", "max_jump_rad",
-            "max_mean_px", "max_pixel_px", "min_points", "check_reprojection")}
+            "max_mean_px", "max_pixel_px", "min_points", "check_reprojection", "check_individual_jumps")}
 
     def _clear_cluster(self, reason):
         # Keep observation watermarks: a duplicate of a rejected observation

@@ -1,7 +1,8 @@
 """Read-only follower position-error history and an optional Tk graph window.
 
-No controller, robot, or command queue is referenced here.  The supplied error
-is target minus current position in the follower's controller-base axes.
+No robot or motion-command queue is referenced here. Optional recording buttons
+send requests to a separate data recorder; graph redraws never supply its data.
+The supplied error is target minus current position in the follower's base axes.
 Tk is imported only when a window is constructed; the history is headless.
 """
 
@@ -10,6 +11,10 @@ from dataclasses import dataclass
 import math
 from numbers import Integral
 import time
+import uuid
+
+
+_Y_MAX_MM = 50.
 
 
 @dataclass(frozen=True)
@@ -194,15 +199,19 @@ class PositionErrorWindow:
     no new telemetry. Rendering is throttled to 10 Hz independently of sampling.
     """
 
-    def __init__(self, parent, follower="ur5e", simulation=False):
+    def __init__(self, parent, follower="ur5e", simulation=False, *, recording_command=None):
         import tkinter as tk
         from tkinter import ttk
 
         self.history = PositionErrorHistory(follower=follower, simulation=simulation)
+        self._recording_command = recording_command
+        self._recording = {"state": "idle" if recording_command is not None else "unavailable"}
+        self._recording_pending = None
+        self._recording_error = ""
         self.window = tk.Toplevel(parent)
         self.window.title("Follower TCP position error" + (" — SIMULATION" if simulation else ""))
-        self.window.geometry("900x520")
-        self.window.minsize(560, 350)
+        self.window.geometry("900x620")
+        self.window.minsize(560, 450)
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.window.columnconfigure(0, weight=1)
         self.window.rowconfigure(2, weight=1)
@@ -219,14 +228,91 @@ class PositionErrorWindow:
         self.canvas.grid(row=2, column=0, sticky="nsew", padx=10)
         status = ttk.Label(self.window, textvariable=self._status, wraplength=850, justify="left")
         status.grid(row=3, column=0, sticky="ew", padx=12, pady=8)
+        controls = ttk.Frame(self.window)
+        controls.grid(row=4, column=0, sticky="w", padx=12)
+        self._record_start = ttk.Button(controls, text="Start recording",
+                                       command=lambda: self._request_recording("start"))
+        self._record_start.grid(row=0, column=0, padx=(0, 8))
+        self._record_stop = ttk.Button(controls, text="Stop & save",
+                                      command=lambda: self._request_recording("stop"))
+        self._record_stop.grid(row=0, column=1)
+        self._recording_text = tk.StringVar(self.window)
+        recording = ttk.Label(self.window, textvariable=self._recording_text,
+                              wraplength=850, justify="left")
+        recording.grid(row=5, column=0, sticky="ew", padx=12, pady=(6, 4))
+        note = ttk.Label(self.window, text="Closing this graph keeps recording. Stop & save ends the CSV interval.",
+                         wraplength=850, justify="left")
+        note.grid(row=6, column=0, sticky="ew", padx=12, pady=(0, 10))
         def reflow(event):
             if event.widget is self.window:
-                for label in (heading, values, status):
+                for label in (heading, values, status, recording, note):
                     label.configure(wraplength=max(300, event.width - 24))
         self.window.bind("<Configure>", reflow)
         self._hidden = False
         self._last_draw = float("-inf")
+        self._refresh_recording()
         self.refresh()
+
+    def set_recording_status(self, status):
+        """Display producer acknowledgements independently of plot throttling."""
+        if not isinstance(status, dict):
+            return
+        self._recording = dict(status)
+        if (self._recording_pending is not None
+                and status.get("request_id") == self._recording_pending["request_id"]):
+            self._recording_pending = None
+            self._recording_error = ""
+        self._refresh_recording()
+
+    def _request_recording(self, action):
+        state = self._recording.get("state", "idle")
+        allowed = (self._recording.get("can_start", state in ("idle", "saved", "error"))
+                   if action == "start" else self._recording.get("can_stop", state in ("starting", "recording")))
+        if self._recording_command is None or self._recording_pending is not None or not allowed:
+            return
+        command = {"action": action, "request_id": uuid.uuid4().hex}
+        self._recording_pending = command
+        self._recording_error = ""
+        self._refresh_recording()
+        try:
+            self._recording_command(command)
+        except Exception as exc:
+            # Optional data recording must never send a robot Stop or escape
+            # the Tk callback because its queue or filesystem is unavailable.
+            self._recording_pending = None
+            self._recording_error = "Recording request failed: " + str(exc)
+            self._refresh_recording()
+
+    def _refresh_recording(self):
+        state = self._recording.get("state", "idle")
+        connected = self._recording_command is not None
+        waiting = self._recording_pending is not None
+        self._record_start.configure(state="normal" if connected and not waiting
+                                     and self._recording.get("can_start", state in ("idle", "saved", "error")) else "disabled")
+        self._record_stop.configure(state="normal" if connected and not waiting
+                                    and self._recording.get("can_stop", state in ("starting", "recording")) else "disabled")
+        if not connected:
+            text = "CSV recording is unavailable in this viewer."
+        elif waiting:
+            action = self._recording_pending["action"]
+            text = "Waiting for recorder to " + ("start..." if action == "start" else "stop and save...")
+        else:
+            labels = {"idle": "CSV ready", "starting": "Opening CSV", "recording": "RECORDING",
+                      "saving": "Saving CSV", "saved": "CSV saved", "error": "Recording error"}
+            text = labels.get(state, str(state))
+            rows = self._recording.get("rows", self._recording.get("samples", 0))
+            duration = self._recording.get("elapsed_s", 0.)
+            if state != "idle":
+                text += f" | {rows} rows | {float(duration):.2f} s"
+            if self._recording.get("error"):
+                text += " | " + str(self._recording["error"])
+            if self._recording.get("incomplete"):
+                text += " | INCOMPLETE"
+        if self._recording_error:
+            text += "\n" + self._recording_error
+        if self._recording.get("path"):
+            text += "\n" + str(self._recording["path"])
+        self._recording_text.set(text)
 
     def update(self, sample):
         self.history.update(sample)
@@ -253,7 +339,8 @@ class PositionErrorWindow:
         self._heading.set(f"{follower} TCP position error: distance to target")
         if data["valid"]:
             qualifier = "" if data["fresh"] and not data["time_held"] else "LAST SAMPLE  "
-            self._values.set(f"{qualifier}Position error: {data['norm_mm']:.2f} mm")
+            overflow = " (above plot range)" if data["norm_mm"] > _Y_MAX_MM else ""
+            self._values.set(f"{qualifier}Position error: {data['norm_mm']:.2f} mm{overflow}")
         else:
             self._values.set("Position error: — mm")
         phase, source = data["phase"].replace("_", " "), data["target_source"].replace("_", " ")
@@ -268,16 +355,16 @@ class PositionErrorWindow:
             return
         left, top, right, bottom = 66., 35., width - 18., height - 42.
         points = data["points"]
-        peak = max((point.norm_mm for point in points), default=0.)
-        span = max(1., peak * 1.12 if peak < 1e308 else peak)
+        span = _Y_MAX_MM
         end = data["end_at"] or 0.
         start = end - self.history.window_seconds
         xscreen = lambda at: left + (at - start) / self.history.window_seconds * (right - left)
-        yscreen = lambda value: top + (1. - value / span) * (bottom - top)
-        for index in range(5):
-            value = span * (1 - index / 4)
+        # Clamp drawing only; history and the numeric readout retain the real error.
+        yscreen = lambda value: top + (1. - min(span, max(0., value)) / span) * (bottom - top)
+        for index in range(6):
+            value = span * (1 - index / 5)
             y = yscreen(value)
-            canvas.create_line(left, y, right, y, fill="#94a3b8" if index == 4 else "#e2e8f0")
+            canvas.create_line(left, y, right, y, fill="#94a3b8" if index == 5 else "#e2e8f0")
             canvas.create_text(left - 8, y, text=f"{value:.1f}", fill="#334155", anchor="e")
         for seconds in range(0, 31, 5):
             x = xscreen(end - seconds)

@@ -104,8 +104,8 @@ class LiveAlignmentRuntimeTests(unittest.TestCase):
         args.stable_frames = 5  # Match the explicit five-frame calibration stream below.
         args.initial_align = enabled
         clock, order, records = Clock(), [], []
-        queues = [LocalQueue(maxsize=size) for size in (1, 8, 1, 1)]
-        frames, command_queue, statuses, gui_statuses = queues
+        queues = [LocalQueue(maxsize=size) for size in (1, 8, 1, 1, 8)]
+        frames, command_queue, statuses, gui_statuses, recording_commands = queues
         for command in commands:
             command_queue.put_nowait(command)
         real_gate, feed = calibration_stream(args, frames, clock, calibration_events or {})

@@ -4,7 +4,7 @@ No hardware connections are made here. prepare() proposes a command; commit()
 advances task time ONLY after its successful transmission. Preview never commits.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import copy
 
 import numpy as np
@@ -24,6 +24,7 @@ from urcal.control.acquisition import StationaryCalibrationAcquisition, stationa
 from urcal.cooperative.state import RelativeStateEstimator, RelativeStateError
 from urcal.cooperative.pose_smoothing import RelativePoseSmoother
 from urcal.cooperative.base_plane import constrain_base_snapshot
+from urcal.cooperative.base_compensation import relative_base_compensation
 
 
 ROBOTS = ("ur5e", "ur10e")
@@ -83,8 +84,9 @@ class CooperativeController:
         # Saved research configurations without this option keep their original
         # velocity model. The live CLI defaults to pose-only visual updates.
         self.base_motion_mode = getattr(args, "base_motion_mode", "velocity")
-        if self.base_motion_mode not in ("pose", "velocity"):
-            raise ValueError("base_motion_mode must be pose or velocity")
+        if self.base_motion_mode not in ("pose", "velocity", "relative_kalman"):
+            raise ValueError("base_motion_mode must be pose, velocity or relative_kalman")
+        self.relative_kalman = self.base_motion_mode == "relative_kalman"
         self.target_tolerance_m = float(getattr(args, "target_tolerance_m", 0.))
         self.target_tolerance_rad = np.deg2rad(float(getattr(args, "target_tolerance_deg", 0.)))
         if (not np.isfinite([self.target_tolerance_m, self.target_tolerance_rad]).all()
@@ -101,10 +103,13 @@ class CooperativeController:
                 or self.base_motion_mode != "pose" or response != "bounded"):
             raise ValueError("pose follow_law requires method separated, pose base updates and bounded response")
         self.bounded_leader = (response == "bounded" and args.method == "separated"
-                               and (self.approximate_targets or self.base_motion_mode == "pose"))
+                               and (self.approximate_targets or self.base_motion_mode in ("pose", "relative_kalman")))
+        if self.relative_kalman and (args.method != "separated" or self.follow_law != "feedforward"
+                                    or response != "bounded"):
+            raise ValueError("relative_kalman requires separated, feedforward and bounded following")
         self.live_calibration = None
         if (getattr(args, "live_calibration_recovery", False)
-                and self.base_motion_mode == "pose" and self.bounded_leader):
+                and self.base_motion_mode in ("pose", "relative_kalman") and self.bounded_leader):
             self.live_calibration = LiveCalibrationWindow(
                 timeout=getattr(args, "calibration_recovery_timeout", 2.),
                 blend_time=getattr(args, "calibration_blend_time", .5),
@@ -127,6 +132,7 @@ class CooperativeController:
         self.tracking_offset = None
         self.previous_base_compensation = np.zeros(6)
         self.previous_base_compensation_qdot = np.zeros(6)
+        self.previous_relative_base_flange = np.zeros(6)
         self.offsets = {name: pose_matrix(getattr(args, name + "_tcp_offset") or [0.]*6) for name in ROBOTS}
         # Fixed dataset-frame conversion is enabled by default, including
         # old saved research argument sets that lacked this output option.
@@ -135,6 +141,8 @@ class CooperativeController:
         self.common_base_plane = getattr(args, "common_base_plane", False)
         if not isinstance(self.common_base_plane, bool):
             raise ValueError("common_base_plane must be a boolean")
+        if self.relative_kalman and not self.common_base_plane:
+            raise ValueError("relative_kalman requires the common physical mounting plane")
         self.mappings = {name: calibration_output_mapping(
             name, ur10e_output_correction=self.ur10e_output_correction) for name in ROBOTS}
         self.models = models or {name: NominalKinematics(name, self.offsets[name]) for name in ROBOTS}
@@ -143,7 +151,7 @@ class CooperativeController:
             max_age=args.max_calibration_age, stable_frames=args.stable_frames, alpha=1.,
             max_jump_m=args.max_calibration_jump_m, max_jump_rad=np.deg2rad(args.max_calibration_jump_deg),
             max_mean_px=args.max_reproj_px, max_pixel_px=args.max_point_reproj_px, min_points=args.min_points,
-            check_reprojection=args.check_reprojection)
+            check_reprojection=args.check_reprojection, check_individual_jumps=not self.relative_kalman)
         self.estimator = self._new_estimator()
         self.stationary_acquisition = StationaryCalibrationAcquisition(self.gate)
         self.preview_recovery = PreviewCalibrationRecovery()
@@ -175,6 +183,13 @@ class CooperativeController:
 
     def _new_estimator(self):
         args = self.args
+        if self.relative_kalman:
+            from urcal.cooperative.relative_kalman import PlanarRelativeStateEstimator, PlanarKalmanConfig, load_planar_kalman_config
+            parameters = getattr(args, "relative_kalman_parameters", None)
+            config = (PlanarKalmanConfig.from_dict(parameters) if parameters is not None else
+                      load_planar_kalman_config(getattr(args, "relative_kalman_config", None)))
+            return PlanarRelativeStateEstimator(leader=self.leader, mappings=self.mappings,
+                                               max_measurement_age=args.max_calibration_age, config=config)
         mode = ("pose" if self.base_motion_mode == "pose" else
                 "direct" if args.method == "direct" else "predict")
         return RelativeStateEstimator(
@@ -206,6 +221,7 @@ class CooperativeController:
                           "previous_compensation_qdot", "previous_feedback",
                           "previous_base_compensation", "previous_base_compensation_qdot"):
             getattr(self, attribute)[:] = 0.
+        self.previous_relative_base_flange[:] = 0.
         self.pause_gap_approach("motion stopped; resume explicitly after Arm")
         self.tracking_offset = np.eye(4) if self.gap_approach.state != "idle" else None
         self.previous_task_scale = 0.
@@ -237,6 +253,7 @@ class CooperativeController:
         self.tracking_offset = None
         self.previous_base_compensation[:] = 0
         self.previous_base_compensation_qdot[:] = 0
+        self.previous_relative_base_flange[:] = 0
         if self.live_calibration is not None:
             self.live_calibration.reset()
         self._last_live_snapshot = None
@@ -247,7 +264,7 @@ class CooperativeController:
     def _gap_approach_block(self, enabled):
         if not enabled:
             return "available during active following"
-        if not self.bounded_leader or self.base_motion_mode != "pose":
+        if not self.bounded_leader or self.base_motion_mode not in ("pose", "relative_kalman"):
             return "requires separated, bounded following with pose base updates"
         if self.invalid_since is not None or (self.live_calibration is not None and
                 (self.live_calibration.waiting or self.live_calibration.blending)):
@@ -338,6 +355,8 @@ class CooperativeController:
         return nominal @ offset, offset.copy()
 
     def _start_live_observation(self, now, reason, *, pause_approach=True):
+        if self.relative_kalman:
+            self.estimator.note_rejected(now, reason)
         if pause_approach:
             self.pause_gap_approach("calibration observation; resume approach after recovery")
         if self._last_live_snapshot is None:
@@ -435,6 +454,8 @@ class CooperativeController:
                     self.live_calibration.candidate.reset()
             return accepted
         except (ControlFault, RelativeStateError, ValueError) as exc:
+            if self.relative_kalman:
+                self.estimator.note_rejected(received_at, str(exc))
             if not active_recovery:
                 self.pause_gap_approach("calibration rejected; resume approach after recovery")
             stable_count = self.gate.stable_count
@@ -502,19 +523,31 @@ class CooperativeController:
             snapshot = self.estimator.estimate(now, leader=self.leader)
         except RelativeStateError as exc:
             raise self._measurement_fault("measurement_expired", str(exc), now) from exc
-        if self.common_base_plane:
+        if self.common_base_plane and not self.relative_kalman:
             snapshot = constrain_base_snapshot(snapshot, self.leader, self.mappings)
         if active and self.pose_smoother is not None:
             # Retained across live estimator replacement: a new PnP branch
             # must not bypass gradual coordinate application. Only a new
             # stopped/target session resets this filter; no timestamps change.
             snapshot = self.pose_smoother.apply(snapshot, now, self.leader)
+        relative_blending = False
         if active and self.live_calibration is not None:
+            relative_blending = self.relative_kalman and self.live_calibration.blending
             snapshot = self.live_calibration.blend(snapshot, now, self.leader)
         # Independent temporal interpolation can leave the common-plane
         # manifold even when all input image pairs satisfy it exactly.
-        if self.common_base_plane and active:
+        if self.common_base_plane and active and (not self.relative_kalman or relative_blending):
             snapshot = constrain_base_snapshot(snapshot, self.leader, self.mappings)
+        if self.relative_kalman:
+            # Recovery blending must not reuse pre-blend velocities or expose
+            # two different G values to task geometry and feedforward.
+            information = copy.deepcopy(snapshot.relative_filter)
+            information["G_control"] = inverse(snapshot.base_poses[self.follower]) @ snapshot.base_poses[self.leader]
+            if self.invalid_since is not None or relative_blending:
+                information.update(reason="rejected observation or recovery blending")
+                information["lambda"] = 0.
+                information["origin_velocity"] = np.zeros(6)
+            snapshot = replace(snapshot, relative_filter=information)
         self._last_live_snapshot = copy.deepcopy(snapshot)
         return snapshot
 
@@ -657,6 +690,22 @@ class CooperativeController:
                 bases, snapshot.base_twists, leader, follower, flanges[leader],
                 leader_jacobian @ qdots[leader], tracking_relative,
                 tracking_derivative, self.offsets[follower])
+        relative_base = None
+        if self.relative_kalman:
+            information = snapshot.relative_filter
+            confidence = 0. if calibration_braking else information["lambda"]
+            relative_base = relative_base_compensation(
+                inverse(bases[follower]) @ bases[leader], flanges[follower], states[follower].tcp,
+                information["raw_origin_velocity"], confidence,
+                self.previous_relative_base_flange, dt,
+                linear_speed=getattr(self.args, "relative_base_speed", .10),
+                angular_speed=getattr(self.args, "relative_base_angular_speed", .15),
+                linear_accel=getattr(self.args, "relative_base_accel", .20),
+                angular_accel=getattr(self.args, "relative_base_angular_accel", .30))
+            base_comp = relative_base["effective_tcp"].copy()
+            nominal_base_comp = relative_base["raw_flange"].copy()
+            nominal_base_comp[:3] += np.cross(nominal_base_comp[3:],
+                                             states[follower].tcp[:3, 3] - flanges[follower][:3, 3])
         current = states[follower].tcp
         dp, dr = pose_delta(current, target)
         tcp_error_m, tcp_error_rad = float(np.linalg.norm(dp)), float(np.linalg.norm(dr))
@@ -790,6 +839,11 @@ class CooperativeController:
         separated = self.args.method == "separated"
         compensation = base_comp + leader_comp if separated else np.zeros(6)
         mandatory_compensation = base_comp if self.bounded_leader else compensation
+        if self.relative_kalman:
+            # Estimated table motion is an attenuable requested component, not
+            # a mandatory external-motion obligation. The total still passes
+            # exactly the same measured/command TCP and joint motion checks.
+            mandatory_compensation = np.zeros(6)
         work_twist = task_twist if separated else np.zeros(6)
         rho_cap = 1.
         if separated:
@@ -815,17 +869,27 @@ class CooperativeController:
         geometry_failure = None
         geometry_details = {}
 
+        def future_base_poses(duration):
+            if self.relative_kalman:
+                G = inverse(bases[follower]) @ bases[leader]
+                velocity = np.zeros(6) if calibration_braking else relative_base["effective_origin"]
+                information = snapshot.relative_filter
+                remaining = max(0., information["config"]["prediction_horizon"] - information["capture_age"])
+                return {follower: bases[follower].copy(),
+                        leader: bases[follower] @ advance_origin_pose(G, velocity, min(duration, remaining))}
+            return {name: advance_origin_pose(bases[name], snapshot.base_twists[name], duration) for name in ROBOTS}
+
         # Velocity research mode requires independent feasibility of external
         # base compensation. Pose/bounded following has no such mandatory
         # motion: test the actual candidate's sweep below, rather than a
         # hypothetical stationary follower with the leader still moving.
-        if not calibration_braking and not (self.base_motion_mode == "pose" and self.bounded_leader):
+        if not calibration_braking and not (self.base_motion_mode in ("pose", "relative_kalman") and self.bounded_leader):
             try:
                 compensation_qdot = np.linalg.solve(jacobians[follower], mandatory_compensation)
             except np.linalg.LinAlgError as exc:
                 raise ResearchFault("singularity", "cannot solve mandatory compensation joints") from exc
             for fraction in (.5, 1.):
-                trial_bases = {name: advance_origin_pose(bases[name], snapshot.base_twists[name], dt * fraction) for name in ROBOTS}
+                trial_bases = future_base_poses(dt * fraction)
                 trial_q = {leader: states[leader].joints + qdots[leader] * dt * fraction,
                            follower: states[follower].joints + compensation_qdot * dt * fraction}
                 allowed, why, _ = self.guard.check(trial_bases, trial_q)
@@ -847,7 +911,7 @@ class CooperativeController:
             if not calibration_braking and np.linalg.norm(desired[:3, 3]) < self.args.min_gap:
                 geometry_failure = ("clearance_infeasible", "next relative flange gap below min_gap")
                 return False
-            future_bases = {name: advance_origin_pose(bases[name], snapshot.base_twists[name], dt) for name in ROBOTS}
+            future_bases = future_base_poses(dt)
             future_leader = advance_origin_pose(flanges[leader], leader_jacobian @ qdots[leader], dt)
             next_target = inverse(future_bases[follower]) @ future_bases[leader] @ future_leader @ desired @ self.offsets[follower]
             nominal_next_target = next_target.copy()
@@ -869,7 +933,7 @@ class CooperativeController:
             # The joint-space sweep remains bounded by all motion/geometry
             # limits and the original (larger) tracking-error envelope.
             for fraction in (.5, 1.):
-                trial_bases = {name: advance_origin_pose(bases[name], snapshot.base_twists[name], dt * fraction) for name in ROBOTS}
+                trial_bases = future_base_poses(dt * fraction)
                 trial_q = {leader: states[leader].joints + qdots[leader] * dt * fraction,
                            follower: states[follower].joints + qdot * dt * fraction}
                 if not self.guard.check(trial_bases, trial_q)[0]:
@@ -948,8 +1012,10 @@ class CooperativeController:
             geometry_failure, geometry_details = None, {}
             try:
                 if bounded_command:
+                    soft_base = base_comp if self.relative_kalman else np.zeros(6)
                     decision = govern_follow(
-                        base_comp, leader_comp + feedback * feedback_scale, work_twist, jacobians[follower],
+                        np.zeros(6) if self.relative_kalman else base_comp,
+                        leader_comp + soft_base + feedback * feedback_scale, work_twist, jacobians[follower],
                         measured_twist, qdots[follower], self.previous_twist, self.previous_qdot, dt, self.limits,
                         previous_base=np.zeros(6) if calibration_braking else self.previous_base_compensation,
                         previous_base_qdot=np.zeros(6) if calibration_braking else self.previous_base_compensation_qdot,
@@ -993,7 +1059,7 @@ class CooperativeController:
             "follow_law": self.follow_law,
             "calibration_braking": bool(calibration_braking),
             "base_motion_mode": self.base_motion_mode,
-            "base_velocity_used": self.base_motion_mode == "velocity",
+            "base_velocity_used": self.base_motion_mode in ("velocity", "relative_kalman"),
             "leader_velocity_source": "joint_encoders",
             "follower_velocity_source": "rtde",
             "follow_damping_time": self.follow_damping_time if damped else 0.,
@@ -1056,6 +1122,14 @@ class CooperativeController:
                           leader_velocity_command_used=False,
                           feedback_error_origin="tcp", feedback_error_frame="follower_base",
                           feedback_velocity_source="rtde_actual_tcp")
+        if self.relative_kalman:
+            record["relative_kalman"] = copy.deepcopy(snapshot.relative_filter)
+            record["relative_base_compensation"] = relative_base
+            record["relative_base_compensation"]["held_for_braking"] = bool(calibration_braking)
+            record["requested_twist"] = base_comp + leader_comp + feedback + rho_cap * work_twist
+            record["tracking_requested"] = base_comp + leader_comp + feedback
+            record["relative_base_target"] = snapshot.relative_filter["G_control"] @ flanges[leader] @ tracking_relative
+            record["tracking_target_tcp"] = record["relative_base_target"] @ self.offsets[follower]
         if active and self.pose_smoother is not None:
             record["base_pose_smoothing"] = self.pose_smoother.diagnostics()
         if bounded_command:
@@ -1077,6 +1151,10 @@ class CooperativeController:
         self.previous_compensation_qdot = np.asarray(proposal.decision.components["compensation_qdot"]).copy()
         self.previous_feedback = proposal.feedback.copy()
         self.previous_task_scale = proposal.decision.task_scale
+        if self.relative_kalman:
+            self.previous_relative_base_flange = (
+                np.zeros(6) if proposal.record.get("calibration_braking") else
+                proposal.record["relative_base_compensation"]["effective_flange"].copy())
         if self.bounded_leader:
             self.previous_base_compensation = proposal.compensation.copy()
             self.previous_base_compensation_qdot = np.asarray(proposal.decision.components["compensation_qdot"]).copy()

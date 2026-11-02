@@ -39,7 +39,7 @@ def fresh_calibration_tracker(template):
     """Empty acceptance state with unchanged configured calibration limits."""
     return CalibrationTracker(**{key: getattr(template, key) for key in (
         "max_age", "stable_frames", "alpha", "max_jump_m", "max_jump_rad",
-        "max_mean_px", "max_pixel_px", "min_points", "check_reprojection",
+        "max_mean_px", "max_pixel_px", "min_points", "check_reprojection", "check_individual_jumps",
     )})
 
 

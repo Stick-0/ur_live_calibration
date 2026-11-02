@@ -51,8 +51,8 @@ class LiveCalibrationRuntimeTests(unittest.TestCase):
         for index, at in enumerate((9.92, 9.96, 10.), 1):
             accept(engine, bases, at, index)
         clock = Clock()
-        queues = [LocalQueue(maxsize=size) for size in (1, 8, 1, 1)]
-        frames, commands, statuses, gui_statuses = queues
+        queues = [LocalQueue(maxsize=size) for size in (1, 8, 1, 1, 8)]
+        frames, commands, statuses, gui_statuses, recording_commands = queues
         if arm:
             commands.put_nowait("arm")
         sequence = 3

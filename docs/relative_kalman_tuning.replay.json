@@ -1,0 +1,309 @@
+{
+  "kind": "unlabelled_diagnostic_replay_not_accuracy",
+  "config": {
+    "measurement_std_m": 0.007,
+    "measurement_std_yaw": 0.005235987755982988,
+    "acceleration_std_m": 0.1,
+    "acceleration_std_yaw": 0.15,
+    "initial_velocity_std_m": 0.05,
+    "initial_velocity_std_yaw": 0.15,
+    "prediction_horizon": 0.35000000000000003,
+    "gap_reset": 0.35,
+    "min_velocity_samples": 4,
+    "innovation_gate": 16.27,
+    "max_step_m": 0.15,
+    "max_step_yaw": 0.2617993877991494,
+    "max_speed": 0.15,
+    "max_yaw_rate": 0.5,
+    "stationary_window": 0.25,
+    "stationary_sigma": 0.75,
+    "reversal_sigma": 3.0,
+    "velocity_snr_min": 1.5,
+    "velocity_snr_full": 3.0
+  },
+  "logs": [
+    {
+      "log": "runs/20261101T130112Z-separated-2479f01f.jsonl",
+      "samples": 1184,
+      "age_s": 0.18,
+      "filter_rejections": 16,
+      "phases": [
+        {
+          "phase": "preview",
+          "samples": 233,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "alignment",
+          "samples": 34,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "handoff",
+          "samples": 5,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "tracking",
+          "samples": 898,
+          "finite_estimate_fraction": 0.9866369710467706,
+          "mean_lambda": 0.07031498566128236,
+          "mean_prediction_gain": [
+            0.08758219172609898,
+            0.08758219172609898,
+            0.059345031430220484
+          ],
+          "linear_compensation_rms_m_s": 0.009800689123624178,
+          "nonzero_compensation_fraction": 0.1291759465478842
+        },
+        {
+          "phase": "recovery",
+          "samples": 14,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        }
+      ],
+      "interpretation": "diagnostic replay only; no ground truth, robot dynamics or upstream gate replay"
+    },
+    {
+      "log": "runs/20261101T130341Z-separated-3206b63c.jsonl",
+      "samples": 826,
+      "age_s": 0.18,
+      "filter_rejections": 0,
+      "phases": [
+        {
+          "phase": "preview",
+          "samples": 305,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "alignment",
+          "samples": 61,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "handoff",
+          "samples": 5,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "tracking",
+          "samples": 415,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.07373493973681906,
+          "mean_prediction_gain": [
+            0.10612225860766862,
+            0.10612225860766862,
+            0.057134233920321784
+          ],
+          "linear_compensation_rms_m_s": 0.008999539877575988,
+          "nonzero_compensation_fraction": 0.15180722891566265
+        },
+        {
+          "phase": "recovery",
+          "samples": 40,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        }
+      ],
+      "interpretation": "diagnostic replay only; no ground truth, robot dynamics or upstream gate replay"
+    },
+    {
+      "log": "runs/20261101T130549Z-separated-2cac12f2.jsonl",
+      "samples": 860,
+      "age_s": 0.18,
+      "filter_rejections": 0,
+      "phases": [
+        {
+          "phase": "preview",
+          "samples": 29,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "alignment",
+          "samples": 89,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "handoff",
+          "samples": 4,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "tracking",
+          "samples": 695,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0880575539303019,
+          "mean_prediction_gain": [
+            0.07894798906322013,
+            0.07894798906322013,
+            0.03381589137838768
+          ],
+          "linear_compensation_rms_m_s": 0.006492885431279605,
+          "nonzero_compensation_fraction": 0.17266187050359713
+        },
+        {
+          "phase": "recovery",
+          "samples": 43,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        }
+      ],
+      "interpretation": "diagnostic replay only; no ground truth, robot dynamics or upstream gate replay"
+    },
+    {
+      "log": "runs/20261101T130805Z-separated-3af9fd05.jsonl",
+      "samples": 863,
+      "age_s": 0.18,
+      "filter_rejections": 2,
+      "phases": [
+        {
+          "phase": "preview",
+          "samples": 173,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "alignment",
+          "samples": 88,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.005519480517817444,
+          "mean_prediction_gain": [
+            0.00020642653071141953,
+            0.00020642653071141953,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 2.8592721913849975e-05,
+          "nonzero_compensation_fraction": 0.011363636363636364
+        },
+        {
+          "phase": "handoff",
+          "samples": 5,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.0,
+          "mean_prediction_gain": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "linear_compensation_rms_m_s": 0.0,
+          "nonzero_compensation_fraction": 0.0
+        },
+        {
+          "phase": "tracking",
+          "samples": 597,
+          "finite_estimate_fraction": 1.0,
+          "mean_lambda": 0.17329504660966527,
+          "mean_prediction_gain": [
+            0.26498922414190723,
+            0.26498922414190723,
+            0.17474905246535272
+          ],
+          "linear_compensation_rms_m_s": 0.02022928726255659,
+          "nonzero_compensation_fraction": 0.34673366834170855
+        }
+      ],
+      "interpretation": "diagnostic replay only; no ground truth, robot dynamics or upstream gate replay"
+    }
+  ]
+}
