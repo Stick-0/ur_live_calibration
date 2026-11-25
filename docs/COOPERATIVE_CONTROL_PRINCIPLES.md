@@ -1607,6 +1607,86 @@ JSONL 쓰기는 용량이 제한된 별도 스레드 큐를 사용한다. 기록
 
 근거: [오차 계산](../urcal/control/tracking_error.py), [JSONL 기록](../urcal/cooperative/logging.py), [오차 CSV](../urcal/control/error_recording.py), [분석 도구](../urcal/tools/analyze_log.py). 회귀 근거: [오차 좌표와 시각](../tests/test_tracking_error.py), [실험 로그 원자성](../tests/test_cooperative_logging.py), [CSV 생산자 샘플 보존](../tests/test_error_recording.py).
 
+<a id="evaluation-sessions"></a>
+
+### 24.3 고정 상대 목표를 사용하는 평가 세션
+
+평가 세션은 기존 상세 JSONL 안에 `evaluation_start`, `evaluation_cycle`, `evaluation_marker`, `evaluation_stop`을 추가한다. 시행 이름 `trial_id`는 사용자가 지정하거나 자동 생성하고, 별도의 UUID `session_id`로 구간을 식별한다. 같은 시행 이름을 재사용해도 세션이나 파일을 덮어쓰지 않는다. 평가 버튼은 기존 위치오차 CSV 버튼과 같은 비구동 기록 채널을 사용하며, Arm·목표 변경 명령 큐에 들어가지 않는다.
+
+시작 시 명목 상대 플랜지 목표 `engine.path.pose(engine.progress)`를 복사하여 `frozen_target`으로 저장한다. 이 목표는 시작 순간의 현재 측정 자세가 아니며, 허용오차 안에서 제어기가 선택한 `tracking_offset`도 포함하지 않는다. 따라서 허용오차로 제어 참조가 이동하거나, 접근 작업·상대 경로가 진행되거나, 미리보기에서 목표를 다시 편집해도 평가 기준 자체는 움직이지 않는다. 경로 추종 도중 시작한 세션 역시 그 시작점에 대한 유지 오차를 측정한다. 시간에 따라 변하는 경로의 추종 오차는 별도의 제어 로그와 구분해서 해석해야 한다.
+
+시작 기록의 `settings`에는 CLI 실행 설정과 실제 로드된 `relative_kalman_parameters`를 저장한다. `runtime_context`에는 GUI 변경을 반영한 현재 간격, 경로 시작 자세·종류·변위·반지름·시간, 진행률, 작업 일시정지 여부, TCP 오프셋을 저장한다. 설정 파일 경로만 남겨 나중에 바뀐 파일을 실험 당시 설정으로 오인하는 것을 피한다.
+
+| 시작 설정 표식 | 의미 |
+| --- | --- |
+| `kalman_state_estimation_enabled` | `base_motion_mode=relative_kalman`일 때 참 |
+| `prediction_enabled` | 상대 칼만 모드 또는 velocity 모드의 predict/separated 방식에서 참 |
+| `table_compensation_enabled` | velocity/relative_kalman 모드이고 separated·feedforward 조합일 때 참 |
+
+이 표식은 구성상 활성 여부다. 실제 이동 속도나 신뢰도가 0이면 그 주기에 적용된 보상도 0일 수 있다. 관측 거절, 정지 판정, 신뢰도 감소, 제동 때문에 보상이 억제된 정도는 주기별 `relative_kalman`, `relative_base_compensation`, 보상 벡터에서 확인한다. 기록 기능이 추정·예측·보상 알고리즘을 켜거나 끄지는 않는다.
+
+### 24.4 평가 오차의 좌표계와 주기별 원자료
+
+두 컨트롤러 베이스의 추정 자세를 \(B_l,B_f\), 각 베이스 기준 실제 플랜지 자세를 \(L,F\)라고 하면 현재 상대 플랜지 자세는
+
+$$
+D_{actual}=(B_l L)^{-1}(B_f F),\qquad
+G_{control}=B_f^{-1}B_l.
+$$
+
+`G_control`은 제어에 사용한 리더 베이스를 팔로워 베이스로 옮기는 변환이고, `actual_relative_pose`는 팔로워 플랜지를 리더 플랜지로 옮기는 변환이다. `relative_base_pose` 등 기존 필드의 방향과 이름만 보고 혼용하지 않는다. 플랜지 자세는 RTDE TCP 자세에 TCP 오프셋의 역변환을 곱해 얻는다. 정상 제어 주기에는 제어기가 계산한 `estimated_relative_pose`와 해당 주기의 베이스를 사용하고, 준비되지 않은 주기에는 사용 가능한 scene에서 계산한다.
+
+고정 목표를 \(D_*\)라고 할 때 평가 오차는
+
+$$
+e_p=p_* - p_{actual},\qquad
+e_R=\operatorname{Log}(R_*R_{actual}^{T})^\vee
+$$
+
+이다. 두 벡터 모두 리더 플랜지 좌표로 표현하며 위치는 m, 회전벡터는 rad다. 회전 오차는 Euler 각 성분 차가 아니라 SO(3)의 상대 회전이다. CSV에는 성분과 노름을 저장하고, 읽기 편하도록 위치 노름 mm와 회전 노름 deg도 함께 제공한다. 이 오차도 영상 추정 좌표와 로봇 상태로 계산한 내부 잔차이며 독립 계측의 정답은 아니다.
+
+| 기록 묶음 | 보존하는 값과 해석 |
+| --- | --- |
+| 기준·현재 자세 | 고정 목표, 현재 상대 플랜지 자세, `G_control`, 전체 베이스 추정·상대 상태 |
+| 상태 추정 | 측정·수신 시각, 예측 시간, 칼만 상태·공분산·신뢰도 등 기존 상세 제어 기록 |
+| 명령 합성 | 베이스/리더 보상, 요청·적용 보상, 피드백, 작업 속도, governor 제한 정보, 제동 상태 |
+| 후보·송신 | 후보 속도와 관절속도, 실제 speedL/speedJ 호출 인수, 호출 시작·종료·응답·예외 |
+| 실제 상태 | 두 로봇의 관절 위치·속도, TCP 자세·실제 TCP 속도, 로봇 및 호스트 상태 시각 |
+| 유효성 | `metric_valid`, `robot_state_valid`, `calibration_valid`, 미리보기·활성·실패 이유 |
+
+`applied_compensation` 등 기존 합성 필드는 해당 제어법에서의 의미를 유지한다. 모든 합성 성분이 최종 제한 뒤의 독립 적용량이라는 뜻은 아니다. 제한된 `tracking_applied`나 `relative_base_compensation.effective_tcp`와 최종 송신 벡터를 함께 확인한다. 전체 `control_record_json`을 보존하므로 CSV의 대표 열에 펼치지 않은 성분도 복원할 수 있다.
+
+`final_sent_*`는 해당 주기의 SDK speedL/speedJ 호출이 `True`를 반환한 경우에만 채운다. 호출 전에 정확한 속도·가속도·기간을 복사하므로 실패한 시도도 `command_attempts`에 남는다. 이전 주기의 최근 성공 명령을 현재 주기에 다시 쓴 것으로 처리하지 않는다. SDK 성공은 로봇의 실제 궤적 달성을 증명하지 않으므로 실제 TCP 속도와 함께 평가한다. 복구·종료의 speedStop, stopScript, disconnect 시도는 별도 `stop_transport_json`으로 보존하여 원래 속도 송신 이력과 구분한다.
+
+### 24.5 시간 연결과 시작·종료 표식
+
+실기의 세션/주기/표식 시각은 호스트 단조시각이고, UTC 생성 시각은 파일 식별용이다. `evaluation_cycle.at`은 생산자가 기록을 내보낸 시각이며 `control_at`, `scene_at`, `metric_at`과 로봇별 `host_sample_at`은 계산에 사용한 원래 시각을 유지한다. 전송 지연이나 정렬 preflight 시간을 기록 시각에서 감추지 않는다. 로봇별 `robot_timestamp`는 RTDE 자체 시계이므로 호스트 단조시각과 숫자를 직접 빼지 않는다. 대응하는 호스트 관측 시각을 사용해 상태 나이를 판정한다.
+
+`measurement_sequence/captured_at/received_at`은 최근 **수신한** 영상 패킷과 연결한다. 이 패킷이 거절되었을 수 있으므로 `accepted`도 보존한다. 실제 제어 계산에 사용한 영상은 `measurement_times`, `received_times` 및 추정기 상세 기록으로 연결한다. 최근 수신 영상과 채택된 영상의 시각을 같은 것으로 덮어쓰지 않는다. 원시 검출·추정 포즈와 재투영 정보는 같은 JSONL의 기존 measurement 레코드에 남는다.
+
+GUI 표시 주기와 무관하게 제어 생산자의 각 주기를 기록한다. 같은 RTDE 시각을 다시 관측해도 원 시각을 유지하고, 유효기간 안인지 따로 판정한다. 오래된 상태·좌표나 누락된 입력으로 지표가 무효이면 오차에 0을 넣지 않고 비워 두며 이유와 원자료를 남긴다. 송신 실패와 지표 유효성은 별도로 판단하므로, 명령이 실패했어도 신선한 자세가 있다면 해당 오차는 보존한다. 정렬에서 동작을 허용하기 위해 고정한 베이스도 평가상 영상 나이가 초과되면 invalid로 처리한다. 정렬 준비 중 관측 공백 및 종료 시 정지 호출은 별도 단계의 관측 행으로 남을 수 있다.
+
+GUI에서 시행 ID를 입력한 뒤 **Start evaluation → Table movement start → Table movement end → Stop & export** 순서로 표식을 남긴다. 정반 버튼은 외부 정반의 구동 명령이나 자동 이동 검출이 아니라 운영자의 구간 주석이다. 원 요청 시각 `request.requested_at`과 생산자가 요청을 처리한 표식 시각을 함께 저장한다. Stop을 처리한 뒤의 다음 주기는 해당 세션에 포함하지 않는다. 정반 종료 표식을 누르지 않고 평가를 끝냈다면 종료 레코드의 `table_moving`이 참으로 남으며 실제 정반 정지를 추정해서 만들어 넣지 않는다.
+
+시뮬레이션은 가상 시각·episode를 사용하고, GUI 클릭의 호스트 시각과 직접 섞지 않는다. 가상 명령 적용은 `simulated_command_applied` 및 별도 가상 명령 열에 기록하며 물리적 `command_sent`는 거짓이다. 일시정지 중 같은 가상 시각의 관측도 보존하고, Reset은 이전 평가를 종료한 뒤 시간을 되감는다. 시뮬레이션 참 베이스와 제어에 사용한 추정 베이스는 별도로 보존한다.
+
+### 24.6 CSV 추출과 불완전 구간의 보존
+
+평가 종료 표식을 JSONL에 기록한 후 별도 스레드가 해당 `session_id`를 CSV로 추출한다. 실기는 `runs/evaluation_sessions/`, 시뮬레이션은 실행 폴더 안의 평가 디렉터리를 사용한다. `.metadata.json`에는 시작 설정·고정 목표, 원본 파일과 읽은 바이트 구간의 SHA-256, 원본 행 번호, 종료 정보, 불완전 여부·이유를 저장한다. CSV는 각 행의 원 JSON과 원본 행 해시도 보존한다. 원본 JSONL을 수정하거나 정상 샘플만 골라 실패 구간을 지우지 않는다.
+
+송신 실패·미송신·유효하지 않은 지표도 모두 행으로 남는다. 분석 시 `metric_valid=1`인 행으로 오차 통계를 계산할 수 있지만, 전체 주기 수·유효 비율·미송신 및 실패 구간을 함께 보고해야 한다. 종료 표식 누락, 주기 번호 누락·중복, 파싱 실패, 잘린 마지막 줄은 불완전 상태로 표시한다. 파일 전체에서 발견한 파싱 문제는 선택 구간과의 관계를 확정할 수 없으므로 원 행과 위치를 보존하고 추출을 불완전으로 표시한다. 원자료의 이상을 숨겨 성공한 시행으로 바꾸지 않는다.
+
+CSV 생성은 기존 파일을 덮어쓰지 않는다. 추출 실패는 GUI에 `error`와 `incomplete`로 표시하고 원본을 유지한다. CSV 스레드 실패 자체가 모션 명령을 만들지는 않는다. 반면 필수 원본 JSONL 기록 실패는 기존 `LoggingError` 정책에 따라 제어 중단으로 이어진다. 프로세스 강제 종료나 디스크 실패 시 아직 쓰지 못한 큐의 데이터까지 보존을 보장할 수 없으며, 가능한 접두 구간을 불완전한 시행으로 재추출한다.
+
+```bash
+python3 -m urcal.tools.export_evaluation runs/실험.jsonl \
+  --session-id JSONL의_session_id --output runs/recovered-evaluation.csv
+```
+
+파일에 세션이 하나만 있으면 `--session-id`를 생략할 수 있다. CLI 종료 코드 `0`은 완전한 추출, `2`는 불완전 구간을 보존한 추출, `1`은 추출 실패를 뜻한다. CSV만 남기지 말고 원본 JSONL과 metadata도 함께 보관해야 기록 정의·설정·실패 문맥을 재검증할 수 있다.
+
+근거: [평가 세션](../urcal/control/evaluation.py), [평가 GUI](../urcal/control/evaluation_panel.py), [추출기](../urcal/tools/export_evaluation.py), [실기 연결](../urcal/cooperative/runtime.py), [가상 실행 연결](../urcal/simulation/runtime.py). 회귀 근거: [기록·오차·CSV](../tests/test_evaluation_recording.py), [실기 주기·실패](../tests/test_evaluation_runtime.py), [초기 정렬](../tests/test_evaluation_alignment.py), [시뮬레이션](../tests/test_evaluation_simulation.py), [비구동 GUI](../tests/test_evaluation_gui.py).
+
 <a id="sec-25"></a>
 
 ## 25. 설정값을 해석할 때 구분해야 하는 물리량

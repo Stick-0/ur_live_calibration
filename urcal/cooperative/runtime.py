@@ -7,6 +7,7 @@ The default is receive-only preview; --execute plus operator Arm is required.
 
 from contextlib import ExitStack
 from copy import deepcopy
+from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 import hashlib
 import multiprocessing as mp
@@ -33,6 +34,7 @@ from urcal.cooperative.diagnostics import WaitDiagnostics, fault_diagnostics
 from urcal.control.transport_diagnostics import capture_runtime_fault, fault_transport_summary, transport_record
 from urcal.control.tracking_error import position_error_sample
 from urcal.control.error_recording import PositionErrorRecorder
+from urcal.control.evaluation import EvaluationRecorder
 
 
 def finite_record(value):
@@ -105,8 +107,34 @@ def cooperative_gui_scene(now, engine, states, readers, previous_timestamps, max
                                nominal_goals=nominal_goals_override, command_goals=command_goals)
         if scene is not None:
             scene["task"] = task
+            scene["evaluated_at"] = now  # measurement_age is evaluated at this host time.
         return scene
     except (ControlFault, ValueError, TypeError, KeyError, AttributeError):
+        return None
+
+
+def evaluation_control_record(record, states, readers, *, state_host_times=None):
+    """Retain available telemetry even when preparation or transport failed."""
+    result = deepcopy(record) if record is not None else {}
+    if states is not None:
+        result["robots"] = {
+            name: {"q": state.joints, "qd": state.joint_velocity,
+                   "tcp": state.tcp, "tcp_speed": state.speed,
+                   "robot_timestamp": state.robot_timestamp}
+            for name, state in states.items()}
+    if states is not None or "robot_state_host_times" not in result:
+        result["robot_state_host_times"] = (dict(state_host_times) if state_host_times is not None else {
+            name: getattr(reader, "last_advance", None) for name, reader in readers.items()})
+    return finite_record(result)
+
+
+def evaluation_stop_transport(session):
+    """Read previously captured stop attempts; never ask the SDK for state."""
+    try:
+        getter = getattr(session, "cleanup_transport_diagnostics", None)
+        result = getter() if callable(getter) else None
+        return result if isinstance(result, dict) and result else None
+    except Exception:
         return None
 
 
@@ -148,7 +176,14 @@ def run(args):
     vision = ctx.Process(target=vision_worker, args=(args, frames, commands, statuses, stop), daemon=True)
     gui = ctx.Process(target=gui_worker, args=(args, commands, gui_statuses, stop, recording_commands), daemon=True)
     engine = None
+    evaluation_recorder = None
+    evaluation_measurement = None
+    evaluation_control = evaluation_transport = None
+    evaluation_pending = False
+    evaluation_cleanup_recorded = False
+    evaluation_reason = ""
     states = None
+    state_host_times = None
     control_at = control_dt = None
     final_reason = "operator_stop"
     try:
@@ -160,6 +195,13 @@ def run(args):
                     "error_basis": "estimated camera bases plus encoder-based controller FK; independent reference required for real error",
                     "collision_model": "nominal link/tool capsules, optional camera keep-out spheres; no CAD/self-collision certification"})
         engine = CooperativeController(args)
+        evaluation_settings = dict(vars(args))
+        kalman_config = getattr(engine.estimator, "config", None)
+        if is_dataclass(kalman_config):
+            evaluation_settings["relative_kalman_parameters"] = asdict(kalman_config)
+        evaluation_recorder = EvaluationRecorder(
+            logger, log_path, BUNDLE / "runs" / "evaluation_sessions",
+            settings=evaluation_settings, leader=engine.leader, follower=engine.follower)
         with ExitStack() as cleanup:
             readers = {}
             for name in ROBOTS:
@@ -260,9 +302,14 @@ def run(args):
             scene_timestamps = {}
 
             def ingest_latest(when, *, allow_reacquire=False):
-                nonlocal gap_request_after
+                nonlocal gap_request_after, evaluation_measurement
                 packet = take_latest(frames)
                 if packet is not None:
+                    evaluation_measurement = finite_record({
+                        "sequence": packet.sequence, "captured_at": packet.captured_at,
+                        "received_at": when, "accepted": False,
+                        "raw_mean_px": packet.raw_mean_px, "raw_max_px": packet.raw_max_px,
+                        "valid_counts": packet.valid_counts, "pose_diagnostics": packet.pose_diagnostics})
                     if recovery is not None and (recovery_capture_after is None
                                                   or packet.captured_at <= recovery_capture_after):
                         logger.log({"kind": "recovery_measurement_discarded", "at": when,
@@ -271,9 +318,11 @@ def run(args):
                         return False
                     if session is not None and args.initial_align and not alignment_complete:
                         accepted = handoff.ingest(packet, when) if handoff is not None else False
+                        evaluation_measurement["accepted"] = accepted
                         logger.log(finite_record({
                             "kind": "handoff_measurement" if handoff is not None else "alignment_vision",
                             "at": when, "sequence": packet.sequence, "captured_at": packet.captured_at,
+                            "received_at": when,
                             "poses_camera_model": packet.poses, "accepted": accepted,
                             "raw_mean_px": packet.raw_mean_px, "raw_max_px": packet.raw_max_px,
                             "valid_counts": packet.valid_counts, "pose_diagnostics": packet.pose_diagnostics,
@@ -284,6 +333,7 @@ def run(args):
                     previous_live = live.reacquisitions if live is not None else 0
                     accepted = engine.ingest(packet, when, allow_reacquire=allow_reacquire,
                                              active_recovery=session is not None and live is not None)
+                    evaluation_measurement["accepted"] = accepted
                     if session is not None and (
                             (not accepted and engine.invalid_since is not None)
                             or (live is not None and live.reacquisitions != previous_live)):
@@ -334,10 +384,14 @@ def run(args):
                     None, now=time.monotonic(), leader=engine.leader, follower=engine.follower,
                     phase="alignment_preflight", reason="Preflight: no current TCP error sample")
                 error_recorder.record(error_sample, emitted_at=time.monotonic())
+                evaluation_recorder.record(at=time.monotonic(), phase="alignment_preflight",
+                                           scene=None, measurement=evaluation_measurement,
+                                           reason="Preflight: " + message)
                 put_latest(gui_statuses, {"message": message, "active": True, "ready": False,
                                           "phase": "alignment_preflight", "progress": 0.,
                                           "position_error": error_sample,
-                                          "error_recording": error_recorder.status()})
+                                          "error_recording": error_recorder.status(),
+                                          "evaluation_recording": evaluation_recorder.status()})
 
             def require_new_recovery_arm(requested):
                 nonlocal recovery_ready
@@ -355,17 +409,34 @@ def run(args):
 
             while not stop.is_set():
                 now = time.monotonic()
+                evaluation_control = evaluation_transport = None
+                evaluation_reason = ""
+                evaluation_pending = True
+                evaluation_cleanup_recorded = False
                 # Recording has its own non-actuating command channel. It
                 # never enters target/Arm handling or the latest-only GUI queue.
                 for _ in range(8):
                     try:
-                        error_recorder.request(recording_commands.get_nowait())
+                        request = recording_commands.get_nowait()
+                        if isinstance(request, dict) and request.get("type") == "evaluation":
+                            if request.get("action") == "start":
+                                request = {**request, "runtime_context": {
+                                    "gap": engine.gap, "progress": engine.progress,
+                                    "task_paused": engine.task_paused, "tcp_offsets": engine.offsets,
+                                    "path": {"kind": engine.path.kind, "start": engine.path.start,
+                                             "delta": engine.path.delta, "radius": engine.path.radius,
+                                             "duration": engine.path.duration}}}
+                            evaluation_recorder.request(
+                                request, now=now, target=engine.path.pose(engine.progress).copy())
+                        else:
+                            error_recorder.request(request)
                     except Empty:
                         break
                 dt, last_tick = now - last_tick, now
                 control_at, control_dt = now, dt
                 ready, goals, proposal = False, {}, None
                 states = None
+                state_host_times = None
                 category = ""
                 try:
                     if not vision.is_alive() or not gui.is_alive():
@@ -401,6 +472,7 @@ def run(args):
                         arm = False
                     if recovery is not None:
                         states = {name: reader.read(now) for name, reader in readers.items()}
+                        state_host_times = {name: reader.last_advance for name, reader in readers.items()}
                         if not recovery.observe(states, now):
                             recovery_capture_after = None
                             recovery_ready = False
@@ -424,6 +496,7 @@ def run(args):
                         calibration_current = (engine.check_live_calibration(now) if engine.live_calibration is not None
                                                else calibration_guard.check(engine.gate, now))
                     states = {name: reader.read(now) for name, reader in readers.items()}
+                    state_host_times = {name: reader.last_advance for name, reader in readers.items()}
                     initializing = args.initial_align and not alignment_complete
                     live = engine.live_calibration
                     if not calibration_current or (live is not None and (live.waiting or live.blending)):
@@ -547,8 +620,16 @@ def run(args):
                                         "dt": max(dt, 1e-6), "bases": bases,
                                         "predicted_joints": alignment.predicted_joints,
                                         "progress": alignment.progress})
-                            session.send_joints(qdots, alignment.predicted_joints, check_fresh=alignment_fresh,
-                                                accelerations=alignment.joint_accelerations)
+                            evaluation_control = evaluation_control_record(
+                                {"at": now, "active": True, "joint_commands": qdots,
+                                 "joint_command": qdots[engine.follower], "bases": bases,
+                                 "command_sent": False}, states, readers, state_host_times=state_host_times)
+                            try:
+                                session.send_joints(qdots, alignment.predicted_joints, check_fresh=alignment_fresh,
+                                                    accelerations=alignment.joint_accelerations)
+                            finally:
+                                evaluation_transport = transport_record(session)
+                            evaluation_control["command_sent"] = True
                             if handoff is None:
                                 alignment.commit()
                             logger.log({"kind": "alignment", "at": now, "progress": alignment.progress,
@@ -630,6 +711,7 @@ def run(args):
                                     if session is not None and engine.live_calibration is not None else
                                     engine.prepare(now, states, planning_dt, active=session is not None))
                         proposal.record["command_sent"] = False
+                        evaluation_control = proposal.record
                         goals, ready = proposal.goals, session is None
                         if engine.path.kind == "hold":
                             following = ("decelerating tracking; checking next frame" if proposal.record.get("tracking_braking")
@@ -692,6 +774,7 @@ def run(args):
                                 # committed; the next bounded tick brakes.
                                 logger.log({"kind": "calibration_command_discarded",
                                             "at": time.monotonic(), "reason": str(exc)})
+                                evaluation_reason = "command_discarded: " + str(exc)
                             else:
                                 engine.commit(proposal)
                                 proposal.record["command_sent"] = True
@@ -699,6 +782,8 @@ def run(args):
                                 proposal.record["transport"] = transport_record(session)
                                 proposal.record["committed_progress"] = engine.progress
                                 proposal.record["committed_finished"] = engine.finished
+                            finally:
+                                evaluation_transport = transport_record(session)
                         else:
                             proposal.record["command_sent"] = False
                         logger.log(proposal.record)
@@ -734,6 +819,10 @@ def run(args):
                         category = arm_error_category
                 except (ControlFault, ValueError, KeyError, TypeError) as exc:
                     category = getattr(exc, "category", "control_fault")
+                    evaluation_reason = category + ": " + str(exc)
+                    evaluation_control = evaluation_control_record(
+                        proposal.record if proposal is not None else evaluation_control, states, readers,
+                        state_host_times=state_host_times)
                     engine.pause_gap_approach("motion unavailable: " + str(exc))
                     if session is not None:
                         if (getattr(args, "fault_response", "exit") != "preview"
@@ -742,7 +831,10 @@ def run(args):
                             raise
                         # Stop first. Failed stop/script acknowledgements are
                         # fatal and cannot unlock preview or another Arm.
-                        session.stop_for_recovery()
+                        try:
+                            session.stop_for_recovery()
+                        finally:
+                            evaluation_control["stop_transport"] = evaluation_stop_transport(session)
                         session = None
                         if engine.live_calibration is not None:
                             engine.live_calibration.reset()
@@ -865,13 +957,34 @@ def run(args):
                     target_source=error_source, max_robot_age=args.max_robot_age,
                     max_calibration_age=args.max_calibration_age)
                 error_recorder.record(error_sample, emitted_at=now)
+                if evaluation_recorder.status()["active"]:
+                    evaluation_control = evaluation_control_record(
+                        proposal.record if proposal is not None else evaluation_control, states, readers,
+                        state_host_times=state_host_times)
+                # GUI scenes suppress repeated robot timestamps. Evaluation
+                # retains every producer tick and judges freshness by age.
+                evaluation_scene = scene
+                if evaluation_scene is None and evaluation_recorder.status()["active"]:
+                    evaluation_scene = cooperative_gui_scene(
+                        now, engine, states, readers, {}, args.max_robot_age,
+                        proposal=proposal, active=session is not None,
+                        bases_override=alignment_bases if session is not None
+                        and args.initial_align and not alignment_complete else None,
+                        calibration_captured_at=alignment_capture)
+                evaluation_recorder.record(
+                    at=time.monotonic(), phase=error_phase, scene=evaluation_scene,
+                    control_record=evaluation_control, transport=evaluation_transport,
+                    measurement=evaluation_measurement, reason=evaluation_reason)
+                evaluation_pending = False
+                evaluation_cleanup_recorded = bool(evaluation_control and evaluation_control.get("stop_transport"))
                 recording_status = error_recorder.status()
                 notice = (recording_status.get("state"), recording_status.get("path"), recording_status.get("error"))
                 if notice != recording_notice and notice[0] != "idle":
                     print(f"[error CSV] {notice[0]}: {notice[2] or notice[1] or ''}", flush=True)
                 recording_notice = notice
                 put_latest(gui_statuses, {**status, "scene": scene, "position_error": error_sample,
-                                          "error_recording": recording_status})
+                                          "error_recording": recording_status,
+                                          "evaluation_recording": evaluation_recorder.status()})
                 if now - last_report >= 1.:
                     print("[research] " + message, flush=True)
                     last_report = now
@@ -879,6 +992,18 @@ def run(args):
     except BaseException as exc:
         final_reason = getattr(exc, "category", "operator_stop" if isinstance(exc, KeyboardInterrupt) else "control_fault")
         try:
+            if evaluation_recorder is not None and evaluation_pending:
+                evaluation_control = evaluation_control_record(
+                    evaluation_control, states, readers, state_host_times=state_host_times)
+                cleanup_transport = evaluation_stop_transport(session)
+                if cleanup_transport:
+                    evaluation_control["stop_transport"] = cleanup_transport
+                evaluation_recorder.record(
+                    at=time.monotonic(), phase="fault", scene=None,
+                    control_record=evaluation_control, transport=evaluation_transport,
+                    measurement=evaluation_measurement, reason=final_reason + ": " + str(exc))
+                evaluation_pending = False
+                evaluation_cleanup_recorded = bool(evaluation_control.get("stop_transport"))
             logger.log({"kind": "fault", "at": time.monotonic(), "category": final_reason,
                         "control_at": control_at, "control_dt": control_dt,
                         "reason": str(exc), "external_base_stop_required": session is not None,
@@ -892,6 +1017,26 @@ def run(args):
         if session is not None:
             session.close()
         stop.set()
+        if evaluation_recorder is not None:
+            try:
+                cleanup_transport = evaluation_stop_transport(session)
+                if evaluation_pending or (cleanup_transport and not evaluation_cleanup_recorded):
+                    final_control = evaluation_control_record(
+                        evaluation_control if evaluation_pending else None, states, readers,
+                        state_host_times=state_host_times)
+                    if cleanup_transport:
+                        final_control["stop_transport"] = cleanup_transport
+                    evaluation_recorder.record(
+                        at=time.monotonic(), phase="stopped" if evaluation_pending else "shutdown", scene=None,
+                        control_record=final_control,
+                        transport=evaluation_transport if evaluation_pending else None, measurement=evaluation_measurement,
+                        reason=evaluation_reason or final_reason)
+                evaluation_status = evaluation_recorder.close(reason=final_reason)
+                if evaluation_status.get("state") != "idle":
+                    print(f"[evaluation] {evaluation_status.get('state')}: "
+                          f"{evaluation_status.get('error') or evaluation_status.get('csv_path') or ''}", flush=True)
+            except Exception as recording_exc:
+                print(f"[evaluation STOP] {recording_exc}", flush=True)
         error_recorder.close()
         recording_status = error_recorder.status()
         if recording_status.get("state") not in (None, "idle"):

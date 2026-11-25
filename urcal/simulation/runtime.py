@@ -6,7 +6,8 @@ Saved snapshots require neither camera, inference checkpoints nor robot SDKs.
 """
 
 import copy
-from contextlib import closing
+from contextlib import ExitStack, closing
+from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
@@ -22,6 +23,7 @@ from urcal.control.policy import CalibrationFrame, ControlFault
 from urcal.control.runtime import parse_args
 from urcal.control.tracking_error import position_error_sample
 from urcal.control.error_recording import PositionErrorRecorder
+from urcal.control.evaluation import EvaluationRecorder
 from urcal.cooperative.controller import CooperativeController
 from urcal.cooperative.logging import ExperimentLogger
 from urcal.paths import BUNDLE
@@ -36,7 +38,7 @@ NOTICE = "SIMULATION — captured initial state; hardware disconnected; no hardw
 class SimulationSession:
     """Controller/plant coupling without any hardware transport or wall clock IO."""
 
-    def __init__(self, args, initial, logger=None):
+    def __init__(self, args, initial, logger=None, evaluation_recorder=None):
         if args.execute or not args.simulate:
             raise ValueError("simulation requires --simulate without --execute")
         if args.mode != "follow":
@@ -53,6 +55,7 @@ class SimulationSession:
                 raise ValueError(name + ": TCP offset differs from the saved initial state; recapture it")
             setattr(self.args, name + "_tcp_offset", matrix_pose(offset).tolist())
         self.logger = logger
+        self.evaluation_recorder = evaluation_recorder
         self.plant = JointPlant(self.initial, self.args)
         self.dt = 1. / self.args.control_hz
         self._mappings = {name: calibration_output_mapping(
@@ -85,10 +88,25 @@ class SimulationSession:
         packet = CalibrationFrame(self.sequence, at, self._calibration(),
                                   {name: 0. for name in ROBOTS}, {name: 0. for name in ROBOTS},
                                   {name: 7 for name in ROBOTS})
-        if not self.engine.ingest(packet, at):
+        self._evaluation_measurement = {
+            "source": "ideal_virtual_base_sensor", "sequence": self.sequence,
+            "captured_at": at, "received_at": at, "poses": copy.deepcopy(packet.poses),
+            "raw_mean_px": packet.raw_mean_px.copy(), "raw_max_px": packet.raw_max_px.copy(),
+            "valid_counts": packet.valid_counts.copy(), "accepted": False,
+        }
+        accepted = self.engine.ingest(packet, at)
+        self._evaluation_measurement["accepted"] = accepted
+        if not accepted:
+            self._evaluation_measurement["reason"] = self.engine.last_rejection
             raise SimulationFault("virtual base sensor rejected: " + self.engine.last_rejection)
 
     def reset(self):
+        if self.episode >= 0 and self.evaluation_recorder is not None:
+            # A clock rewind starts a new experiment episode. Keep its final
+            # observation and end the old fixed-target session before reset.
+            self._record_evaluation(self.now, "reset", reason="simulation reset; evaluation ended")
+            self.evaluation_request({"type": "evaluation", "action": "stop",
+                                     "request_id": uuid.uuid4().hex, "reason": "simulation_reset"})
         self.plant.reset()
         self.episode += 1
         self.active, self.paused, self.fault = False, False, ""
@@ -106,6 +124,73 @@ class SimulationSession:
         self.last_record, self.task_scale = {}, 0.
         self._preview()
         self._log("simulation_reset")
+
+    def evaluation_request(self, command):
+        """Record experiment actions without routing them through motion IO."""
+        if self.evaluation_recorder is None:
+            return False
+        if isinstance(command, dict) and command.get("action") == "start":
+            command = copy.deepcopy(command)
+            path = self.engine.path
+            command["runtime_context"] = {
+                "gap": self.engine.gap, "progress": self.engine.progress,
+                "task_paused": self.engine.task_paused,
+                "path": {key: copy.deepcopy(getattr(path, key))
+                         for key in ("kind", "start", "delta", "radius", "duration")},
+                "tcp_offsets": copy.deepcopy(self.engine.offsets),
+            }
+        return self.evaluation_recorder.request(
+            command, now=self.now, target=self.engine.path.pose(self.engine.progress).copy(),
+            episode=self.episode)
+
+    def _evaluation_scene(self, at, *, states=None, control_record=None):
+        """Copy this cycle's measured state and already evaluated coordinates.
+
+        Reading telemetry must not call prepare/state or advance an estimator.
+        The virtual plant is retained separately from the controller estimate.
+        """
+        states = self.plant.states(at) if states is None else states
+        record = {} if control_record is None else control_record
+        bases = record.get("bases")
+        captures = record.get("measurement_times")
+        if bases is None:
+            # Alignment/paused cycles have no current control proposal. Use
+            # the actual accepted virtual observation, not a cached display
+            # snapshot whose freshness would depend on GUI polling.
+            accepted = self.engine.gate.poses
+            bases = {name: pose @ self._mappings[name] for name, pose in accepted.items()}
+            captured = self.engine.gate.last_capture
+            captures = None if captured is None else {name: captured for name in ROBOTS}
+        return {
+            "at": float(at), "clock": "simulation", "episode": self.episode,
+            "bases": {} if bases is None else copy.deepcopy(bases),
+            "truth_bases": copy.deepcopy(self.plant.bases),
+            "robots": {name: {"at": float(at), "q": state.joints.copy(), "qd": state.joint_velocity.copy(),
+                               "tcp": state.tcp.copy(), "tcp_speed": state.speed.copy(),
+                               "tcp_offset": self.plant.offsets[name].copy(),
+                               "robot_timestamp": state.robot_timestamp}
+                       for name, state in states.items()},
+            "calibration_valid": bases is not None and captures is not None,
+            "measurement_age": ({name: float(at - stamp) for name, stamp in captures.items()}
+                                if captures is not None else None),
+            "measurement_times": copy.deepcopy(captures),
+            "pose_source": "controller_proposal" if control_record is not None else "accepted_virtual_calibration",
+            "reason": "ideal virtual base sensor; no hardware measurements",
+        }
+
+    def _record_evaluation(self, at, phase, *, scene=None, control_record=None,
+                           transport=None, measurement=None, reason=""):
+        if self.evaluation_recorder is None:
+            return
+        control = copy.deepcopy(control_record)
+        if control is not None:
+            control.update(command_sent=False, hardware_commands=False,
+                           simulated_command_applied=bool(transport and transport.get("simulated_command_applied")))
+        self.evaluation_recorder.record(
+            at=at, phase=phase, scene=self._evaluation_scene(at) if scene is None else scene,
+            control_record=control, transport=transport,
+            measurement=copy.deepcopy(self._evaluation_measurement) if measurement is None else measurement,
+            reason=reason, episode=self.episode)
 
     def _prepare(self):
         states = self.plant.states(self.now)
@@ -272,17 +357,39 @@ class SimulationSession:
 
     def tick(self):
         """Advance at most one step. A rejected plant step never commits a task."""
+        cycle_at = self.now
         if not self.active or self.paused:
+            phase = "fault" if self.fault else "paused" if self.paused else "preview"
+            self._record_evaluation(cycle_at, phase, reason=self.fault or (
+                "simulation paused; virtual time is unchanged" if self.paused else ""))
             return False
+        evaluation_scene = self._evaluation_scene(cycle_at) if self.evaluation_recorder is not None else None
+        measurement = copy.deepcopy(self._evaluation_measurement) if self.evaluation_recorder is not None else None
+        control_record, reason = None, ""
+        phase = "alignment" if self.approach is not None and not self.approach.done else "tracking"
+        transport = {"simulated": True, "hardware_commands": False,
+                     "simulated_command_applied": False, "commands": {}}
         try:
             if self.approach is not None and not self.approach.done:
-                self._tick_alignment()
+                control_record = {"kind": "simulation_alignment", "at": cycle_at, "active": True,
+                                  "control_dt": self.dt, "progress": self.engine.progress,
+                                  "alignment_progress": self.approach.progress}
+                self._tick_alignment(transport=transport)
+                control_record["next_alignment_progress"] = self.approach.progress
                 return True
             proposal = self._prepare()
+            control_record = proposal.record
+            if evaluation_scene is not None:
+                evaluation_scene = self._evaluation_scene(cycle_at, control_record=control_record)
             bases, leader_velocity = self._external_motion()
             velocities = {self.engine.follower: proposal.decision.qdot,
                           self.engine.leader: leader_velocity}
+            transport["commands"] = {
+                self.engine.follower: {"method": "speedL", "command": proposal.decision.twist.copy(),
+                                       "joint_velocity": proposal.decision.qdot.copy(),
+                                       "applied_method": "joint_velocity_step"}}
             self.plant.step(velocities, self.dt, bases=bases)
+            transport["simulated_command_applied"] = True
             self.engine.commit(proposal)
             self.task_scale = proposal.decision.task_scale
             self.last_record = proposal.record
@@ -292,6 +399,7 @@ class SimulationSession:
                       joints=self.plant.joints, joint_velocity=self.plant.joint_velocity)
             return True
         except (ControlFault, ValueError, np.linalg.LinAlgError) as exc:
+            phase, reason = "fault", str(exc)
             self.active, self.paused, self.ready = False, False, False
             self.fault = str(exc)
             self.engine.pause_gap_approach("simulation stopped: " + self.fault)
@@ -299,10 +407,21 @@ class SimulationSession:
             self._preview()
             self._log("simulation_fault", reason=self.fault)
             return False
+        finally:
+            self._record_evaluation(cycle_at, phase, scene=evaluation_scene,
+                                    control_record=control_record, transport=transport,
+                                    measurement=measurement, reason=reason)
 
-    def _tick_alignment(self):
+    def _tick_alignment(self, *, transport=None):
         velocities = self.approach.propose(self.plant.states(self.now))
+        if transport is not None:
+            transport["commands"] = {
+                name: {"method": "speedJ", "command": command.copy(),
+                       "joint_velocity": command.copy(), "applied_method": "joint_velocity_step"}
+                for name, command in velocities.items() if name == self.engine.follower}
         self.plant.step(velocities, self.dt)  # Both external bases remain fixed.
+        if transport is not None:
+            transport["simulated_command_applied"] = True
         self.approach.commit()
         self.steps += 1
         self._ingest(self.now)
@@ -382,6 +501,8 @@ class SimulationSession:
                 "task_paused": self.engine.task_paused, "measurement_age": 0.,
                 "gap_approach": gap_approach,
                 "position_error": error_sample,
+                "evaluation_recording": (self.evaluation_recorder.status()
+                                         if self.evaluation_recorder is not None else {"state": "idle"}),
                 "alignment_progress": self.approach.progress if self.approach else None,
                 "fault_category": "simulation" if self.fault else ""}
 
@@ -403,8 +524,16 @@ def run(args):
     print("[sim] Initial velocities set to zero. Virtual base sensor has no camera noise or latency.", flush=True)
     log_path = args.log if args.log is not None else output / "simulation.jsonl"
     with ExperimentLogger(log_path) as logger, closing(
-            PositionErrorRecorder(BUNDLE / "runs" / "error_segments")) as error_recorder:
+            PositionErrorRecorder(BUNDLE / "runs" / "error_segments")) as error_recorder, ExitStack() as recordings:
         session = SimulationSession(args, initial, logger)
+        evaluation_settings = dict(vars(session.args))
+        kalman_config = getattr(session.engine.estimator, "config", None)
+        if is_dataclass(kalman_config):
+            evaluation_settings["relative_kalman_parameters"] = asdict(kalman_config)
+        evaluation_recorder = recordings.enter_context(closing(EvaluationRecorder(
+            logger, log_path, output / "evaluation_sessions", settings=evaluation_settings,
+            leader=session.engine.leader, follower=session.engine.follower, clock="simulation")))
+        session.evaluation_recorder = evaluation_recorder
         logger.log({"kind": "simulation_settings", "simulation": True, "hardware_commands": False,
                     "initial_state": str(snapshot_path), "captured_at_utc": initial["captured_at_utc"],
                     "settings": vars(session.args), "plant": "seeded nominal FK; joint velocity integration",
@@ -412,7 +541,13 @@ def run(args):
         from tkinter import ttk
         from urcal.control.gui import TargetPanel
         stop = threading.Event()
-        panel = TargetPanel(session.args, session.command, stop, recording_command=error_recorder.request)
+
+        def recording_command(command):
+            if isinstance(command, dict) and command.get("type") == "evaluation":
+                return session.evaluation_request(command)
+            return error_recorder.request(command)
+
+        panel = TargetPanel(session.args, session.command, stop, recording_command=recording_command)
         panel._view._models = session.plant.models
         ttk.Label(panel.root, text=NOTICE, foreground="#8a4100", padding=8,
                   font=("TkDefaultFont", 11, "bold"), wraplength=950).grid(row=1, column=0, sticky="ew")
@@ -439,13 +574,17 @@ def run(args):
                 session.tick()
                 stop.wait(max(0., session.dt - (time.monotonic() - started)))
         finally:
-            session.plant.stop()
-            error_recorder.close()
-            recording_status = error_recorder.status()
-            if recording_status.get("state") not in (None, "idle"):
-                print(f"[error CSV] {recording_status.get('state')}: "
-                      f"{recording_status.get('error') or recording_status.get('path') or ''}", flush=True)
-            panel.close()
+            try:
+                session._record_evaluation(session.now, "shutdown", reason="simulation shutdown")
+                evaluation_recorder.close(reason="shutdown")
+            finally:
+                session.plant.stop()
+                error_recorder.close()
+                recording_status = error_recorder.status()
+                if recording_status.get("state") not in (None, "idle"):
+                    print(f"[error CSV] {recording_status.get('state')}: "
+                          f"{recording_status.get('error') or recording_status.get('path') or ''}", flush=True)
+                panel.close()
 
 
 def main(argv=None):

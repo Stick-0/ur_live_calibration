@@ -242,6 +242,7 @@ class MotionSession:
         self.last_ik_tcp = {}
         self._transport_current = None
         self._last_transport = None
+        self._cleanup_transport = None
         self._last_successful_send = {}
         if factory is None:
             # Importing/constructing this interface is confined to explicit arm.
@@ -308,6 +309,49 @@ class MotionSession:
         record["last_successful_send"] = deepcopy(self._last_successful_send)
         return record
 
+    def cleanup_transport_diagnostics(self):
+        """Return stop/release calls separately from the velocity transaction.
+
+        Host call timing and SDK return values do not establish physical
+        standstill. A repeated empty close preserves the original evidence.
+        """
+        return deepcopy(self._cleanup_transport or {})
+
+    @staticmethod
+    def _cleanup_time():
+        # Optional timing must never prevent the actual cleanup calls or
+        # replace the fault already responsible for shutdown.
+        try:
+            return time.monotonic()
+        except Exception:
+            return None
+
+    def _cleanup_call(self, name, stage, function, *values):
+        operation = {"robot": name, "stage": stage, "started_at": self._cleanup_time()}
+        if stage == "speedStop":
+            operation["command"] = {"acceleration": values[0], "motion_mode": self._motion_modes.get(name)}
+        self._cleanup_transport["operations"].append(operation)
+        try:
+            result = function(*values)
+            if result is None or isinstance(result, (bool, np.bool_)):
+                operation["returned"] = None if result is None else bool(result)
+            else:
+                # Unexpected SDK values keep their original policy behavior;
+                # do not put an arbitrary object into the JSON diagnostics.
+                operation["returned_type"] = type(result).__name__
+            return result
+        except BaseException as exc:
+            operation["exception_type"] = type(exc).__name__
+            try:
+                operation["exception"] = str(exc)
+            except Exception:
+                operation["exception"] = "exception message unavailable"
+            raise
+        finally:
+            operation["finished_at"] = self._cleanup_time()
+            operation["duration"] = (operation["finished_at"] - operation["started_at"]
+                                     if operation["finished_at"] is not None and operation["started_at"] is not None else None)
+
     def capture_fault(self, exc, at=None):
         """Annotate the original failure before cleanup, at most once.
 
@@ -343,6 +387,15 @@ class MotionSession:
         if self._transport_current is None:
             return function(*values)
         operation = {"robot": name, "stage": stage, "started_at": time.monotonic()}
+        if stage in ("speedL", "speedJ"):
+            # Capture the actual SDK arguments before invocation, including a
+            # rejected/raising attempt. Last successful sends may be older.
+            operation["command"] = {
+                "velocity": list(values[0]), "acceleration": float(values[1]),
+                "duration_s": float(values[2]),
+                "frame": "follower_base_tcp" if stage == "speedL" else "joint",
+                "unit": "m/s,rad/s" if stage == "speedL" else "rad/s",
+            }
         self._transport_current["operations"].append(operation)
         try:
             result = function(*values)
@@ -706,27 +759,38 @@ class MotionSession:
     def _close_controls(self, *, require_confirmation):
         controls, self.controls = self.controls, {}
         self._watchdog_enabled = False
+        if not controls:
+            return
         failures = []
-        # Request both stops before any script shutdown/disconnect can block.
-        for name, control in controls.items():
-            try:
-                acceleration = self.args.max_joint_accel if self._motion_modes.get(name) == "joint" else self.args.stop_accel
-                result = control.speedStop(acceleration)
-                if require_confirmation and not (isinstance(result, (bool, np.bool_)) and result):
-                    failures.append(f"{name}: speedStop did not confirm success")
-            except Exception as exc:
-                failures.append(f"{name}: speedStop failed: {exc}")
-                print(f"[warn] {name} speedStop: {exc}", flush=True)
-        for name, control in controls.items():
-            for label in ("stopScript", "disconnect"):
+        record = {"mode": "cleanup", "purpose": "recovery" if require_confirmation else "shutdown",
+                  "require_confirmation": bool(require_confirmation), "started_at": self._cleanup_time(),
+                  "operations": [], "failures": failures}
+        self._cleanup_transport = record
+        try:
+            # Request both stops before any script shutdown/disconnect can block.
+            for name, control in controls.items():
                 try:
-                    result = getattr(control, label)()
-                    if (require_confirmation and label == "stopScript" and result is not None
-                            and not (isinstance(result, (bool, np.bool_)) and result)):
-                        failures.append(f"{name}: stopScript did not confirm success")
+                    acceleration = self.args.max_joint_accel if self._motion_modes.get(name) == "joint" else self.args.stop_accel
+                    result = self._cleanup_call(name, "speedStop", control.speedStop, acceleration)
+                    if require_confirmation and not (isinstance(result, (bool, np.bool_)) and result):
+                        failures.append(f"{name}: speedStop did not confirm success")
                 except Exception as exc:
-                    failures.append(f"{name}: {label} failed: {exc}")
-                    print(f"[warn] {name} cleanup: {exc}", flush=True)
+                    failures.append(f"{name}: speedStop failed: {exc}")
+                    print(f"[warn] {name} speedStop: {exc}", flush=True)
+            for name, control in controls.items():
+                for label in ("stopScript", "disconnect"):
+                    try:
+                        result = self._cleanup_call(name, label, getattr(control, label))
+                        if (require_confirmation and label == "stopScript" and result is not None
+                                and not (isinstance(result, (bool, np.bool_)) and result)):
+                            failures.append(f"{name}: stopScript did not confirm success")
+                    except Exception as exc:
+                        failures.append(f"{name}: {label} failed: {exc}")
+                        print(f"[warn] {name} cleanup: {exc}", flush=True)
+        finally:
+            record["finished_at"] = self._cleanup_time()
+            record["duration"] = (record["finished_at"] - record["started_at"]
+                                  if record["finished_at"] is not None and record["started_at"] is not None else None)
         if require_confirmation and failures:
             raise ControlFault("recovery stop could not be confirmed: " + "; ".join(failures))
 

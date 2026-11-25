@@ -11,6 +11,7 @@ import numpy as np
 
 from urcal.control.geometry import facing_follower
 from urcal.control.error_plot import PositionErrorWindow
+from urcal.control.evaluation_panel import EvaluationPanel
 from urcal.control.scene_view import RobotSceneView, task_path
 
 
@@ -296,6 +297,9 @@ class TargetPanel:
             ttk.Label(body, textvariable=self._progress_message, wraplength=480).grid(
                 row=row, column=0, columnspan=4, sticky="w", pady=(5, 0))
             row += 1
+        self._evaluation = EvaluationPanel(body, recording_command=recording_command)
+        self._evaluation.frame.grid(row=row, column=0, columnspan=4, sticky="ew")
+        row += 1
         if not args.execute and not self._simulation:
             ttk.Label(body, text="Preview only. --execute is required to arm motion.").grid(
                 row=row, column=0, columnspan=4, sticky="w", pady=(8, 0))
@@ -505,6 +509,9 @@ class TargetPanel:
             return
         if status is not None:
             self._status.update(status)
+            evaluation = getattr(self, "_evaluation", None)
+            if evaluation is not None and "evaluation_recording" in status:
+                evaluation.set_status(status["evaluation_recording"])
             if getattr(self, "_view", None) is not None:
                 self._view.set_snapshot(status.get("scene"))
             self._message.set(str(self._status.get("message", "")))

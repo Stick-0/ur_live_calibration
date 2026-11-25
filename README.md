@@ -259,6 +259,17 @@ UR10e PnP 출력의 **Z축 180° / 로컬 Z +5 mm 변환은 기본 ON**입니다
 
 실제 추종은 `runs/<실행ID>.jsonl`, 시뮬레이션은 `runs/simulation/<실행ID>/`에 설정·상태·명령·정지 원인을 기록합니다. GUI의 오차는 추정 좌표에서 계산한 값이며 독립 계측으로 검증한 물리적 오차와는 구분합니다.
 
+협업 GUI의 **Cooperative evaluation**에서 시행 ID를 입력하고 **Start evaluation**을 누르면 현재 명목 상대 플랜지 목표를 평가 기준으로 고정합니다. 칼만 추정·예측·정반 보상 설정과 제어 주기별 상대 자세, 위치·회전 오차, 보상 성분, 실제 SDK 송신 결과, TCP 속도 및 영상/로봇 시각을 기존 JSONL에 기록합니다. **Table movement start / end**는 정반 이동 구간을 표시하는 기록 버튼입니다. **Stop & export**를 누르면 해당 세션의 CSV와 `.metadata.json`을 생성하고 GUI에 경로를 표시합니다. 기록 버튼은 로봇이나 정반을 구동하지 않습니다.
+
+실기 평가 CSV는 `runs/evaluation_sessions/`에 저장됩니다. 시뮬레이션의 CSV는 해당 실행 폴더 안에 저장되며 실제 송신과 가상 적용 명령을 구분합니다. 실패·invalid·미송신 주기도 보존하고, 시뮬레이션 Reset은 기존 평가를 종료합니다. 비정상 종료 후에도 원본 JSONL의 `evaluation_start.session_id`로 재추출할 수 있습니다. 기존 CSV는 덮어쓰지 않습니다.
+
+```bash
+python3 -m urcal.tools.export_evaluation runs/실험.jsonl \
+  --session-id JSONL에_기록된_session_id --output runs/recovered-evaluation.csv
+```
+
+종료 코드 `0`은 추출 완료, `2`는 불완전한 구간을 보존해 추출한 경우, `1`은 추출 실패입니다. 기록 정의와 해석은 [협업제어 원리 문서의 평가 세션 절](docs/COOPERATIVE_CONTROL_PRINCIPLES.md#evaluation-sessions)에 정리했습니다.
+
 ```bash
 python3 -m urcal.tools.analyze_log runs/실험.jsonl
 python3 -m urcal.tools.preview_gui
