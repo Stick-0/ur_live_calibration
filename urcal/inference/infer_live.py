@@ -140,16 +140,53 @@ class URJointReader:
         raise RuntimeError("No UR joint source. Set --robot_ip or --joints.")
 
 
+def _import_realsense():
+    try:
+        import pyrealsense2 as rs
+    except Exception as exc:
+        raise RuntimeError("pyrealsense2 is required for D435 streaming.") from exc
+    return rs
+
+
+def _camera_devices(rs):
+    return sorted(rs.context().query_devices(), key=lambda device: device.get_info(rs.camera_info.serial_number))
+
+
+def list_cameras():
+    rs = _import_realsense()
+    devices = _camera_devices(rs)
+    if not devices:
+        print("[info] No RealSense cameras connected.")
+        return
+    for index, device in enumerate(devices):
+        name = device.get_info(rs.camera_info.name)
+        serial = device.get_info(rs.camera_info.serial_number)
+        print(f"[{index}] {name}  serial={serial}")
+
+
 class D435ColorStream:
-    def __init__(self, width: int, height: int, fps: int):
-        try:
-            import pyrealsense2 as rs
-        except Exception as exc:
-            raise RuntimeError("pyrealsense2 is required for D435 streaming.") from exc
+    def __init__(self, width: int, height: int, fps: int, *,
+                 camera_serial: Optional[str] = None, camera_index: Optional[int] = None):
+        if camera_serial is not None and camera_index is not None:
+            raise ValueError("Choose only one of --camera_serial and --camera_index.")
+        rs = _import_realsense()
+        if camera_serial is not None or camera_index is not None:
+            devices = _camera_devices(rs)
+            serials = [device.get_info(rs.camera_info.serial_number) for device in devices]
+            if camera_index is not None:
+                if not 0 <= camera_index < len(serials):
+                    raise ValueError(f"Invalid --camera_index {camera_index}: {len(serials)} camera(s) connected. "
+                                     "Use --list_cameras to see available indices.")
+                camera_serial = serials[camera_index]
+            elif camera_serial not in serials:
+                raise ValueError(f"Camera serial {camera_serial!r} is not connected. "
+                                 "Use --list_cameras to see available cameras.")
 
         self.rs = rs
         self.pipeline = rs.pipeline()
         config = rs.config()
+        if camera_serial is not None:
+            config.enable_device(camera_serial)
         config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
         profile = self.pipeline.start(config)
         color_profile = profile.get_stream(rs.stream.color).as_video_stream_profile()
@@ -159,6 +196,9 @@ class D435ColorStream:
             dtype=np.float64,
         )
         self.dist = np.asarray(intr.coeffs, dtype=np.float64)
+        device = profile.get_device()
+        self.camera_serial = device.get_info(rs.camera_info.serial_number)
+        print(f"[info] RealSense camera: {device.get_info(rs.camera_info.name)}  serial={self.camera_serial}")
         print(f"[info] D435 color stream: {width}x{height}@{fps}")
         print(f"[info] RealSense K: {self.K.reshape(-1).tolist()}")
         print(f"[info] RealSense dist: {self.dist.tolist()}")
@@ -330,9 +370,9 @@ def solve_pose_empnp(
         return False, None, None, np.nan
 
 
-def parse_args():
+def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="RealSense D435 RGB + UR joint live inference")
-    ap.add_argument("--checkpoint", required=True)
+    ap.add_argument("--checkpoint", help="Required for inference; not needed with --list_cameras")
     ap.add_argument("--robot_ip", type=str, default=None, help="UR controller IP for RTDE getActualQ()")
     ap.add_argument("--joints", type=float, nargs=6, default=None, help="Fallback fixed joint values in radians")
     ap.add_argument("--image_h", type=int, default=480)
@@ -340,6 +380,10 @@ def parse_args():
     ap.add_argument("--camera_w", type=int, default=640)
     ap.add_argument("--camera_h", type=int, default=480)
     ap.add_argument("--fps", type=int, default=30)
+    ap.add_argument("--list_cameras", action="store_true", help="List connected RealSense cameras and exit")
+    camera = ap.add_mutually_exclusive_group()
+    camera.add_argument("--camera_serial", help="Use the RealSense camera with this serial number")
+    camera.add_argument("--camera_index", type=int, help="Use the 0-based camera index shown by --list_cameras")
     ap.add_argument("--no_normalize", action="store_true")
     ap.add_argument("--seg_thr", type=float, default=0.5)
     ap.add_argument("--theta", type=float, default=0.99)
@@ -361,12 +405,19 @@ def parse_args():
     ap.add_argument("--show_seg", action="store_true", help="Start with the segmentation debug window open")
     ap.add_argument("--window", type=str, default="RobotPose D435")
     ap.add_argument("--seg_window", type=str, default="RobotPose Segmentation")
-    return ap.parse_args()
+    args = ap.parse_args(argv)
+    if not args.list_cameras and not args.checkpoint:
+        ap.error("--checkpoint is required unless --list_cameras is used")
+    return args
 
 
 def main():
     args = parse_args()
-    stream = D435ColorStream(args.camera_w, args.camera_h, args.fps)
+    if args.list_cameras:
+        list_cameras()
+        return
+    stream = D435ColorStream(args.camera_w, args.camera_h, args.fps,
+                            camera_serial=args.camera_serial, camera_index=args.camera_index)
     joint_reader = URJointReader(args.robot_ip, args.joints)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -69,7 +69,15 @@ class LiveEquivalenceTests(unittest.TestCase):
         for original, optimized in self.modules:
             with self.subTest(robot=original.DEFAULT_KEY_NAMES[0]):
                 with patch.object(sys, "argv", ["live", "--checkpoint", "test.pt"]):
-                    self.assertEqual(vars(original.parse_args()), vars(optimized.parse_args()))
+                    original_defaults = vars(original.parse_args())
+                    optimized_defaults = vars(optimized.parse_args())
+                    self.assertEqual(original_defaults,
+                                     {key: optimized_defaults[key] for key in original_defaults})
+                    added_defaults = {key: value for key, value in optimized_defaults.items()
+                                      if key not in original_defaults}
+                    self.assertEqual(added_defaults,
+                                     {"list_cameras": False, "camera_index": None, "camera_serial": None}
+                                     if original.DEFAULT_KEY_NAMES[0].startswith("ur5e") else {})
                 fk_name = "ur10e_keypoints_from_joints" if "ur10e" in original.DEFAULT_KEY_NAMES[0] else "ur5e_keypoints_from_joints"
                 joints = [0.2, -1.2, 1.1, -1.5, -1.2, 0.4]
                 np.testing.assert_array_equal(getattr(original, fk_name)(joints), getattr(optimized, fk_name)(joints))

@@ -58,6 +58,32 @@ git lfs pull
 ./run_ur10e.sh --robot_ip 169.254.186.6 --show_seg
 ```
 
+UR5e 단독 포즈 추정에서 D435가 두 대 이상 연결돼 있으면 목록을 확인한 뒤 사용할 카메라를 지정합니다. 로봇은 RTDE로 관절값만 읽으며 구동하지 않습니다.
+
+```bash
+./run_ur5e.sh --list_cameras
+./run_ur5e.sh --robot_ip 169.254.186.10 --camera_index 0 --show_seg
+./run_ur5e.sh --robot_ip 169.254.186.10 --camera_index 1 --show_seg
+```
+
+위 추론 명령 중 원하는 카메라 하나만 실행합니다. 번호는 시리얼 번호순으로 정렬한 목록의 0부터 시작합니다. 연결된 장치가 바뀌어도 같은 카메라를 사용하려면 `--camera_index 0` 대신 `--camera_serial 실제시리얼번호`를 지정합니다. 시작 로그에도 선택된 시리얼이 출력됩니다. 카메라 선택 옵션을 생략하면 기존처럼 RealSense SDK가 장치를 선택합니다. 이 옵션은 기본 `run_ur5e.sh`에서 지원하며 `ROBOTPOSE_REFERENCE=1` 비교 실행에는 적용되지 않습니다.
+
+두 카메라에서 같은 UR5e의 포즈를 동시에 보려면 **각각 다른 터미널**에서 다음 명령을 실행합니다. `--robot_ip`에는 티치펜던트에서 확인한 실제 UR5e 주소를 사용합니다. 아래의 `169.254.186.10`은 예시입니다.
+
+```bash
+# 터미널 1
+./run_ur5e.sh --robot_ip 169.254.186.10 --camera_index 0 \
+  --window "UR5e camera 0" --seg_window "UR5e segmentation 0" --show_seg
+```
+
+```bash
+# 터미널 2
+./run_ur5e.sh --robot_ip 169.254.186.10 --camera_index 1 \
+  --window "UR5e camera 1" --seg_window "UR5e segmentation 1" --show_seg
+```
+
+각 창은 해당 카메라 좌표계의 UR5e 베이스 포즈를 독립적으로 추정하고, 성공하면 좌표축을 표시합니다. 카메라 간 상대 위치를 보정하거나 두 추정값을 융합하지는 않습니다. 각 포즈 창에서 `q` 또는 Esc로 해당 실행을 종료합니다.
+
 같은 프레임에서 양팔을 처리하려면 다음을 실행합니다. 두 모델은 같은 프레임에 대해 순차적으로 실행됩니다.
 
 ```bash
